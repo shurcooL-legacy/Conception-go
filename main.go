@@ -3,18 +3,27 @@ package main
 import (
 	"fmt"
 	. "gist.github.com/5286084.git"
+	"time"
+	"runtime"
 
 	"github.com/go-gl/gl"
 	//gl "github.com/chsc/gogl/gl21"
 	"github.com/go-gl/glfw"
 )
 
+var updated bool
+var occurrences int
+
 func DrawSomething() {
 	gl.LoadIdentity()
 	gl.Translatef(50, 100, 0)
 	gl.Color3f(0, 0, 0)
 	gl.Rectf(0, 0, 300, 100)
-	gl.Color3f(1, 1, 1)
+	if !updated {
+		gl.Color3f(1, 1, 1)
+	} else {
+		gl.Color3f(0, 1, 0)
+	}
 	gl.Rectf(0 + 1, 0 + 1, 300 - 1, 100 - 1)
 }
 
@@ -31,6 +40,8 @@ func DrawSpinner(spinner int) {
 }
 
 func main() {
+	runtime.LockOSThread()
+
 	err := glfw.Init()
 	CheckError(err)
 	defer glfw.Terminate()
@@ -56,25 +67,58 @@ func main() {
 	}
 	glfw.SetWindowSizeCallback(size)
 
+	redraw := true
+
 	MousePos := func(x, y int) {
-		fmt.Println(x, y)
+		redraw = true
+		//fmt.Println("MousePos:", x, y)
 	}
 	glfw.SetMousePosCallback(MousePos)
 
+	go func() {
+		<-time.After(10 * time.Second)
+		fmt.Println("trigger!")
+		updated = true
+		redraw = true
+	}()
+
 	gl.ClearColor(0.8, 0.3, 0.01, 1)
-	
+
 	var spinner int
 
+	/*in := make(chan int)
+	out := make(chan int)
+	go func(in, out chan int) {
+		for {
+			<-in
+			println("in goroutine")
+			out <- 0
+		}
+	}(in, out)*/
+
 	for gl.TRUE == glfw.WindowParam(glfw.Opened) && glfw.KeyPress != glfw.Key(glfw.KeyEsc) {
-		gl.Clear(gl.COLOR_BUFFER_BIT)
+		//in <- 0
+		//glfw.WaitEvents()
+		glfw.PollEvents()
+		//println("glfw.WaitEvents()")
+		//<-out
 
-		glfw.WaitEvents()
+		if redraw {
+			redraw = false
 
-		DrawSpinner(spinner)
-		spinner++
+			gl.Clear(gl.COLOR_BUFFER_BIT)
 
-		DrawSomething()
+			DrawSpinner(spinner)
+			spinner++
 
-		glfw.SwapBuffers()
+			DrawSomething()
+
+			glfw.SwapBuffers()
+		}
+
+		//time.Sleep(1000)
+		runtime.Gosched()
 	}
+
+	fmt.Println("occurrences was:", occurrences)
 }
