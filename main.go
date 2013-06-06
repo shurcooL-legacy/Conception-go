@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	. "gist.github.com/5286084.git"
 	"time"
 	"runtime"
@@ -12,7 +13,6 @@ import (
 )
 
 var updated bool
-var occurrences int
 
 func DrawSomething() {
 	gl.LoadIdentity()
@@ -77,7 +77,7 @@ func main() {
 
 	go func() {
 		<-time.After(10 * time.Second)
-		fmt.Println("trigger!")
+		log.Println("trigger!")
 		updated = true
 		redraw = true
 	}()
@@ -114,11 +114,11 @@ func main() {
 			DrawSomething()
 
 			glfw.SwapBuffers()
+			log.Println("swapped buffers")
+		} else {
+			time.Sleep(time.Millisecond)
 		}
 
-		//time.Sleep(1000)
-		runtime.Gosched()
+		//runtime.Gosched()
 	}
-
-	fmt.Println("occurrences was:", occurrences)
 }
