@@ -97,22 +97,9 @@ func main() {
 
 	var spinner int
 
-	/*in := make(chan int)
-	out := make(chan int)
-	go func(in, out chan int) {
-		for {
-			<-in
-			println("in goroutine")
-			out <- 0
-		}
-	}(in, out)*/
-
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
-		//in <- 0
 		//glfw.WaitEvents()
 		glfw.PollEvents()
-		//println("glfw.WaitEvents()")
-		//<-out
 
 		if redraw {
 			redraw = false
