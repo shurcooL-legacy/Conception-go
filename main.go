@@ -9,7 +9,9 @@ import (
 
 	"github.com/go-gl/gl"
 	//gl "github.com/chsc/gogl/gl21"
-	"github.com/go-gl/glfw"
+	//"github.com/go-gl/glfw"
+	glfw "github.com/tapir/glfw3-go"
+	//glfw "github.com/shurcooL/glfw3-go"
 )
 
 var updated bool
@@ -42,21 +44,28 @@ func DrawSpinner(spinner int) {
 func main() {
 	runtime.LockOSThread()
 
-	err := glfw.Init()
-	CheckError(err)
+	glfw.SetErrorCallback(func(err glfw.ErrorCode, desc string) {
+		panic(fmt.Sprintf("%v: %v\n", err, desc))
+	})
+
+	if !glfw.Init() {
+		panic("glfw.Init()")
+	}
 	defer glfw.Terminate()
 
 	//glfw.OpenWindowHint(glfw.FsaaSamples, 32)
-	err = glfw.OpenWindow(400, 400, 0, 0, 0, 0, 0, 0, glfw.Windowed)
+	window, err := glfw.CreateWindow(400, 400, "", nil, nil)
 	CheckError(err)
+	window.MakeContextCurrent()
 
-	glfw.SetWindowPos(1600, 600)
+	window.SetPosition(1600, 600)
 	//glfw.SetWindowPos(1200, 300)
-	glfw.SetSwapInterval(1)
-	glfw.Disable(glfw.AutoPollEvents)
+	glfw.SwapInterval(1)
 
-	size := func(width, height int) {
-		fmt.Println("screen size:", width, height)
+	redraw := true
+
+	size := func(w *glfw.Window, width, height int) {
+		fmt.Println("Framebuffer Size:", width, height)
 		gl.Viewport(0, 0, width, height)
 
 		// Update the projection matrix
@@ -64,16 +73,18 @@ func main() {
 		gl.LoadIdentity()
 		gl.Ortho(0, float64(width), float64(height), 0, -1, 1)
 		gl.MatrixMode(gl.MODELVIEW)
+
+		redraw = true
 	}
-	glfw.SetWindowSizeCallback(size)
+	window.SetFramebufferSizeCallback(size)
+	width, height := window.GetFramebufferSize()
+	size(window, width, height)
 
-	redraw := true
-
-	MousePos := func(x, y int) {
+	MousePos := func(w *glfw.Window, x, y float64) {
 		redraw = true
 		//fmt.Println("MousePos:", x, y)
 	}
-	glfw.SetMousePosCallback(MousePos)
+	window.SetCursorPositionCallback(MousePos)
 
 	go func() {
 		<-time.After(10 * time.Second)
@@ -96,7 +107,7 @@ func main() {
 		}
 	}(in, out)*/
 
-	for gl.TRUE == glfw.WindowParam(glfw.Opened) && glfw.KeyPress != glfw.Key(glfw.KeyEsc) {
+	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
 		//in <- 0
 		//glfw.WaitEvents()
 		glfw.PollEvents()
@@ -113,7 +124,7 @@ func main() {
 
 			DrawSomething()
 
-			glfw.SwapBuffers()
+			window.SwapBuffers()
 			log.Println("swapped buffers")
 		} else {
 			time.Sleep(time.Millisecond)
