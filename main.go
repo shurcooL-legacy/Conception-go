@@ -69,6 +69,7 @@ func main() {
 		// Update the projection matrix
 		gl.MatrixMode(gl.PROJECTION)
 		gl.LoadIdentity()
+		// TODO: Use window size (in points), not framebuffer size here
 		gl.Ortho(0, float64(width), float64(height), 0, -1, 1)
 		gl.MatrixMode(gl.MODELVIEW)
 
@@ -85,7 +86,7 @@ func main() {
 	window.SetCursorPositionCallback(MousePos)
 
 	go func() {
-		<-time.After(10 * time.Second)
+		<-time.After(3 * time.Second)
 		log.Println("trigger!")
 		updated = true
 		redraw = true
