@@ -10,8 +10,7 @@ import (
 	"github.com/go-gl/gl"
 	//gl "github.com/chsc/gogl/gl21"
 	//"github.com/go-gl/glfw"
-	glfw "github.com/tapir/glfw3-go"
-	//glfw "github.com/shurcooL/glfw3-go"
+	glfw "github.com/go-gl/glfw3"
 )
 
 var updated bool
@@ -58,8 +57,8 @@ func main() {
 	CheckError(err)
 	window.MakeContextCurrent()
 
-	window.SetPosition(1600, 600)
-	//glfw.SetWindowPos(1200, 300)
+	//window.SetPosition(1600, 600)
+	window.SetPosition(1200, 300)
 	glfw.SwapInterval(1)
 
 	redraw := true
