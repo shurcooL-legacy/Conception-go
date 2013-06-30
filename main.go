@@ -9,8 +9,7 @@ import (
 
 	"github.com/go-gl/gl"
 	//gl "github.com/chsc/gogl/gl21"
-	//"github.com/go-gl/glfw"
-	glfw "github.com/go-gl/glfw3"
+	"github.com/go-gl/glfw3"
 )
 
 var updated bool
