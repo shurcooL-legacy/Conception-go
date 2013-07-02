@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-gl/gl"
 	//gl "github.com/chsc/gogl/gl21"
-	"github.com/go-gl/glfw3"
+	glfw "github.com/go-gl/glfw3"
 )
 
 var updated bool
@@ -64,13 +64,14 @@ func main() {
 
 	size := func(w *glfw.Window, width, height int) {
 		fmt.Println("Framebuffer Size:", width, height)
+		windowWidth, windowHeight := w.GetSize()
+		fmt.Println("Window Size:", windowWidth, windowHeight)
 		gl.Viewport(0, 0, width, height)
 
 		// Update the projection matrix
 		gl.MatrixMode(gl.PROJECTION)
 		gl.LoadIdentity()
-		// TODO: Use window size (in points), not framebuffer size here
-		gl.Ortho(0, float64(width), float64(height), 0, -1, 1)
+		gl.Ortho(0, float64(windowWidth), float64(windowHeight), 0, -1, 1)
 		gl.MatrixMode(gl.MODELVIEW)
 
 		redraw = true
