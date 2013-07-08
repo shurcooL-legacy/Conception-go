@@ -7,12 +7,57 @@ import (
 	"time"
 	"runtime"
 
-	"github.com/go-gl/gl"
-	//gl "github.com/chsc/gogl/gl21"
+	"image"
+	"os"
+	_ "github.com/ftrvxmtrx/tga"
+	_ "image/png"
+
+	//"github.com/go-gl/gl"
+	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3"
+
+	"github.com/shurcooL/go-goon"
 )
 
+var _ = goon.Dump
+
 var updated bool
+
+func CheckGLError() {
+	errorCode := gl.GetError()
+	if 0 != errorCode {
+		log.Panic("GL Error: ", errorCode)
+	}
+}
+
+func LoadTexture(path string) {
+	fmt.Printf("Trying to load texture %q.\n", path)
+
+	// Open the file
+	file, err := os.Open(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	// Decode the image
+	img, _, err := image.Decode(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	bounds := img.Bounds()
+	goon.Dump(len(img.(*image.RGBA).Pix))
+	//goon.Dump(img.(*image.RGBA).Pix)
+	goon.Dump(gl.Sizei(bounds.Dx()), gl.Sizei(bounds.Dy()))
+
+	var texture gl.Uint
+	gl.GenTextures(1, &texture)
+	gl.BindTexture(gl.TEXTURE_2D, texture)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.Sizei(bounds.Dx()), gl.Sizei(bounds.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Pointer(&(img.(*image.RGBA).Pix)))
+	CheckGLError()
+}
 
 func DrawSomething() {
 	gl.LoadIdentity()
@@ -27,12 +72,33 @@ func DrawSomething() {
 	gl.Rectf(0 + 1, 0 + 1, 300 - 1, 100 - 1)
 }
 
+func DrawSomething2() {
+	gl.LoadIdentity()
+	gl.Translatef(50, 250, 0)
+	gl.Color3f(1, 1, 1)
+
+	gl.Enable(gl.TEXTURE_2D)
+	gl.Begin(gl.TRIANGLE_FAN)
+	{
+		gl.TexCoord2i(0, 0)
+		gl.Vertex2i(0, 0)
+		gl.TexCoord2i(1, 0)
+		gl.Vertex2i(32, 0)
+		gl.TexCoord2i(1, 1)
+		gl.Vertex2i(32, 32)
+		gl.TexCoord2i(0, 1)
+		gl.Vertex2i(0, 32)
+	}
+	gl.End()
+	gl.Disable(gl.TEXTURE_2D)
+}
+
 func DrawSpinner(spinner int) {
 	gl.LoadIdentity()
 	gl.Color3f(0, 0, 0)
 	gl.Translatef(30, 30, 0)
-	gl.Rotatef(float32(spinner), 0, 0, 1)
-	//gl.Rotatef(gl.Float(spinner), 0, 0, 1)
+	//gl.Rotatef(float32(spinner), 0, 0, 1)
+	gl.Rotatef(gl.Float(spinner), 0, 0, 1)
 	gl.Begin(gl.LINES)
 	gl.Vertex2i(0, 0)
 	gl.Vertex2i(0, 20)
@@ -56,9 +122,18 @@ func main() {
 	CheckError(err)
 	window.MakeContextCurrent()
 
+	err = gl.Init()
+	if nil != err {
+		log.Print(err)
+	}
+	fmt.Println(gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
+
 	//window.SetPosition(1600, 600)
 	window.SetPosition(1200, 300)
 	glfw.SwapInterval(1)
+
+	//LoadTexture("./data/bg test.tga")
+	LoadTexture("./GoLand/src/gist.github.com/5694308.git/Simple.png")
 
 	redraw := true
 
@@ -66,12 +141,12 @@ func main() {
 		fmt.Println("Framebuffer Size:", width, height)
 		windowWidth, windowHeight := w.GetSize()
 		fmt.Println("Window Size:", windowWidth, windowHeight)
-		gl.Viewport(0, 0, width, height)
+		gl.Viewport(0, 0, gl.Sizei(width), gl.Sizei(height))
 
 		// Update the projection matrix
 		gl.MatrixMode(gl.PROJECTION)
 		gl.LoadIdentity()
-		gl.Ortho(0, float64(windowWidth), float64(windowHeight), 0, -1, 1)
+		gl.Ortho(0, gl.Double(windowWidth), gl.Double(windowHeight), 0, -1, 1)
 		gl.MatrixMode(gl.MODELVIEW)
 
 		redraw = true
@@ -110,6 +185,8 @@ func main() {
 			spinner++
 
 			DrawSomething()
+
+			DrawSomething2()
 
 			window.SwapBuffers()
 			log.Println("swapped buffers")
