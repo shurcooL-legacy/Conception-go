@@ -33,6 +33,10 @@ func CheckGLError() {
 var oFontBase gl.Uint
 
 func Print(x, y float32, s string) {
+	if 0 == len(s) {
+		return
+	}
+
 	gl.Enable(gl.BLEND)
 	gl.Enable(gl.TEXTURE_2D)
 
