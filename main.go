@@ -2,15 +2,15 @@ package main
 
 import (
 	"fmt"
-	"log"
 	. "gist.github.com/5286084.git"
-	"time"
+	"log"
 	"runtime"
+	"time"
 
-	"image"
-	"os"
 	_ "github.com/ftrvxmtrx/tga"
+	"image"
 	_ "image/png"
+	"os"
 
 	//"github.com/go-gl/gl"
 	gl "github.com/chsc/gogl/gl21"
@@ -45,17 +45,27 @@ func LoadTexture(path string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	bounds := img.Bounds()
-	goon.Dump(len(img.(*image.RGBA).Pix))
-	//goon.Dump(img.(*image.RGBA).Pix)
-	goon.Dump(gl.Sizei(bounds.Dx()), gl.Sizei(bounds.Dy()))
+	fmt.Printf("Loaded %vx%v texture.\n", bounds.Dx(), bounds.Dy())
+
+	var pixPointer *uint8
+	switch img := img.(type) {
+	case *image.RGBA:
+		pixPointer = &img.Pix[0]
+	case *image.NRGBA:
+		pixPointer = &img.Pix[0]
+	default:
+		panic("Unsupported type.")
+	}
 
 	var texture gl.Uint
 	gl.GenTextures(1, &texture)
 	gl.BindTexture(gl.TEXTURE_2D, texture)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.GENERATE_MIPMAP, gl.TRUE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.Sizei(bounds.Dx()), gl.Sizei(bounds.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Pointer(&(img.(*image.RGBA).Pix)))
+	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.Sizei(bounds.Dx()), gl.Sizei(bounds.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Pointer(pixPointer))
 	CheckGLError()
 }
 
@@ -69,28 +79,31 @@ func DrawSomething() {
 	} else {
 		gl.Color3f(0, 1, 0)
 	}
-	gl.Rectf(0 + 1, 0 + 1, 300 - 1, 100 - 1)
+	gl.Rectf(0+1, 0+1, 300-1, 100-1)
 }
 
 func DrawSomething2() {
 	gl.LoadIdentity()
-	gl.Translatef(50, 250, 0)
-	gl.Color3f(1, 1, 1)
+	gl.Translatef(50, 220, 0)
+	gl.Color3f(0, 0, 0)
 
 	gl.Enable(gl.TEXTURE_2D)
+	gl.Enable(gl.BLEND)
 	gl.Begin(gl.TRIANGLE_FAN)
 	{
+		const size = 256
 		gl.TexCoord2i(0, 0)
 		gl.Vertex2i(0, 0)
 		gl.TexCoord2i(1, 0)
-		gl.Vertex2i(32, 0)
+		gl.Vertex2i(size, 0)
 		gl.TexCoord2i(1, 1)
-		gl.Vertex2i(32, 32)
+		gl.Vertex2i(size, size)
 		gl.TexCoord2i(0, 1)
-		gl.Vertex2i(0, 32)
+		gl.Vertex2i(0, size)
 	}
 	gl.End()
 	gl.Disable(gl.TEXTURE_2D)
+	gl.Disable(gl.BLEND)
 }
 
 func DrawSpinner(spinner int) {
@@ -132,8 +145,7 @@ func main() {
 	window.SetPosition(1200, 300)
 	glfw.SwapInterval(1)
 
-	//LoadTexture("./data/bg test.tga")
-	LoadTexture("./GoLand/src/gist.github.com/5694308.git/Simple.png")
+	LoadTexture("./data/Font2048.tga")
 
 	redraw := true
 
@@ -168,6 +180,7 @@ func main() {
 		redraw = true
 	}()
 
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	gl.ClearColor(0.8, 0.3, 0.01, 1)
 
 	var spinner int
