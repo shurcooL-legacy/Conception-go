@@ -30,6 +30,67 @@ func CheckGLError() {
 	}
 }
 
+var oFontBase gl.Uint
+
+func Print(x, y float32, s string) {
+	gl.Enable(gl.BLEND)
+	gl.Enable(gl.TEXTURE_2D)
+
+	gl.PushMatrix()
+	gl.Translatef(gl.Float(x), gl.Float(y), 0)
+	gl.Translated(-4 + 0.25, -1, 0)
+	gl.ListBase(oFontBase)
+	gl.CallLists(gl.Sizei(len(s)), gl.UNSIGNED_BYTE, gl.Pointer(&[]byte(s)[0]));
+	gl.PopMatrix()
+	
+	CheckGLError()
+
+	gl.Disable(gl.BLEND)
+	gl.Disable(gl.TEXTURE_2D)
+}
+
+func InitFont() {
+	const fontWidth = 8
+
+	LoadTexture("./data/Font2048.tga")
+
+	oFontBase = gl.GenLists(256)
+	
+	for iLoop1 := 0; iLoop1 < 256; iLoop1++ {
+		fCharX := gl.Float(iLoop1 % 16) / 16.0;
+		fCharY := gl.Float(iLoop1 / 16) / 16.0;
+
+		gl.NewList(oFontBase + gl.Uint(iLoop1), gl.COMPILE)
+			const offset = gl.Float(0.004)
+//#if DECISION_RENDER_TEXT_VCENTERED_MID
+			VerticalOffset := gl.Float(0.00125)
+			if (('a' <= iLoop1 && iLoop1 <= 'z') || '_' == iLoop1) {
+				VerticalOffset = gl.Float(-0.00225)
+			}
+/*#else
+			VerticalOffset := gl.Float(0.0)
+//#endif*/
+			gl.Begin(gl.QUADS)
+				gl.TexCoord2f(fCharX+offset, 1 - (1 - fCharY - 0.0625+offset + VerticalOffset))
+				gl.Vertex2i(0, 16);
+				gl.TexCoord2f(fCharX + 0.0625-offset, 1 - (1 - fCharY - 0.0625+offset + VerticalOffset))
+				gl.Vertex2i(16, 16);
+				gl.TexCoord2f(fCharX + 0.0625-offset, 1 - (1 - fCharY-offset + VerticalOffset))
+				gl.Vertex2i(16, 0);
+				gl.TexCoord2f(fCharX+offset, 1 - (1 - fCharY-offset + VerticalOffset))
+				gl.Vertex2i(0, 0);
+			gl.End()
+			gl.Translated(fontWidth, 0.0, 0.0);
+		gl.EndList()
+	}
+	
+	CheckGLError()
+}
+
+func DeinitFont() {
+	gl.DeleteLists(oFontBase, 256)
+}
+
 func LoadTexture(path string) {
 	fmt.Printf("Trying to load texture %q.\n", path)
 
@@ -73,13 +134,15 @@ func DrawSomething() {
 	gl.LoadIdentity()
 	gl.Translatef(50, 100, 0)
 	gl.Color3f(0, 0, 0)
-	gl.Rectf(0, 0, 300, 100)
+	gl.Rectf(0-1, 0-1, 8*22+1, 16+1)
 	if !updated {
 		gl.Color3f(1, 1, 1)
 	} else {
 		gl.Color3f(0, 1, 0)
 	}
-	gl.Rectf(0+1, 0+1, 300-1, 100-1)
+	gl.Rectf(0, 0, 8*22, 16)
+	gl.Color3f(0, 0, 0)
+	Print(0, 0, "Hello Conception 2! :D")
 }
 
 func DrawSomething2() {
@@ -145,7 +208,8 @@ func main() {
 	window.SetPosition(1200, 300)
 	glfw.SwapInterval(1)
 
-	LoadTexture("./data/Font2048.tga")
+	InitFont()
+	defer DeinitFont()
 
 	redraw := true
 
