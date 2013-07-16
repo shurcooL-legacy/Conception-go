@@ -17,11 +17,16 @@ import (
 	glfw "github.com/go-gl/glfw3"
 
 	"github.com/shurcooL/go-goon"
+
+	. "gist.github.com/6003701.git"
 )
 
+var _ = UnderscoreSepToCamelCase
 var _ = goon.Dump
 
-var updated bool
+var widgets []Widgeter
+var offX, offY gl.Float
+var oFontBase gl.Uint
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -29,8 +34,6 @@ func CheckGLError() {
 		log.Panic("GL Error: ", errorCode)
 	}
 }
-
-var oFontBase gl.Uint
 
 func Print(x, y float32, s string) {
 	if 0 == len(s) {
@@ -42,11 +45,11 @@ func Print(x, y float32, s string) {
 
 	gl.PushMatrix()
 	gl.Translatef(gl.Float(x), gl.Float(y), 0)
-	gl.Translated(-4 + 0.25, -1, 0)
+	gl.Translatef(-4+0.25, -1, 0)
 	gl.ListBase(oFontBase)
-	gl.CallLists(gl.Sizei(len(s)), gl.UNSIGNED_BYTE, gl.Pointer(&[]byte(s)[0]));
+	gl.CallLists(gl.Sizei(len(s)), gl.UNSIGNED_BYTE, gl.Pointer(&[]byte(s)[0]))
 	gl.PopMatrix()
-	
+
 	CheckGLError()
 
 	gl.Disable(gl.BLEND)
@@ -59,35 +62,35 @@ func InitFont() {
 	LoadTexture("./data/Font2048.tga")
 
 	oFontBase = gl.GenLists(256)
-	
-	for iLoop1 := 0; iLoop1 < 256; iLoop1++ {
-		fCharX := gl.Float(iLoop1 % 16) / 16.0;
-		fCharY := gl.Float(iLoop1 / 16) / 16.0;
 
-		gl.NewList(oFontBase + gl.Uint(iLoop1), gl.COMPILE)
-			const offset = gl.Float(0.004)
-//#if DECISION_RENDER_TEXT_VCENTERED_MID
-			VerticalOffset := gl.Float(0.00125)
-			if (('a' <= iLoop1 && iLoop1 <= 'z') || '_' == iLoop1) {
-				VerticalOffset = gl.Float(-0.00225)
-			}
-/*#else
-			VerticalOffset := gl.Float(0.0)
-//#endif*/
-			gl.Begin(gl.QUADS)
-				gl.TexCoord2f(fCharX+offset, 1 - (1 - fCharY - 0.0625+offset + VerticalOffset))
-				gl.Vertex2i(0, 16);
-				gl.TexCoord2f(fCharX + 0.0625-offset, 1 - (1 - fCharY - 0.0625+offset + VerticalOffset))
-				gl.Vertex2i(16, 16);
-				gl.TexCoord2f(fCharX + 0.0625-offset, 1 - (1 - fCharY-offset + VerticalOffset))
-				gl.Vertex2i(16, 0);
-				gl.TexCoord2f(fCharX+offset, 1 - (1 - fCharY-offset + VerticalOffset))
-				gl.Vertex2i(0, 0);
-			gl.End()
-			gl.Translated(fontWidth, 0.0, 0.0);
+	for iLoop1 := 0; iLoop1 < 256; iLoop1++ {
+		fCharX := gl.Float(iLoop1%16) / 16.0
+		fCharY := gl.Float(iLoop1/16) / 16.0
+
+		gl.NewList(oFontBase+gl.Uint(iLoop1), gl.COMPILE)
+		const offset = gl.Float(0.004)
+		//#if DECISION_RENDER_TEXT_VCENTERED_MID
+		VerticalOffset := gl.Float(0.00125)
+		if ('a' <= iLoop1 && iLoop1 <= 'z') || '_' == iLoop1 {
+			VerticalOffset = gl.Float(-0.00225)
+		}
+		/*#else
+					VerticalOffset := gl.Float(0.0)
+		//#endif*/
+		gl.Begin(gl.QUADS)
+		gl.TexCoord2f(fCharX+offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
+		gl.Vertex2i(0, 16)
+		gl.TexCoord2f(fCharX+0.0625-offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
+		gl.Vertex2i(16, 16)
+		gl.TexCoord2f(fCharX+0.0625-offset, 1-(1-fCharY-offset+VerticalOffset))
+		gl.Vertex2i(16, 0)
+		gl.TexCoord2f(fCharX+offset, 1-(1-fCharY-offset+VerticalOffset))
+		gl.Vertex2i(0, 0)
+		gl.End()
+		gl.Translated(fontWidth, 0.0, 0.0)
 		gl.EndList()
 	}
-	
+
 	CheckGLError()
 }
 
@@ -134,24 +137,77 @@ func LoadTexture(path string) {
 	CheckGLError()
 }
 
-func DrawSomething() {
-	gl.LoadIdentity()
-	gl.Translatef(50, 100, 0)
-	gl.Color3f(0, 0, 0)
-	gl.Rectf(0-1, 0-1, 8*22+1, 16+1)
-	if !updated {
-		gl.Color3f(1, 1, 1)
-	} else {
-		gl.Color3f(0, 1, 0)
-	}
-	gl.Rectf(0, 0, 8*22, 16)
-	gl.Color3f(0, 0, 0)
-	Print(0, 0, "Hello Conception 2! :D")
+type Widgeter interface {
+	Render()
 }
 
-func DrawSomething2() {
-	gl.LoadIdentity()
-	gl.Translatef(50, 220, 0)
+type Widget struct {
+	x, y   gl.Float
+	dx, dy gl.Float
+}
+
+func (*Widget) Render() {}
+
+type BoxWidget struct {
+	Widget
+}
+
+func (w *BoxWidget) Render() {
+	DrawBox(w.x, w.y, w.dx, w.dy)
+}
+
+func DrawBox(x, y, dx, dy gl.Float) {
+	gl.Color3f(0.3, 0.3, 0.3)
+	gl.Rectf(x-1, y-1, x+dx+1, y+dy+1)
+	gl.Color3f(1, 1, 1)
+	gl.Rectf(x, y, x+dx, y+dy)
+}
+
+type CompositeWidget struct {
+	Widget
+	Widgets []Widgeter
+}
+
+func (w *CompositeWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translatef(w.x, w.y, 0)
+
+	for _, widget := range w.Widgets {
+		widget.Render()
+	}
+}
+
+type SomethingWidget struct {
+	Widget
+	Updated bool
+}
+
+func (w *SomethingWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translatef(w.x, w.y, 0)
+	gl.Color3f(0.3, 0.3, 0.3)
+	gl.Rectf(0-1, 0-1, 8*27+1, 16+1)
+	if !w.Updated {
+		gl.Color3f(1, 1, 1)
+	} else {
+		gl.Color3f(0.9, 1, 0.9)
+	}
+	gl.Rectf(0, 0, 8*27, 16)
+
+	gl.Color3f(0, 0, 0)
+	Print(0, 0, "Hello Conception 2 (Go)! :D Woot")
+}
+
+type Something2Widget struct {
+	Widget
+}
+
+func (w *Something2Widget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translatef(w.x, w.y, 0)
 	gl.Color3f(0, 0, 0)
 
 	gl.Enable(gl.TEXTURE_2D)
@@ -173,12 +229,44 @@ func DrawSomething2() {
 	gl.Disable(gl.BLEND)
 }
 
-func DrawSpinner(spinner int) {
-	gl.LoadIdentity()
+type UnderscoreSepToCamelCaseWidget struct {
+	Widget
+	window *glfw.Window
+}
+
+func (w *UnderscoreSepToCamelCaseWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translatef(w.x, w.y, 0)
+
+	//s := w.window.GetClipboardString()
+	s := "get_clipboard_string"
+	// E.g., get_clipboard_string -> GetClipboardString
+	s += " -> " + UnderscoreSepToCamelCase(s)
+	w.dx = gl.Float(8 * len(s))
+	w.dy = 16
+
+	gl.Color3f(0.3, 0.3, 0.3)
+	gl.Rectf(0-1, 0-1, w.dx+1, w.dy+1)
+	gl.Color3f(1, 1, 1)
+	gl.Rectf(0, 0, w.dx, w.dy)
+
 	gl.Color3f(0, 0, 0)
-	gl.Translatef(30, 30, 0)
+	Print(0, 0, s)
+}
+
+type SpinnerWidget struct {
+	Widget
+	Spinner uint32
+}
+
+func (w *SpinnerWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Color3f(0, 0, 0)
+	gl.Translatef(w.x, w.y, 0)
 	//gl.Rotatef(float32(spinner), 0, 0, 1)
-	gl.Rotatef(gl.Float(spinner), 0, 0, 1)
+	gl.Rotatef(gl.Float(w.Spinner), 0, 0, 1)
 	gl.Begin(gl.LINES)
 	gl.Vertex2i(0, 0)
 	gl.Vertex2i(0, 20)
@@ -189,7 +277,7 @@ func main() {
 	runtime.LockOSThread()
 
 	glfw.SetErrorCallback(func(err glfw.ErrorCode, desc string) {
-		panic(fmt.Sprintf("%v: %v\n", err, desc))
+		panic(fmt.Sprintf("glfw.ErrorCallback: %v: %v\n", err, desc))
 	})
 
 	if !glfw.Init() {
@@ -209,7 +297,7 @@ func main() {
 	fmt.Println(gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
 
 	//window.SetPosition(1600, 600)
-	window.SetPosition(1200, 300)
+	window.SetPosition(1275, 300)
 	glfw.SwapInterval(1)
 
 	InitFont()
@@ -235,42 +323,73 @@ func main() {
 	width, height := window.GetFramebufferSize()
 	size(window, width, height)
 
+	widgets = append(widgets, &BoxWidget{Widget{50, 150, 16, 16}})
+	spinner := SpinnerWidget{Widget{30, 30, 0, 0}, 0}
+	widgets = append(widgets, &spinner)
+	something := SomethingWidget{Widget{50, 100, 0, 0}, false}
+	widgets = append(widgets, &something)
+	widgets = append(widgets, &Something2Widget{Widget{50, 220, 0, 0}})
+	widgets = append(widgets, &CompositeWidget{Widget{150, 150, 0, 0},
+		[]Widgeter{
+			&BoxWidget{Widget{0, 0, 16, 16}},
+			&BoxWidget{Widget{16 + 2, 0, 16, 16}},
+		},
+	})
+	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{Widget{50, 180, 0, 0}, window})
+
 	MousePos := func(w *glfw.Window, x, y float64) {
 		redraw = true
 		//fmt.Println("MousePos:", x, y)
+
+		//(widgets[len(widgets)-1]).(*CompositeWidget).x = gl.Float(x)
+		//(widgets[len(widgets)-1]).(*CompositeWidget).y = gl.Float(y)
 	}
 	window.SetCursorPositionCallback(MousePos)
+
+	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
+		offX += gl.Float(xoff * 10)
+		offY += gl.Float(yoff * 10)
+		redraw = true
+	})
 
 	go func() {
 		<-time.After(3 * time.Second)
 		log.Println("trigger!")
-		updated = true
+		something.Updated = true
 		redraw = true
 	}()
 
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	gl.ClearColor(0.8, 0.3, 0.01, 1)
 
-	var spinner int
+	//last := window.GetClipboardString()
 
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
 		//glfw.WaitEvents()
 		glfw.PollEvents()
+
+		/*now := window.GetClipboardString()
+		if now != last {
+			last = now
+			redraw = true
+			fmt.Println("GetClipboardString changed!")
+		}*/
 
 		if redraw {
 			redraw = false
 
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 
-			DrawSpinner(spinner)
-			spinner++
+			gl.LoadIdentity()
+			gl.Translatef(offX, offY, 0)
 
-			DrawSomething()
-
-			DrawSomething2()
+			for _, widget := range widgets {
+				widget.Render()
+			}
 
 			window.SwapBuffers()
-			log.Println("swapped buffers")
+			spinner.Spinner++
+			//log.Println("swapped buffers")
 		} else {
 			time.Sleep(time.Millisecond)
 		}
