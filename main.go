@@ -133,6 +133,7 @@ func LoadTexture(path string) {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.GENERATE_MIPMAP, gl.TRUE)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, -0.65)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.Sizei(bounds.Dx()), gl.Sizei(bounds.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Pointer(pixPointer))
 	CheckGLError()
 }
@@ -273,6 +274,39 @@ func (w *SpinnerWidget) Render() {
 	gl.End()
 }
 
+type EventType uint8
+
+const (
+	BUTTON_EVENT EventType = iota
+	CHARACTER_EVENT
+	SLIDER_EVENT
+	AXIS_EVENT
+)
+
+type InputEvent struct {
+	EventTypes map[EventType]bool
+	DeviceId   uint8
+	InputId    uint16
+
+	Buttons []bool
+	Sliders []float64
+	Axes    []float64
+}
+
+func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
+	for _, inputEvent := range inputEventQueue {
+		if inputEvent.DeviceId == 0 && inputEvent.InputId == 0 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
+			fmt.Println("Left down!")
+		} else if inputEvent.DeviceId == 0 && inputEvent.InputId == 1 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
+			fmt.Println("Right down!")
+		}
+	}
+
+	inputEventQueue = make([]InputEvent, 0)
+
+	return inputEventQueue
+}
+
 func main() {
 	runtime.LockOSThread()
 
@@ -337,12 +371,25 @@ func main() {
 	})
 	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{Widget{50, 180, 0, 0}, window})
 
+	inputEventQueue := []InputEvent{}
+
 	MousePos := func(w *glfw.Window, x, y float64) {
 		redraw = true
 		//fmt.Println("MousePos:", x, y)
 
 		//(widgets[len(widgets)-1]).(*CompositeWidget).x = gl.Float(x)
 		//(widgets[len(widgets)-1]).(*CompositeWidget).y = gl.Float(y)
+
+		inputEvent := InputEvent{
+			EventTypes: map[EventType]bool{AXIS_EVENT: true},
+			DeviceId:   0,
+			InputId:    0,
+			Buttons:    nil,
+			Sliders:    nil,
+			Axes:       []float64{x, y},
+		}
+		//fmt.Printf("%#v\n", inputEvent)
+		inputEventQueue = append(inputEventQueue, inputEvent)
 	}
 	window.SetCursorPositionCallback(MousePos)
 
@@ -350,6 +397,42 @@ func main() {
 		offX += gl.Float(xoff * 10)
 		offY += gl.Float(yoff * 10)
 		redraw = true
+
+		inputEvent := InputEvent{
+			EventTypes: map[EventType]bool{SLIDER_EVENT: true},
+			DeviceId:   0,
+			InputId:    2,
+			Buttons:    nil,
+			Sliders:    []float64{yoff, xoff},
+			Axes:       nil,
+		}
+		//fmt.Printf("%#v\n", inputEvent)
+		inputEventQueue = append(inputEventQueue, inputEvent)
+	})
+
+	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
+		inputEvent := InputEvent{
+			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
+			DeviceId:   0,
+			InputId:    uint16(button),
+			Buttons:    []bool{action != glfw.Release},
+			Sliders:    nil,
+			Axes:       nil,
+		}
+		inputEventQueue = append(inputEventQueue, inputEvent)
+	})
+
+	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+		inputEvent := InputEvent{
+			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
+			DeviceId:   130,
+			InputId:    uint16(key),
+			Buttons:    []bool{action != glfw.Release},
+			Sliders:    nil,
+			Axes:       nil,
+		}
+		fmt.Println(key, action, mods)
+		inputEventQueue = append(inputEventQueue, inputEvent)
 	})
 
 	go func() {
@@ -375,11 +458,13 @@ func main() {
 			fmt.Println("GetClipboardString changed!")
 		}*/
 
+		// Input
+		inputEventQueue = ProcessInputEventQueue(inputEventQueue)
+
 		if redraw {
 			redraw = false
 
 			gl.Clear(gl.COLOR_BUFFER_BIT)
-
 			gl.LoadIdentity()
 			gl.Translatef(offX, offY, 0)
 
