@@ -16,6 +16,8 @@ import (
 	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3"
 
+	"github.com/Jragonmiris/mathgl"
+
 	"github.com/shurcooL/go-goon"
 
 	. "gist.github.com/6003701.git"
@@ -24,9 +26,12 @@ import (
 var _ = UnderscoreSepToCamelCase
 var _ = goon.Dump
 
-var widgets []Widgeter
 var offX, offY gl.Float
 var oFontBase gl.Uint
+
+var widgets []Widgeter
+var mousePointer *Pointer
+var keyboardPointer *Pointer
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -140,25 +145,67 @@ func LoadTexture(path string) {
 
 type Widgeter interface {
 	Render()
+	Hit(mathgl.Vec4f) []Widgeter
+	HoverPointers() map[*Pointer]bool
 }
 
 type Widget struct {
-	x, y   gl.Float
-	dx, dy gl.Float
+	x, y          gl.Float
+	dx, dy        gl.Float
+	hoverPointers map[*Pointer]bool
+}
+
+func NewWidget(x, y, dx, dy gl.Float) Widget {
+	return Widget{x, y, dx, dy, map[*Pointer]bool{}}
 }
 
 func (*Widget) Render() {}
+func (w *Widget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+	Hit := (ParentPosition[0] >= float32(w.x) &&
+		ParentPosition[1] >= float32(w.y) &&
+		ParentPosition[0] < float32(w.x+w.dx) &&
+		ParentPosition[1] < float32(w.y+w.dy))
+
+	if (Hit) {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *Widget) HoverPointers() map[*Pointer]bool {
+	return w.hoverPointers
+}
 
 type BoxWidget struct {
 	Widget
 }
 
 func (w *BoxWidget) Render() {
-	DrawBox(w.x, w.y, w.dx, w.dy)
+	/*// HACK: Brute-force check the mouse pointer if it contains this widget
+	isHit := false
+	for _, hit := range mousePointer.Mapping {
+		if &w.Widget == hit {
+			isHit = true
+			break
+		}
+	}*/
+	isHit := len(w.HoverPointers()) > 0
+
+	if !isHit {
+		DrawBox(w.x, w.y, w.dx, w.dy)
+	} else {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	}
 }
 
 func DrawBox(x, y, dx, dy gl.Float) {
 	gl.Color3f(0.3, 0.3, 0.3)
+	gl.Rectf(x-1, y-1, x+dx+1, y+dy+1)
+	gl.Color3f(1, 1, 1)
+	gl.Rectf(x, y, x+dx, y+dy)
+}
+func DrawYBox(x, y, dx, dy gl.Float) {
+	gl.Color3f(0.898, 0.765, 0.396)
 	gl.Rectf(x-1, y-1, x+dx+1, y+dy+1)
 	gl.Color3f(1, 1, 1)
 	gl.Rectf(x, y, x+dx, y+dy)
@@ -177,6 +224,16 @@ func (w *CompositeWidget) Render() {
 	for _, widget := range w.Widgets {
 		widget.Render()
 	}
+}
+func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+	LocalPosition := ParentPosition.Sub(mathgl.Vec4f{float32(w.x), float32(w.y)})
+
+	hits := []Widgeter{}
+	for _, widget := range w.Widgets {
+		hits = append(hits, widget.Hit(LocalPosition)...)
+	}
+
+	return hits
 }
 
 type SomethingWidget struct {
@@ -274,6 +331,18 @@ func (w *SpinnerWidget) Render() {
 	gl.End()
 }
 
+type VirtualCategory uint8
+
+const (
+	TYPING VirtualCategory = iota
+	POINTING
+)
+
+type Pointer struct {
+	VirtualCategory VirtualCategory
+	Mapping         []Widgeter
+}
+
 type EventType uint8
 
 const (
@@ -284,9 +353,10 @@ const (
 )
 
 type InputEvent struct {
+	Pointer    *Pointer
 	EventTypes map[EventType]bool
-	DeviceId   uint8
-	InputId    uint16
+	//DeviceId   uint8
+	InputId uint16
 
 	Buttons []bool
 	Sliders []float64
@@ -294,15 +364,38 @@ type InputEvent struct {
 }
 
 func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
-	for _, inputEvent := range inputEventQueue {
-		if inputEvent.DeviceId == 0 && inputEvent.InputId == 0 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
+	for len(inputEventQueue) > 0 {
+		inputEvent := inputEventQueue[0]
+
+		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] {
+			// TODO: Query pointer state rather than event properties
+			Position := mathgl.Vec4f{float32(inputEvent.Axes[0]), float32(inputEvent.Axes[1])}
+
+			// Clear previously hit widgets
+			for _, widget := range inputEvent.Pointer.Mapping {
+				delete(widget.HoverPointers(), inputEvent.Pointer)
+			}
+			inputEvent.Pointer.Mapping = []Widgeter{}
+
+			// Recalculate currently hit widgets
+			for _, widget := range widgets {
+				inputEvent.Pointer.Mapping = append(inputEvent.Pointer.Mapping, widget.Hit(Position)...)
+			}
+			for _, widget := range inputEvent.Pointer.Mapping {
+				widget.HoverPointers()[inputEvent.Pointer] = true
+			}
+		}
+
+		if inputEvent.Pointer == mousePointer && inputEvent.InputId == 0 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
 			fmt.Println("Left down!")
-		} else if inputEvent.DeviceId == 0 && inputEvent.InputId == 1 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
+		} else if inputEvent.Pointer == mousePointer && inputEvent.InputId == 1 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
 			fmt.Println("Right down!")
 		}
+
+		inputEventQueue = inputEventQueue[1:]
 	}
 
-	inputEventQueue = make([]InputEvent, 0)
+	inputEventQueue = []InputEvent{}
 
 	return inputEventQueue
 }
@@ -357,20 +450,23 @@ func main() {
 	width, height := window.GetFramebufferSize()
 	size(window, width, height)
 
-	widgets = append(widgets, &BoxWidget{Widget{50, 150, 16, 16}})
-	spinner := SpinnerWidget{Widget{30, 30, 0, 0}, 0}
+	box := &BoxWidget{NewWidget(50, 150, 16, 16)}
+	widgets = append(widgets, box)
+	spinner := SpinnerWidget{NewWidget(30, 30, 0, 0), 0}
 	widgets = append(widgets, &spinner)
-	something := SomethingWidget{Widget{50, 100, 0, 0}, false}
+	something := SomethingWidget{NewWidget(50, 100, 0, 0), false}
 	widgets = append(widgets, &something)
-	widgets = append(widgets, &Something2Widget{Widget{50, 220, 0, 0}})
-	widgets = append(widgets, &CompositeWidget{Widget{150, 150, 0, 0},
+	widgets = append(widgets, &Something2Widget{NewWidget(50, 220, 0, 0)})
+	widgets = append(widgets, &CompositeWidget{NewWidget(150, 150, 0, 0),
 		[]Widgeter{
-			&BoxWidget{Widget{0, 0, 16, 16}},
-			&BoxWidget{Widget{16 + 2, 0, 16, 16}},
+			&BoxWidget{NewWidget(0, 0, 16, 16)},
+			&BoxWidget{NewWidget(16 + 2, 0, 16, 16)},
 		},
 	})
-	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{Widget{50, 180, 0, 0}, window})
+	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
 
+	mousePointer = &Pointer{VirtualCategory: POINTING}
+	keyboardPointer = &Pointer{VirtualCategory: TYPING}
 	inputEventQueue := []InputEvent{}
 
 	MousePos := func(w *glfw.Window, x, y float64) {
@@ -381,12 +477,13 @@ func main() {
 		//(widgets[len(widgets)-1]).(*CompositeWidget).y = gl.Float(y)
 
 		inputEvent := InputEvent{
+			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{AXIS_EVENT: true},
-			DeviceId:   0,
-			InputId:    0,
-			Buttons:    nil,
-			Sliders:    nil,
-			Axes:       []float64{x, y},
+			//DeviceId:   0,
+			InputId: 0,
+			Buttons: nil,
+			Sliders: nil,
+			Axes:    []float64{x, y},
 		}
 		//fmt.Printf("%#v\n", inputEvent)
 		inputEventQueue = append(inputEventQueue, inputEvent)
@@ -399,12 +496,13 @@ func main() {
 		redraw = true
 
 		inputEvent := InputEvent{
+			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{SLIDER_EVENT: true},
-			DeviceId:   0,
-			InputId:    2,
-			Buttons:    nil,
-			Sliders:    []float64{yoff, xoff},
-			Axes:       nil,
+			//DeviceId:   0,
+			InputId: 2,
+			Buttons: nil,
+			Sliders: []float64{yoff, xoff},
+			Axes:    nil,
 		}
 		//fmt.Printf("%#v\n", inputEvent)
 		inputEventQueue = append(inputEventQueue, inputEvent)
@@ -412,24 +510,26 @@ func main() {
 
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
 		inputEvent := InputEvent{
+			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
-			DeviceId:   0,
-			InputId:    uint16(button),
-			Buttons:    []bool{action != glfw.Release},
-			Sliders:    nil,
-			Axes:       nil,
+			//DeviceId:   0,
+			InputId: uint16(button),
+			Buttons: []bool{action != glfw.Release},
+			Sliders: nil,
+			Axes:    nil,
 		}
 		inputEventQueue = append(inputEventQueue, inputEvent)
 	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		inputEvent := InputEvent{
+			Pointer:    keyboardPointer,
 			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
-			DeviceId:   130,
-			InputId:    uint16(key),
-			Buttons:    []bool{action != glfw.Release},
-			Sliders:    nil,
-			Axes:       nil,
+			//DeviceId:   130,
+			InputId: uint16(key),
+			Buttons: []bool{action != glfw.Release},
+			Sliders: nil,
+			Axes:    nil,
 		}
 		fmt.Println(key, action, mods)
 		inputEventQueue = append(inputEventQueue, inputEvent)
