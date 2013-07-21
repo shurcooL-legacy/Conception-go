@@ -146,6 +146,7 @@ func LoadTexture(path string) {
 type Widgeter interface {
 	Render()
 	Hit(mathgl.Vec4f) []Widgeter
+	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
 	HoverPointers() map[*Pointer]bool
 }
 
@@ -166,35 +167,65 @@ func (w *Widget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
 		ParentPosition[0] < float32(w.x+w.dx) &&
 		ParentPosition[1] < float32(w.y+w.dy))
 
-	if (Hit) {
+	if Hit {
 		return []Widgeter{w}
 	} else {
 		return nil
 	}
 }
+func (w *Widget) ProcessEvent(inputEvent InputEvent) {}
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
 }
 
 type BoxWidget struct {
 	Widget
+	Name string
 }
 
 func (w *BoxWidget) Render() {
-	/*// HACK: Brute-force check the mouse pointer if it contains this widget
-	isHit := false
-	for _, hit := range mousePointer.Mapping {
-		if &w.Widget == hit {
-			isHit = true
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
 			break
 		}
-	}*/
+	}
 	isHit := len(w.HoverPointers()) > 0
 
-	if !isHit {
-		DrawBox(w.x, w.y, w.dx, w.dy)
-	} else {
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawGBox(w.x, w.y, w.dx, w.dy)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
 		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else {
+		DrawBox(w.x, w.y, w.dx, w.dy)
+	}
+}
+func (w *BoxWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+
+// TODO: Make this a method of []Widgeter?
+func containsWidget(widgets []Widgeter, targetWidget Widgeter) bool {
+	for _, widget := range mousePointer.Mapping {
+		if widget == targetWidget {
+			return true
+		}
+	}
+	return false
+}
+func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		fmt.Printf("%q BoxWidget pressed!\n", w.Name)
 	}
 }
 
@@ -208,6 +239,12 @@ func DrawYBox(x, y, dx, dy gl.Float) {
 	gl.Color3f(0.898, 0.765, 0.396)
 	gl.Rectf(x-1, y-1, x+dx+1, y+dy+1)
 	gl.Color3f(1, 1, 1)
+	gl.Rectf(x, y, x+dx, y+dy)
+}
+func DrawGBox(x, y, dx, dy gl.Float) {
+	gl.Color3f(0.898, 0.765, 0.396)
+	gl.Rectf(x-1, y-1, x+dx+1, y+dy+1)
+	gl.Color3f(0.75, 0.75, 0.75)
 	gl.Rectf(x, y, x+dx, y+dy)
 }
 
@@ -341,6 +378,27 @@ const (
 type Pointer struct {
 	VirtualCategory VirtualCategory
 	Mapping         []Widgeter
+	OriginMapping   []Widgeter
+	State           PointerState
+}
+
+type PointerState struct {
+	Buttons []bool // True means pressed down
+	Axes    []float64
+
+	Timestamp int64
+}
+
+// A pointer is defined to be active if any of its buttons are pressed down
+func (ps *PointerState) IsActive() bool {
+	//IsAnyButtonsPressed()
+	for _, button := range ps.Buttons {
+		if button {
+			return true
+		}
+	}
+
+	return false
 }
 
 type EventType uint8
@@ -350,6 +408,8 @@ const (
 	CHARACTER_EVENT
 	SLIDER_EVENT
 	AXIS_EVENT
+	POINTER_ACTIVATION
+	POINTER_DEACTIVATION
 )
 
 type InputEvent struct {
@@ -368,8 +428,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 		inputEvent := inputEventQueue[0]
 
 		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] {
-			// TODO: Query pointer state rather than event properties
-			Position := mathgl.Vec4f{float32(inputEvent.Axes[0]), float32(inputEvent.Axes[1])}
+			Position := mathgl.Vec4f{float32(inputEvent.Pointer.State.Axes[0]), float32(inputEvent.Pointer.State.Axes[1])}
 
 			// Clear previously hit widgets
 			for _, widget := range inputEvent.Pointer.Mapping {
@@ -386,10 +445,27 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 			}
 		}
 
+		// Populate PointerMappings (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
+		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] &&
+			!inputEvent.EventTypes[POINTER_DEACTIVATION] && !inputEvent.Pointer.State.IsActive() {
+			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
+			copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
+		}
+
 		if inputEvent.Pointer == mousePointer && inputEvent.InputId == 0 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
-			fmt.Println("Left down!")
+			//fmt.Println("Left down!")
 		} else if inputEvent.Pointer == mousePointer && inputEvent.InputId == 1 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
-			fmt.Println("Right down!")
+			//fmt.Println("Right down!")
+		}
+
+		for _, widget := range inputEvent.Pointer.OriginMapping {
+			widget.ProcessEvent(inputEvent)
+		}
+
+		// Populate PointerMappings (but only upon pointer deactivation event)
+		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[POINTER_DEACTIVATION] {
+			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
+			copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
 		}
 
 		inputEventQueue = inputEventQueue[1:]
@@ -398,6 +474,46 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 	inputEventQueue = []InputEvent{}
 
 	return inputEventQueue
+}
+
+func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []InputEvent {
+	//fmt.Printf("%#v\n", inputEvent)
+
+	preStateActive := inputEvent.Pointer.State.IsActive()
+
+	{
+		if inputEvent.EventTypes[BUTTON_EVENT] {
+			// Extend slice if needed
+			neededSize := int(inputEvent.InputId) + len(inputEvent.Buttons)
+			if neededSize > len(inputEvent.Pointer.State.Buttons) {
+				inputEvent.Pointer.State.Buttons = append(inputEvent.Pointer.State.Buttons, make([]bool, neededSize-len(inputEvent.Pointer.State.Buttons))...)
+			}
+
+			copy(inputEvent.Pointer.State.Buttons[inputEvent.InputId:], inputEvent.Buttons)
+		}
+
+		if inputEvent.EventTypes[AXIS_EVENT] {
+			// Extend slice if needed
+			neededSize := int(inputEvent.InputId) + len(inputEvent.Axes)
+			if neededSize > len(inputEvent.Pointer.State.Axes) {
+				inputEvent.Pointer.State.Axes = append(inputEvent.Pointer.State.Axes, make([]float64, neededSize-len(inputEvent.Pointer.State.Axes))...)
+			}
+
+			copy(inputEvent.Pointer.State.Axes[inputEvent.InputId:], inputEvent.Axes)
+		}
+
+		inputEvent.Pointer.State.Timestamp = time.Now().UnixNano()
+	}
+
+	postStateActive := inputEvent.Pointer.State.IsActive()
+
+	if !preStateActive && postStateActive {
+		inputEvent.EventTypes[POINTER_ACTIVATION] = true
+	} else if preStateActive && !postStateActive {
+		inputEvent.EventTypes[POINTER_DEACTIVATION] = true
+	}
+
+	return append(inputEventQueue, inputEvent)
 }
 
 func main() {
@@ -450,7 +566,7 @@ func main() {
 	width, height := window.GetFramebufferSize()
 	size(window, width, height)
 
-	box := &BoxWidget{NewWidget(50, 150, 16, 16)}
+	box := &BoxWidget{NewWidget(50, 150, 16, 16), "The Original Box"}
 	widgets = append(widgets, box)
 	spinner := SpinnerWidget{NewWidget(30, 30, 0, 0), 0}
 	widgets = append(widgets, &spinner)
@@ -459,8 +575,8 @@ func main() {
 	widgets = append(widgets, &Something2Widget{NewWidget(50, 220, 0, 0)})
 	widgets = append(widgets, &CompositeWidget{NewWidget(150, 150, 0, 0),
 		[]Widgeter{
-			&BoxWidget{NewWidget(0, 0, 16, 16)},
-			&BoxWidget{NewWidget(16 + 2, 0, 16, 16)},
+			&BoxWidget{NewWidget(0, 0, 16, 16), "Left of Duo"},
+			&BoxWidget{NewWidget(16+2, 0, 16, 16), "Right of Duo"},
 		},
 	})
 	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
@@ -485,8 +601,7 @@ func main() {
 			Sliders: nil,
 			Axes:    []float64{x, y},
 		}
-		//fmt.Printf("%#v\n", inputEvent)
-		inputEventQueue = append(inputEventQueue, inputEvent)
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	}
 	window.SetCursorPositionCallback(MousePos)
 
@@ -504,11 +619,12 @@ func main() {
 			Sliders: []float64{yoff, xoff},
 			Axes:    nil,
 		}
-		//fmt.Printf("%#v\n", inputEvent)
-		inputEventQueue = append(inputEventQueue, inputEvent)
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	})
 
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
+		// TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+		redraw = true
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
@@ -518,7 +634,7 @@ func main() {
 			Sliders: nil,
 			Axes:    nil,
 		}
-		inputEventQueue = append(inputEventQueue, inputEvent)
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
@@ -531,8 +647,8 @@ func main() {
 			Sliders: nil,
 			Axes:    nil,
 		}
-		fmt.Println(key, action, mods)
-		inputEventQueue = append(inputEventQueue, inputEvent)
+		//fmt.Println(key, action, mods)
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	})
 
 	go func() {
