@@ -469,6 +469,129 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 }
 
+type MetaCharacter struct {
+	Character byte
+	Timestamp int64
+}
+
+func NewMetaCharacter(ch byte) MetaCharacter {
+	return MetaCharacter{ch, time.Now().UnixNano()}
+}
+
+type MetaTextFieldWidget struct {
+	Widget
+	Content       []MetaCharacter
+	CaretPosition uint32
+}
+
+func NewMetaTextFieldWidget(x, y gl.Float) *MetaTextFieldWidget {
+	return &MetaTextFieldWidget{NewWidget(x, y, 0, 0), nil, 0}
+}
+
+func (w *MetaTextFieldWidget) Render() {
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	if len(w.Content) < 3 {
+		w.dx = gl.Float(8 * 3)
+	} else {
+		w.dx = gl.Float(8 * len(w.Content))
+	}
+	w.dy = 16
+
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else if hasTypingFocus {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else {
+		DrawBox(w.x, w.y, w.dx, w.dy)
+	}
+
+	now := time.Now().UnixNano()
+	for i, mc := range w.Content {
+		age := now - mc.Timestamp
+		highlight := gl.Float(age) / 10000000000
+
+		gl.Color3f(1, 1, highlight)
+		gl.Rectf(w.x + gl.Float(i*8), w.y, w.x + gl.Float((i+1) * 8), w.y + 16)
+
+		gl.Color3f(0, 0, 0)
+		Print(float32(w.x) + float32(8*i), float32(w.y), string(mc.Character))
+	}
+
+	if hasTypingFocus {
+		// Draw caret
+		gl.PushMatrix()
+		defer gl.PopMatrix()
+		gl.Translatef(w.x, w.y, 0)
+		gl.Color3f(0, 0, 0)
+		gl.Recti(gl.Int(w.CaretPosition*8 - 1), 0, gl.Int(w.CaretPosition*8 + 1), 16)
+	}
+}
+func (w *MetaTextFieldWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		keyboardPointer.OriginMapping = []Widgeter{w}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyBackspace:
+			if w.CaretPosition >= 1 {
+				w.CaretPosition--
+				w.Content = append(w.Content[:w.CaretPosition], w.Content[w.CaretPosition+1:]...)
+			}
+		case glfw.KeyLeft:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.CaretPosition = 0
+			} else if inputEvent.ModifierKey == 0 {
+				if w.CaretPosition >= 1 {
+					w.CaretPosition--
+				}
+			}
+		case glfw.KeyRight:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.CaretPosition = uint32(len(w.Content))
+			} else if inputEvent.ModifierKey == 0 {
+				if w.CaretPosition < uint32(len(w.Content)) {
+					w.CaretPosition++
+				}
+			}
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
+		//w.Content = append(append(w.Content[:w.CaretPosition], NewMetaCharacter(byte(inputEvent.InputId))), w.Content[w.CaretPosition:]...)
+		w.Content = append(w.Content, MetaCharacter{})
+		copy(w.Content[w.CaretPosition+1:], w.Content[w.CaretPosition:])
+		w.Content[w.CaretPosition] = NewMetaCharacter(byte(inputEvent.InputId))
+		w.CaretPosition++
+	}
+}
+
 type VirtualCategory uint8
 
 const (
@@ -684,7 +807,7 @@ func main() {
 	})
 	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
 	widgets = append(widgets, NewTextFieldWidget(50, 50))
-	widgets = append(widgets, NewTextFieldWidget(50, 70))
+	widgets = append(widgets, NewMetaTextFieldWidget(50, 70))
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 	keyboardPointer = &Pointer{VirtualCategory: TYPING}
@@ -774,7 +897,6 @@ func main() {
 
 	go func() {
 		<-time.After(3 * time.Second)
-		log.Println("trigger!")
 		something.Updated = true
 		redraw = true
 	}()
