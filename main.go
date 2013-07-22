@@ -210,7 +210,6 @@ func (w *BoxWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
 		return nil
 	}
 }
-
 // TODO: Make this a method of []Widgeter?
 func containsWidget(widgets []Widgeter, targetWidget Widgeter) bool {
 	for _, widget := range mousePointer.Mapping {
@@ -368,6 +367,108 @@ func (w *SpinnerWidget) Render() {
 	gl.End()
 }
 
+type TextFieldWidget struct {
+	Widget
+	Content       string
+	CaretPosition uint32
+}
+
+func NewTextFieldWidget(x, y gl.Float) *TextFieldWidget {
+	return &TextFieldWidget{NewWidget(x, y, 0, 0), "", 0}
+}
+
+func (w *TextFieldWidget) Render() {
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	if len(w.Content) < 3 {
+		w.dx = gl.Float(8 * 3)
+	} else {
+		w.dx = gl.Float(8 * len(w.Content))
+	}
+	w.dy = 16
+
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else if hasTypingFocus {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else {
+		DrawBox(w.x, w.y, w.dx, w.dy)
+	}
+
+	gl.Color3f(0, 0, 0)
+	Print(float32(w.x), float32(w.y), w.Content)
+
+	if hasTypingFocus {
+		// Draw caret
+		gl.PushMatrix()
+		defer gl.PopMatrix()
+		gl.Translatef(w.x, w.y, 0)
+		gl.Color3f(0, 0, 0)
+		gl.Recti(gl.Int(w.CaretPosition*8 - 1), 0, gl.Int(w.CaretPosition*8 + 1), 16)
+	}
+}
+func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		keyboardPointer.OriginMapping = []Widgeter{w}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyBackspace:
+			if w.CaretPosition >= 1 {
+				w.CaretPosition--
+				w.Content = w.Content[:w.CaretPosition] + w.Content[w.CaretPosition+1:]
+			}
+		case glfw.KeyLeft:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.CaretPosition = 0
+			} else if inputEvent.ModifierKey == 0 {
+				if w.CaretPosition >= 1 {
+					w.CaretPosition--
+				}
+			}
+		case glfw.KeyRight:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.CaretPosition = uint32(len(w.Content))
+			} else if inputEvent.ModifierKey == 0 {
+				if w.CaretPosition < uint32(len(w.Content)) {
+					w.CaretPosition++
+				}
+			}
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
+		w.Content = w.Content[:w.CaretPosition] + string(byte(inputEvent.InputId)) + w.Content[w.CaretPosition:]
+		w.CaretPosition++
+	}
+}
+
 type VirtualCategory uint8
 
 const (
@@ -419,8 +520,10 @@ type InputEvent struct {
 	InputId uint16
 
 	Buttons []bool
+	// TODO: Characters? Split into distinct event types, bundle up in an event frame based on time?
 	Sliders []float64
 	Axes    []float64
+	ModifierKey glfw.ModifierKey // HACK
 }
 
 func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
@@ -580,6 +683,8 @@ func main() {
 		},
 	})
 	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
+	widgets = append(widgets, NewTextFieldWidget(50, 50))
+	widgets = append(widgets, NewTextFieldWidget(50, 70))
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 	keyboardPointer = &Pointer{VirtualCategory: TYPING}
@@ -642,13 +747,29 @@ func main() {
 			Pointer:    keyboardPointer,
 			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
 			//DeviceId:   130,
-			InputId: uint16(key),
-			Buttons: []bool{action != glfw.Release},
-			Sliders: nil,
-			Axes:    nil,
+			InputId:     uint16(key),
+			Buttons:     []bool{action != glfw.Release},
+			Sliders:     nil,
+			Axes:        nil,
+			ModifierKey: mods,
 		}
 		//fmt.Println(key, action, mods)
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // HACK
+	})
+
+	window.SetCharacterCallback(func(w *glfw.Window, char uint) {
+		inputEvent := InputEvent{
+			Pointer:    keyboardPointer,
+			EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
+			//DeviceId:   130,
+			InputId: uint16(char),
+			Buttons: nil,
+			Sliders: nil,
+			Axes:    nil,
+		}
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // HACK
 	})
 
 	go func() {
