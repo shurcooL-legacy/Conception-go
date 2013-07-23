@@ -437,6 +437,19 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 		keyboardPointer.OriginMapping = []Widgeter{w}
 	}
 
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Buttons[0] == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+		if inputEvent.Pointer.State.Axes[0]-float64(w.x) < 0 {
+			w.CaretPosition = 0
+		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.Content)*8) {
+			w.CaretPosition = uint32(len(w.Content))
+		} else {
+			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0]-float64(w.x)+4) / 8)
+		}
+	}
+
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyBackspace:
@@ -555,6 +568,19 @@ func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		keyboardPointer.OriginMapping = []Widgeter{w}
+	}
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Buttons[0] == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+		if inputEvent.Pointer.State.Axes[0]-float64(w.x) < 0 {
+			w.CaretPosition = 0
+		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.Content)*8) {
+			w.CaretPosition = uint32(len(w.Content))
+		} else {
+			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0]-float64(w.x)+4) / 8)
+		}
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
