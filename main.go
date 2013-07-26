@@ -145,7 +145,7 @@ func LoadTexture(path string) {
 
 type Widgeter interface {
 	Render()
-	Hit(mathgl.Vec4f) []Widgeter
+	Hit(mathgl.Vec2f) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
 	HoverPointers() map[*Pointer]bool
 }
@@ -161,7 +161,7 @@ func NewWidget(x, y, dx, dy gl.Float) Widget {
 }
 
 func (*Widget) Render() {}
-func (w *Widget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+func (w *Widget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
 	Hit := (ParentPosition[0] >= float32(w.x) &&
 		ParentPosition[1] >= float32(w.y) &&
 		ParentPosition[0] < float32(w.x+w.dx) &&
@@ -203,13 +203,14 @@ func (w *BoxWidget) Render() {
 		DrawBox(w.x, w.y, w.dx, w.dy)
 	}
 }
-func (w *BoxWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+func (w *BoxWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
 		return nil
 	}
 }
+
 // TODO: Make this a method of []Widgeter?
 func containsWidget(widgets []Widgeter, targetWidget Widgeter) bool {
 	for _, widget := range mousePointer.Mapping {
@@ -219,12 +220,15 @@ func containsWidget(widgets []Widgeter, targetWidget Widgeter) bool {
 	}
 	return false
 }
+var globalWindow *glfw.Window
 func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		fmt.Printf("%q BoxWidget pressed!\n", w.Name)
+		x, y := globalWindow.GetPosition()
+		globalWindow.SetPosition(x-16, y)
 	}
 }
 
@@ -261,8 +265,8 @@ func (w *CompositeWidget) Render() {
 		widget.Render()
 	}
 }
-func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
-	LocalPosition := ParentPosition.Sub(mathgl.Vec4f{float32(w.x), float32(w.y)})
+func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
+	LocalPosition := ParentPosition.Sub(mathgl.Vec2f{float32(w.x), float32(w.y)})
 
 	hits := []Widgeter{}
 	for _, widget := range w.Widgets {
@@ -381,6 +385,7 @@ func (w *TextFieldWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
+	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
 	if len(w.Content) < 3 {
 		w.dx = gl.Float(8 * 3)
 	} else {
@@ -418,10 +423,10 @@ func (w *TextFieldWidget) Render() {
 		defer gl.PopMatrix()
 		gl.Translatef(w.x, w.y, 0)
 		gl.Color3f(0, 0, 0)
-		gl.Recti(gl.Int(w.CaretPosition*8 - 1), 0, gl.Int(w.CaretPosition*8 + 1), 16)
+		gl.Recti(gl.Int(w.CaretPosition*8-1), 0, gl.Int(w.CaretPosition*8+1), 16)
 	}
 }
-func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -446,7 +451,7 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.Content)*8) {
 			w.CaretPosition = uint32(len(w.Content))
 		} else {
-			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0]-float64(w.x)+4) / 8)
+			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0] - float64(w.x) + 4) / 8)
 		}
 	}
 
@@ -505,6 +510,7 @@ func (w *MetaTextFieldWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
+	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
 	if len(w.Content) < 3 {
 		w.dx = gl.Float(8 * 3)
 	} else {
@@ -539,10 +545,10 @@ func (w *MetaTextFieldWidget) Render() {
 		highlight := gl.Float(age) / 10000000000
 
 		gl.Color3f(1, 1, highlight)
-		gl.Rectf(w.x + gl.Float(i*8), w.y, w.x + gl.Float((i+1) * 8), w.y + 16)
+		gl.Rectf(w.x+gl.Float(i*8), w.y, w.x+gl.Float((i+1)*8), w.y+16)
 
 		gl.Color3f(0, 0, 0)
-		Print(float32(w.x) + float32(8*i), float32(w.y), string(mc.Character))
+		Print(float32(w.x)+float32(8*i), float32(w.y), string(mc.Character))
 	}
 
 	if hasTypingFocus {
@@ -551,10 +557,10 @@ func (w *MetaTextFieldWidget) Render() {
 		defer gl.PopMatrix()
 		gl.Translatef(w.x, w.y, 0)
 		gl.Color3f(0, 0, 0)
-		gl.Recti(gl.Int(w.CaretPosition*8 - 1), 0, gl.Int(w.CaretPosition*8 + 1), 16)
+		gl.Recti(gl.Int(w.CaretPosition*8-1), 0, gl.Int(w.CaretPosition*8+1), 16)
 	}
 }
-func (w *MetaTextFieldWidget) Hit(ParentPosition mathgl.Vec4f) []Widgeter {
+func (w *MetaTextFieldWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -579,7 +585,7 @@ func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.Content)*8) {
 			w.CaretPosition = uint32(len(w.Content))
 		} else {
-			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0]-float64(w.x)+4) / 8)
+			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0] - float64(w.x) + 4) / 8)
 		}
 	}
 
@@ -670,8 +676,8 @@ type InputEvent struct {
 
 	Buttons []bool
 	// TODO: Characters? Split into distinct event types, bundle up in an event frame based on time?
-	Sliders []float64
-	Axes    []float64
+	Sliders     []float64
+	Axes        []float64
 	ModifierKey glfw.ModifierKey // HACK
 }
 
@@ -680,7 +686,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 		inputEvent := inputEventQueue[0]
 
 		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] {
-			Position := mathgl.Vec4f{float32(inputEvent.Pointer.State.Axes[0]), float32(inputEvent.Pointer.State.Axes[1])}
+			Position := mathgl.Vec2f{float32(inputEvent.Pointer.State.Axes[0]), float32(inputEvent.Pointer.State.Axes[1])}
 
 			// Clear previously hit widgets
 			for _, widget := range inputEvent.Pointer.Mapping {
@@ -780,8 +786,10 @@ func main() {
 	}
 	defer glfw.Terminate()
 
-	//glfw.OpenWindowHint(glfw.FsaaSamples, 32)
+	//glfw.WindowHint(glfw.Samples, 32)
+	//glfw.WindowHint(glfw.Decorated, glfw.False)
 	window, err := glfw.CreateWindow(400, 400, "", nil, nil)
+	globalWindow = window
 	CheckError(err)
 	window.MakeContextCurrent()
 
@@ -814,9 +822,11 @@ func main() {
 
 		redraw = true
 	}
+	{
+		width, height := window.GetFramebufferSize()
+		size(window, width, height)
+	}
 	window.SetFramebufferSizeCallback(size)
-	width, height := window.GetFramebufferSize()
-	size(window, width, height)
 
 	box := &BoxWidget{NewWidget(50, 150, 16, 16), "The Original Box"}
 	widgets = append(widgets, box)
@@ -857,6 +867,10 @@ func main() {
 		}
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	}
+	{
+		x, y := window.GetCursorPosition()
+		MousePos(window, x, y)
+	}
 	window.SetCursorPositionCallback(MousePos)
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
@@ -892,6 +906,11 @@ func main() {
 	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+		if key == glfw.KeyEnter && action == glfw.Press {
+			x, y := window.GetPosition()
+			window.SetPosition(x-16, y)
+		}
+
 		inputEvent := InputEvent{
 			Pointer:    keyboardPointer,
 			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
