@@ -21,6 +21,10 @@ import (
 	"github.com/shurcooL/go-goon"
 
 	. "gist.github.com/6003701.git"
+
+	. "gist.github.com/6096872.git"
+	. "gist.github.com/5258650.git"
+	"os/exec"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -29,6 +33,7 @@ var _ = goon.Dump
 var offX, offY gl.Float
 var oFontBase gl.Uint
 
+var redraw bool = true
 var widgets []Widgeter
 var mousePointer *Pointer
 var keyboardPointer *Pointer
@@ -220,7 +225,9 @@ func containsWidget(widgets []Widgeter, targetWidget Widgeter) bool {
 	}
 	return false
 }
+
 var globalWindow *glfw.Window
+
 func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
@@ -351,6 +358,61 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 
 	gl.Color3f(0, 0, 0)
 	Print(0, 0, s)
+}
+
+type ChannelExpeWidget struct {
+	Widget
+	Content string
+	ch      <-chan []byte
+	errCh   <-chan error
+}
+
+func NewChannelExpeWidget(x, y gl.Float) *ChannelExpeWidget {
+	cmd := exec.Command("ping", "google.com")
+	stdout, err := cmd.StdoutPipe()
+	CheckError(err)
+	err = cmd.Start()
+	CheckError(err)
+
+	w := ChannelExpeWidget{Widget: NewWidget(x, y, 0, 0)}
+	w.ch, w.errCh = ByteReader(stdout)
+
+	return &w
+}
+
+func (w *ChannelExpeWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translatef(w.x, w.y, 0)
+
+	// TODO: This needs to go into "ProcessTimePassed" type of thing that gets called even when redraw is false
+	select {
+	case b := <-w.ch:
+		w.Content += string(b)
+		//redraw = true // Commented out because it's useless inside Render() which doesn't get called, etc.
+	default:
+	}
+
+	LongestLine := 0
+	lines := GetLines(w.Content)
+	for _, line := range lines {
+		if len(line) > LongestLine {
+			LongestLine = len(line)
+		}
+	}
+
+	w.dx = gl.Float(8 * LongestLine)
+	w.dy = gl.Float(16 * len(lines))
+
+	gl.Color3f(0.3, 0.3, 0.3)
+	gl.Rectf(0-1, 0-1, w.dx+1, w.dy+1)
+	gl.Color3f(1, 1, 1)
+	gl.Rectf(0, 0, w.dx, w.dy)
+
+	gl.Color3f(0, 0, 0)
+	for lineNumber, line := range lines {
+		Print(0, float32(16*lineNumber), line)
+	}
 }
 
 type SpinnerWidget struct {
@@ -806,8 +868,6 @@ func main() {
 	InitFont()
 	defer DeinitFont()
 
-	redraw := true
-
 	size := func(w *glfw.Window, width, height int) {
 		fmt.Println("Framebuffer Size:", width, height)
 		windowWidth, windowHeight := w.GetSize()
@@ -834,7 +894,7 @@ func main() {
 	widgets = append(widgets, &spinner)
 	something := SomethingWidget{NewWidget(50, 100, 0, 0), false}
 	widgets = append(widgets, &something)
-	widgets = append(widgets, &Something2Widget{NewWidget(50, 220, 0, 0)})
+	//widgets = append(widgets, &Something2Widget{NewWidget(50, 220, 0, 0)})
 	widgets = append(widgets, &CompositeWidget{NewWidget(150, 150, 0, 0),
 		[]Widgeter{
 			&BoxWidget{NewWidget(0, 0, 16, 16), "Left of Duo"},
@@ -844,6 +904,7 @@ func main() {
 	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
 	widgets = append(widgets, NewTextFieldWidget(50, 50))
 	widgets = append(widgets, NewMetaTextFieldWidget(50, 70))
+	widgets = append(widgets, NewChannelExpeWidget(-100, 210))
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 	keyboardPointer = &Pointer{VirtualCategory: TYPING}
@@ -947,7 +1008,8 @@ func main() {
 	}()
 
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	gl.ClearColor(0.8, 0.3, 0.01, 1)
+	//gl.ClearColor(0.8, 0.3, 0.01, 1)
+	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
 	//last := window.GetClipboardString()
 
