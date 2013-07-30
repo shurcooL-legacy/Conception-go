@@ -22,7 +22,8 @@ import (
 
 	. "gist.github.com/6003701.git"
 
-	. "gist.github.com/6096872.git"
+	"io"
+	//. "gist.github.com/6096872.git"
 	. "gist.github.com/5258650.git"
 	"os/exec"
 )
@@ -367,6 +368,37 @@ type ChannelExpeWidget struct {
 	errCh   <-chan error
 }
 
+// TODO: Fix the duplication of gist.github.com/6096872.git
+func ByteReaderW(r io.Reader) (<-chan []byte, <-chan error) {
+	ch := make(chan []byte)
+	errCh := make(chan error)
+
+	go func() {
+		for {
+			buf := make([]byte, 2048)
+			s := 0
+		inner:
+			for {
+				n, err := r.Read(buf[s:])
+				if n > 0 {
+					redraw = true
+					ch <- buf[s : s+n]
+					s += n
+				}
+				if err != nil {
+					errCh <- err
+					return
+				}
+				if s >= len(buf) {
+					break inner
+				}
+			}
+		}
+	}()
+
+	return ch, errCh
+}
+
 func NewChannelExpeWidget(x, y gl.Float) *ChannelExpeWidget {
 	cmd := exec.Command("ping", "google.com")
 	stdout, err := cmd.StdoutPipe()
@@ -375,7 +407,7 @@ func NewChannelExpeWidget(x, y gl.Float) *ChannelExpeWidget {
 	CheckError(err)
 
 	w := ChannelExpeWidget{Widget: NewWidget(x, y, 0, 0)}
-	w.ch, w.errCh = ByteReader(stdout)
+	w.ch, w.errCh = ByteReaderW(stdout)
 
 	return &w
 }
@@ -389,7 +421,6 @@ func (w *ChannelExpeWidget) Render() {
 	select {
 	case b := <-w.ch:
 		w.Content += string(b)
-		//redraw = true // Commented out because it's useless inside Render() which doesn't get called, etc.
 	default:
 	}
 
@@ -428,8 +459,8 @@ func (w *SpinnerWidget) Render() {
 	//gl.Rotatef(float32(spinner), 0, 0, 1)
 	gl.Rotatef(gl.Float(w.Spinner), 0, 0, 1)
 	gl.Begin(gl.LINES)
-	gl.Vertex2i(0, 0)
-	gl.Vertex2i(0, 20)
+	gl.Vertex2i(0, -10)
+	gl.Vertex2i(0, 10)
 	gl.End()
 }
 
@@ -890,7 +921,7 @@ func main() {
 
 	box := &BoxWidget{NewWidget(50, 150, 16, 16), "The Original Box"}
 	widgets = append(widgets, box)
-	spinner := SpinnerWidget{NewWidget(30, 30, 0, 0), 0}
+	spinner := SpinnerWidget{NewWidget(20, 20, 0, 0), 0}
 	widgets = append(widgets, &spinner)
 	something := SomethingWidget{NewWidget(50, 100, 0, 0), false}
 	widgets = append(widgets, &something)
