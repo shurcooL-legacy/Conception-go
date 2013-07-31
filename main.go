@@ -464,6 +464,163 @@ func (w *SpinnerWidget) Render() {
 	gl.End()
 }
 
+type TextBoxWidget struct {
+	Widget
+	content       string
+	caretPosition uint32
+
+	lines       []contentLine
+	longestLine uint32 // Line length
+}
+
+type contentLine struct {
+	Start  uint32
+	Length uint32
+}
+
+func NewTextBoxWidget(x, y gl.Float) *TextBoxWidget {
+	return &TextBoxWidget{Widget: NewWidget(x, y, 0, 0)}
+}
+
+func (w *TextBoxWidget) SetContent(content string) {
+	w.content = content
+	w.UpdateLines()
+	//goon.Dump(w.Content, w.Lines)
+}
+
+func (w *TextBoxWidget) UpdateLines() {
+	lines := GetLines(w.content)
+	w.lines = make([]contentLine, len(lines))
+	w.longestLine = 0
+	for lineNumber, line := range lines {
+		if uint32(len(line)) > w.longestLine {
+			w.longestLine = uint32(len(line))
+		}
+		if lineNumber >= 1 {
+			w.lines[lineNumber].Start = w.lines[lineNumber - 1].Start + w.lines[lineNumber - 1].Length + 1
+		}
+		w.lines[lineNumber].Length = uint32(len(line))
+	}
+}
+
+func (w *TextBoxWidget) Render() {
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
+	if w.longestLine < 3 {
+		w.dx = gl.Float(8 * 3)
+	} else {
+		w.dx = gl.Float(8 * w.longestLine)
+	}
+	w.dy = gl.Float(16 * len(w.lines))
+
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else if hasTypingFocus {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	} else {
+		DrawBox(w.x, w.y, w.dx, w.dy)
+	}
+
+	gl.Color3f(0, 0, 0)
+	for lineNumber, contentLine := range w.lines {
+		Print(float32(w.x), float32(w.y) + float32(16*lineNumber), w.content[contentLine.Start:contentLine.Start + contentLine.Length])
+	}
+
+	if hasTypingFocus {
+		caretPosition := w.caretPosition
+		caretLine := uint32(0)
+		for caretPosition > w.lines[caretLine].Length {
+			caretPosition -= w.lines[caretLine].Length + 1
+			caretLine++
+		}
+
+		// Draw caret
+		gl.PushMatrix()
+		defer gl.PopMatrix()
+		gl.Translatef(w.x, w.y, 0)
+		gl.Color3f(0, 0, 0)
+		gl.Recti(gl.Int(caretPosition*8-1), gl.Int(caretLine * 16), gl.Int(caretPosition*8+1), gl.Int(caretLine * 16) + 16)
+	}
+}
+func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		keyboardPointer.OriginMapping = []Widgeter{w}
+	}
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	/*hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Buttons[0] == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+		if inputEvent.Pointer.State.Axes[0]-float64(w.x) < 0 {
+			w.caretPosition = 0
+		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.content)*8) {
+			w.caretPosition = uint32(len(w.content))
+		} else {
+			w.caretPosition = uint32((inputEvent.Pointer.State.Axes[0] - float64(w.x) + 4) / 8)
+		}
+	}*/
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyBackspace:
+			if w.caretPosition >= 1 {
+				w.caretPosition--
+				w.SetContent(w.content[:w.caretPosition] + w.content[w.caretPosition+1:])
+			}
+		case glfw.KeyEnter:
+			w.SetContent(w.content[:w.caretPosition] + "\n" + w.content[w.caretPosition:])
+			w.caretPosition++
+		case glfw.KeyLeft:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.caretPosition = 0
+			} else if inputEvent.ModifierKey == 0 {
+				if w.caretPosition >= 1 {
+					w.caretPosition--
+				}
+			}
+		case glfw.KeyRight:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.caretPosition = uint32(len(w.content))
+			} else if inputEvent.ModifierKey == 0 {
+				if w.caretPosition < uint32(len(w.content)) {
+					w.caretPosition++
+				}
+			}
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
+		w.SetContent(w.content[:w.caretPosition] + string(byte(inputEvent.InputId)) + w.content[w.caretPosition:])
+		w.caretPosition++
+	}
+}
+
 type TextFieldWidget struct {
 	Widget
 	Content       string
@@ -936,6 +1093,7 @@ func main() {
 	widgets = append(widgets, NewTextFieldWidget(50, 50))
 	widgets = append(widgets, NewMetaTextFieldWidget(50, 70))
 	widgets = append(widgets, NewChannelExpeWidget(-100, 210))
+	widgets = append(widgets, NewTextBoxWidget(100, 20))
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 	keyboardPointer = &Pointer{VirtualCategory: TYPING}
@@ -998,10 +1156,10 @@ func main() {
 	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		if key == glfw.KeyEnter && action == glfw.Press {
+		/*if key == glfw.KeyEnter && action == glfw.Press {
 			x, y := window.GetPosition()
 			window.SetPosition(x-16, y)
-		}
+		}*/
 
 		inputEvent := InputEvent{
 			Pointer:    keyboardPointer,
@@ -1041,6 +1199,9 @@ func main() {
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	//gl.ClearColor(0.8, 0.3, 0.01, 1)
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
+
+	keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets) - 1]}
+	widgets[len(widgets) - 1].(*TextBoxWidget).SetContent("blah\nnew line")
 
 	//last := window.GetClipboardString()
 
