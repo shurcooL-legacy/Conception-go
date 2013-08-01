@@ -5,6 +5,7 @@ import (
 	. "gist.github.com/5286084.git"
 	"log"
 	"runtime"
+	"strings"
 	"time"
 
 	_ "github.com/ftrvxmtrx/tga"
@@ -43,6 +44,16 @@ func CheckGLError() {
 	errorCode := gl.GetError()
 	if 0 != errorCode {
 		log.Panic("GL Error: ", errorCode)
+	}
+}
+
+func PrintLine(x, y float32, s string) {
+	segments := strings.Split(s, "\t")
+	var advance uint32
+	for _, segment := range segments {
+		Print(x+float32(8*advance), y, segment)
+		advance += uint32(len(segment))
+		advance += 4 - (advance % 4)
 	}
 }
 
@@ -110,7 +121,7 @@ func DeinitFont() {
 }
 
 func LoadTexture(path string) {
-	fmt.Printf("Trying to load texture %q.\n", path)
+	fmt.Printf("Trying to load texture %q: ", path)
 
 	// Open the file
 	file, err := os.Open(path)
@@ -126,7 +137,7 @@ func LoadTexture(path string) {
 	}
 
 	bounds := img.Bounds()
-	fmt.Printf("Loaded %vx%v texture.\n", bounds.Dx(), bounds.Dy())
+	fmt.Printf("loaded %vx%v texture.\n", bounds.Dx(), bounds.Dy())
 
 	var pixPointer *uint8
 	switch img := img.(type) {
@@ -424,11 +435,12 @@ func (w *ChannelExpeWidget) Render() {
 	default:
 	}
 
-	LongestLine := 0
+	LongestLine := uint32(0)
 	lines := GetLines(w.Content)
 	for _, line := range lines {
-		if len(line) > LongestLine {
-			LongestLine = len(line)
+		lineLength := ExpandedLength(line)
+		if lineLength > LongestLine {
+			LongestLine = lineLength
 		}
 	}
 
@@ -464,10 +476,105 @@ func (w *SpinnerWidget) Render() {
 	gl.End()
 }
 
+// ---
+
+func ExpandedLength(s string) uint32 {
+	segments := strings.Split(s, "\t")
+	var advance uint32
+	for segmentIndex, segment := range segments {
+		advance += uint32(len(segment))
+		if segmentIndex != len(segments)-1 {
+			advance += 4 - (advance % 4)
+		}
+	}
+	return advance
+}
+
+func ExpandedToLogical(s string, expanded uint32) uint32 {
+	var logical uint32
+	var advance uint32
+	var smallestDifference int32 = int32(expanded) - 0
+	for charIndex, char := range []byte(s) {
+		if char == '\t' {
+			advance += 4 - (advance % 4)
+		} else {
+			advance++
+		}
+
+		difference := int32(advance) - int32(expanded)
+		if difference < 0 {
+			difference *= -1
+		}
+		if difference < smallestDifference {
+			smallestDifference = difference
+			logical = uint32(charIndex + 1)
+		}
+	}
+
+	return logical
+}
+
+// ---
+
+type CaretPosition struct {
+	w               *TextBoxWidget
+	caretPosition   uint32
+	targetExpandedX uint32
+}
+
+func (cp *CaretPosition) Logical() uint32 {
+	return cp.caretPosition
+}
+
+func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
+	caretPosition := cp.caretPosition
+	caretLine := uint32(0)
+	for caretPosition > cp.w.lines[caretLine].Length {
+		caretPosition -= cp.w.lines[caretLine].Length + 1
+		caretLine++
+	}
+	expandedCaretPosition := ExpandedLength(cp.w.content[cp.w.lines[caretLine].Start : cp.w.lines[caretLine].Start+caretPosition])
+
+	return expandedCaretPosition, caretLine
+}
+
+func (cp *CaretPosition) Move(amount int8) {
+	switch {
+	case amount == +1:
+		cp.caretPosition++
+	case amount == -1:
+		cp.caretPosition--
+	}
+
+	x, _ := cp.ExpandedPosition()
+	cp.targetExpandedX = x
+}
+
+func (cp *CaretPosition) TryMoveV(amount int8) {
+	_, y := cp.ExpandedPosition()
+
+	switch {
+	case amount == -1:
+		if y > 0 {
+			y--
+			line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
+			cp.caretPosition = cp.w.lines[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+		}
+	case amount == +1:
+		if y < uint32(len(cp.w.lines))-1 {
+			y++
+			line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
+			cp.caretPosition = cp.w.lines[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+		}
+	}
+}
+
+// ---
+
 type TextBoxWidget struct {
 	Widget
 	content       string
-	caretPosition uint32
+	caretPosition CaretPosition
 
 	lines       []contentLine
 	longestLine uint32 // Line length
@@ -479,7 +586,9 @@ type contentLine struct {
 }
 
 func NewTextBoxWidget(x, y gl.Float) *TextBoxWidget {
-	return &TextBoxWidget{Widget: NewWidget(x, y, 0, 0)}
+	w := &TextBoxWidget{Widget: NewWidget(x, y, 0, 0)}
+	w.caretPosition.w = w
+	return w
 }
 
 func (w *TextBoxWidget) SetContent(content string) {
@@ -493,11 +602,12 @@ func (w *TextBoxWidget) UpdateLines() {
 	w.lines = make([]contentLine, len(lines))
 	w.longestLine = 0
 	for lineNumber, line := range lines {
-		if uint32(len(line)) > w.longestLine {
-			w.longestLine = uint32(len(line))
+		lineLength := ExpandedLength(line)
+		if lineLength > w.longestLine {
+			w.longestLine = lineLength
 		}
 		if lineNumber >= 1 {
-			w.lines[lineNumber].Start = w.lines[lineNumber - 1].Start + w.lines[lineNumber - 1].Length + 1
+			w.lines[lineNumber].Start = w.lines[lineNumber-1].Start + w.lines[lineNumber-1].Length + 1
 		}
 		w.lines[lineNumber].Length = uint32(len(line))
 	}
@@ -538,23 +648,18 @@ func (w *TextBoxWidget) Render() {
 
 	gl.Color3f(0, 0, 0)
 	for lineNumber, contentLine := range w.lines {
-		Print(float32(w.x), float32(w.y) + float32(16*lineNumber), w.content[contentLine.Start:contentLine.Start + contentLine.Length])
+		PrintLine(float32(w.x), float32(w.y)+float32(16*lineNumber), w.content[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
 	if hasTypingFocus {
-		caretPosition := w.caretPosition
-		caretLine := uint32(0)
-		for caretPosition > w.lines[caretLine].Length {
-			caretPosition -= w.lines[caretLine].Length + 1
-			caretLine++
-		}
+		expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
 
 		// Draw caret
 		gl.PushMatrix()
 		defer gl.PopMatrix()
 		gl.Translatef(w.x, w.y, 0)
 		gl.Color3f(0, 0, 0)
-		gl.Recti(gl.Int(caretPosition*8-1), gl.Int(caretLine * 16), gl.Int(caretPosition*8+1), gl.Int(caretLine * 16) + 16)
+		gl.Recti(gl.Int(expandedCaretPosition*8-1), gl.Int(caretLine*16), gl.Int(expandedCaretPosition*8+1), gl.Int(caretLine*16)+16)
 	}
 }
 func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
@@ -589,35 +694,48 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyBackspace:
-			if w.caretPosition >= 1 {
-				w.caretPosition--
-				w.SetContent(w.content[:w.caretPosition] + w.content[w.caretPosition+1:])
+			if w.caretPosition.Logical() >= 1 {
+				w.caretPosition.Move(-1)
+				w.SetContent(w.content[:w.caretPosition.Logical()] + w.content[w.caretPosition.Logical()+1:])
 			}
 		case glfw.KeyEnter:
-			w.SetContent(w.content[:w.caretPosition] + "\n" + w.content[w.caretPosition:])
-			w.caretPosition++
+			w.SetContent(w.content[:w.caretPosition.Logical()] + "\n" + w.content[w.caretPosition.Logical():])
+			w.caretPosition.Move(+1)
+		case glfw.KeyTab:
+			w.SetContent(w.content[:w.caretPosition.Logical()] + "\t" + w.content[w.caretPosition.Logical():])
+			w.caretPosition.Move(+1)
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.caretPosition = 0
+				// TODO: Go to start of line-ish
+				//w.caretPosition = 0
 			} else if inputEvent.ModifierKey == 0 {
-				if w.caretPosition >= 1 {
-					w.caretPosition--
+				if w.caretPosition.Logical() >= 1 {
+					w.caretPosition.Move(-1)
 				}
 			}
 		case glfw.KeyRight:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.caretPosition = uint32(len(w.content))
+				// TODO: Go to end of line
+				//w.caretPosition = uint32(len(w.content))
 			} else if inputEvent.ModifierKey == 0 {
-				if w.caretPosition < uint32(len(w.content)) {
-					w.caretPosition++
+				if w.caretPosition.Logical() < uint32(len(w.content)) {
+					w.caretPosition.Move(+1)
 				}
+			}
+		case glfw.KeyUp:
+			if inputEvent.ModifierKey == 0 {
+				w.caretPosition.TryMoveV(-1)
+			}
+		case glfw.KeyDown:
+			if inputEvent.ModifierKey == 0 {
+				w.caretPosition.TryMoveV(+1)
 			}
 		}
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
-		w.SetContent(w.content[:w.caretPosition] + string(byte(inputEvent.InputId)) + w.content[w.caretPosition:])
-		w.caretPosition++
+		w.SetContent(w.content[:w.caretPosition.Logical()] + string(byte(inputEvent.InputId)) + w.content[w.caretPosition.Logical():])
+		w.caretPosition.Move(+1)
 	}
 }
 
@@ -1057,9 +1175,8 @@ func main() {
 	defer DeinitFont()
 
 	size := func(w *glfw.Window, width, height int) {
-		fmt.Println("Framebuffer Size:", width, height)
 		windowWidth, windowHeight := w.GetSize()
-		fmt.Println("Window Size:", windowWidth, windowHeight)
+		//fmt.Println("Framebuffer Size:", width, height, "Window Size:", windowWidth, windowHeight)
 		gl.Viewport(0, 0, gl.Sizei(width), gl.Sizei(height))
 
 		// Update the projection matrix
@@ -1200,8 +1317,8 @@ func main() {
 	//gl.ClearColor(0.8, 0.3, 0.01, 1)
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
-	keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets) - 1]}
-	widgets[len(widgets) - 1].(*TextBoxWidget).SetContent("blah\nnew line")
+	keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
+	widgets[len(widgets)-1].(*TextBoxWidget).SetContent("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")
 
 	//last := window.GetClipboardString()
 
