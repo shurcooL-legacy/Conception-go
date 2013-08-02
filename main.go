@@ -540,10 +540,16 @@ func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 
 func (cp *CaretPosition) Move(amount int8) {
 	switch {
-	case amount == +1:
-		cp.caretPosition++
 	case amount == -1:
 		cp.caretPosition--
+	case amount == +1:
+		cp.caretPosition++
+	case amount == -2:
+		_, y := cp.ExpandedPosition()
+		cp.caretPosition = cp.w.lines[y].Start
+	case amount == +2:
+		_, y := cp.ExpandedPosition()
+		cp.caretPosition = cp.w.lines[y].Start + cp.w.lines[y].Length
 	}
 
 	x, _ := cp.ExpandedPosition()
@@ -559,14 +565,38 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 			y--
 			line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
 			cp.caretPosition = cp.w.lines[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+		} else {
+			cp.Move(-2)
 		}
 	case amount == +1:
 		if y < uint32(len(cp.w.lines))-1 {
 			y++
 			line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
 			cp.caretPosition = cp.w.lines[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+		} else {
+			cp.Move(+2)
 		}
 	}
+}
+
+func (cp *CaretPosition) SetPositionFromPhysical(xf, yf float64) {
+	var y uint32
+	if yf < 0 {
+		y = 0
+	} else if yf >= float64(len(cp.w.lines)*16) {
+		y = uint32(len(cp.w.lines) - 1)
+	} else {
+		y = uint32(yf / 16)
+	}
+
+	if xf < 0 {
+		cp.targetExpandedX = 0
+	} else {
+		cp.targetExpandedX = uint32((xf + 4) / 8)
+	}
+
+	line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
+	cp.caretPosition = cp.w.lines[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 }
 
 // ---
@@ -679,17 +709,11 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	/*hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Buttons[0] == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
-		if inputEvent.Pointer.State.Axes[0]-float64(w.x) < 0 {
-			w.caretPosition = 0
-		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.content)*8) {
-			w.caretPosition = uint32(len(w.content))
-		} else {
-			w.caretPosition = uint32((inputEvent.Pointer.State.Axes[0] - float64(w.x) + 4) / 8)
-		}
-	}*/
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+		w.caretPosition.SetPositionFromPhysical(inputEvent.Pointer.State.Axes[0]-float64(w.x), inputEvent.Pointer.State.Axes[1]-float64(w.y))
+	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
@@ -706,8 +730,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			w.caretPosition.Move(+1)
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				// TODO: Go to start of line-ish
-				//w.caretPosition = 0
+				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start)
+				// TODO: Rename to TryMove since no check is being made
+				w.caretPosition.Move(-2)
 			} else if inputEvent.ModifierKey == 0 {
 				if w.caretPosition.Logical() >= 1 {
 					w.caretPosition.Move(-1)
@@ -715,8 +740,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyRight:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				// TODO: Go to end of line
-				//w.caretPosition = uint32(len(w.content))
+				// TODO: Rename to TryMove since no check is being made
+				w.caretPosition.Move(+2)
 			} else if inputEvent.ModifierKey == 0 {
 				if w.caretPosition.Logical() < uint32(len(w.content)) {
 					w.caretPosition.Move(+1)
@@ -813,7 +838,7 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Buttons[0] == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
 		if inputEvent.Pointer.State.Axes[0]-float64(w.x) < 0 {
 			w.CaretPosition = 0
 		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.Content)*8) {
@@ -947,7 +972,7 @@ func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Buttons[0] == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
 		if inputEvent.Pointer.State.Axes[0]-float64(w.x) < 0 {
 			w.CaretPosition = 0
 		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.Content)*8) {
@@ -1023,6 +1048,14 @@ func (ps *PointerState) IsActive() bool {
 	}
 
 	return false
+}
+
+func (ps *PointerState) Button(button int) bool {
+	if button < len(ps.Buttons) {
+		return ps.Buttons[button]
+	} else {
+		return false
+	}
 }
 
 type EventType uint8
