@@ -550,6 +550,11 @@ func (cp *CaretPosition) Move(amount int8) {
 	case amount == +2:
 		_, y := cp.ExpandedPosition()
 		cp.caretPosition = cp.w.lines[y].Start + cp.w.lines[y].Length
+	case amount == -3:
+		cp.caretPosition = 0
+	case amount == +3:
+		y := len(cp.w.lines) - 1
+		cp.caretPosition = cp.w.lines[y].Start + cp.w.lines[y].Length
 	}
 
 	x, _ := cp.ExpandedPosition()
@@ -748,11 +753,15 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 			}
 		case glfw.KeyUp:
-			if inputEvent.ModifierKey == 0 {
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.caretPosition.Move(-3)
+			} else if inputEvent.ModifierKey == 0 {
 				w.caretPosition.TryMoveV(-1)
 			}
 		case glfw.KeyDown:
-			if inputEvent.ModifierKey == 0 {
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.caretPosition.Move(+3)
+			} else if inputEvent.ModifierKey == 0 {
 				w.caretPosition.TryMoveV(+1)
 			}
 		}
