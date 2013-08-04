@@ -369,57 +369,6 @@ func (w *CompositeWidget) ProcessTimePassed(timePassed float64) {
 	}
 }
 
-type SomethingWidget struct {
-	Widget
-	Updated bool
-}
-
-func (w *SomethingWidget) Render() {
-	gl.PushMatrix()
-	defer gl.PopMatrix()
-	gl.Translatef(w.x, w.y, 0)
-	gl.Color3f(0.3, 0.3, 0.3)
-	gl.Rectf(0-1, 0-1, 8*27+1, 16+1)
-	if !w.Updated {
-		gl.Color3f(1, 1, 1)
-	} else {
-		gl.Color3f(0.9, 1, 0.9)
-	}
-	gl.Rectf(0, 0, 8*27, 16)
-
-	gl.Color3f(0, 0, 0)
-	Print(0, 0, "Hello Conception 2 (Go)! :D Woot")
-}
-
-type Something2Widget struct {
-	Widget
-}
-
-func (w *Something2Widget) Render() {
-	gl.PushMatrix()
-	defer gl.PopMatrix()
-	gl.Translatef(w.x, w.y, 0)
-	gl.Color3f(0, 0, 0)
-
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Enable(gl.BLEND)
-	gl.Begin(gl.TRIANGLE_FAN)
-	{
-		const size = 256
-		gl.TexCoord2i(0, 0)
-		gl.Vertex2i(0, 0)
-		gl.TexCoord2i(1, 0)
-		gl.Vertex2i(size, 0)
-		gl.TexCoord2i(1, 1)
-		gl.Vertex2i(size, size)
-		gl.TexCoord2i(0, 1)
-		gl.Vertex2i(0, size)
-	}
-	gl.End()
-	gl.Disable(gl.TEXTURE_2D)
-	gl.Disable(gl.BLEND)
-}
-
 type UnderscoreSepToCamelCaseWidget struct {
 	Widget
 	window *glfw.Window
@@ -1310,26 +1259,28 @@ func main() {
 	}
 	window.SetFramebufferSizeCallback(size)
 
-	box := &BoxWidget{NewWidget(50, 150, 16, 16), "The Original Box"}
-	widgets = append(widgets, box)
 	spinner := SpinnerWidget{NewWidget(20, 20, 0, 0), 0}
 	widgets = append(widgets, &spinner)
-	something := SomethingWidget{NewWidget(50, 100, 0, 0), false}
-	widgets = append(widgets, &something)
-	//widgets = append(widgets, &Something2Widget{NewWidget(50, 220, 0, 0)})
-	widgets = append(widgets, &CompositeWidget{NewWidget(150, 150, 0, 0),
-		[]Widgeter{
-			&BoxWidget{NewWidget(0, 0, 16, 16), "Left of Duo"},
-			&BoxWidget{NewWidget(16+2, 0, 16, 16), "Right of Duo"},
-		},
-	})
-	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
-	widgets = append(widgets, NewTextFieldWidget(50, 50))
-	widgets = append(widgets, NewMetaTextFieldWidget(50, 70))
-	//widgets = append(widgets, NewChannelExpeWidget(-100, 210))
-	widgets = append(widgets, NewTextBoxWidget(100, 5))
-	widgets = append(widgets, NewTextFileWidget(100, 25, "/Users/Dmitri/Desktop/sample.txt"))
-	widgets = append(widgets, NewKatWidget(370, 20))
+	if false {
+		box := &BoxWidget{NewWidget(50, 150, 16, 16), "The Original Box"}
+		widgets = append(widgets, box)
+		//widgets = append(widgets, &Something2Widget{NewWidget(50, 220, 0, 0)})
+		widgets = append(widgets, &CompositeWidget{NewWidget(150, 150, 0, 0),
+			[]Widgeter{
+				&BoxWidget{NewWidget(0, 0, 16, 16), "Left of Duo"},
+				&BoxWidget{NewWidget(16+2, 0, 16, 16), "Right of Duo"},
+			},
+		})
+		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
+		widgets = append(widgets, NewTextFieldWidget(50, 50))
+		widgets = append(widgets, NewMetaTextFieldWidget(50, 70))
+		//widgets = append(widgets, NewChannelExpeWidget(-100, 210))
+		widgets = append(widgets, NewTextBoxWidget(100, 5))
+		widgets = append(widgets, NewTextFileWidget(100, 25, "/Users/Dmitri/Desktop/sample.txt"))
+		widgets = append(widgets, NewKatWidget(370, 20))
+	} else {
+		//widgets = append(widgets, )
+	}
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 	keyboardPointer = &Pointer{VirtualCategory: TYPING}
@@ -1425,12 +1376,6 @@ func main() {
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 		redraw = true // HACK
 	})
-
-	go func() {
-		<-time.After(3 * time.Second)
-		something.Updated = true
-		redraw = true
-	}()
 
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	//gl.ClearColor(0.8, 0.3, 0.01, 1)
