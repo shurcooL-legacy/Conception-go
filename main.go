@@ -23,10 +23,11 @@ import (
 
 	. "gist.github.com/6003701.git"
 
-	"io"
-	//. "gist.github.com/6096872.git"
+	. "gist.github.com/6096872.git"
 	. "gist.github.com/5258650.git"
 	"os/exec"
+
+	. "gist.github.com/5571468.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -164,6 +165,7 @@ type Widgeter interface {
 	Render()
 	Hit(mathgl.Vec2f) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
+	ProcessTimePassed(timePassed float64)
 	HoverPointers() map[*Pointer]bool
 }
 
@@ -191,9 +193,12 @@ func (w *Widget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
 	}
 }
 func (w *Widget) ProcessEvent(inputEvent InputEvent) {}
+func (w *Widget) ProcessTimePassed(timePassed float64) {}
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
 }
+
+// ---
 
 type BoxWidget struct {
 	Widget
@@ -270,6 +275,70 @@ func DrawGBox(x, y, dx, dy gl.Float) {
 	gl.Rectf(x, y, x+dx, y+dy)
 }
 
+// ---
+
+type KatWidget struct {
+	Widget
+}
+
+func NewKatWidget(x, y gl.Float) *KatWidget {
+	return &KatWidget{Widget: NewWidget(x, y, 16, 16)}
+}
+
+func (w *KatWidget) Render() {
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	if !hasTypingFocus {
+		DrawBox(w.x, w.y, w.dx, w.dy)
+	} else {
+		DrawYBox(w.x, w.y, w.dx, w.dy)
+	}
+}
+
+func (w *KatWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+
+func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		keyboardPointer.OriginMapping = []Widgeter{w}
+	}
+}
+
+func (w *KatWidget) ProcessTimePassed(timePassed float64) {
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	if hasTypingFocus {
+		speed := 100.0
+		if keyboardPointer.State.Button('W') && !keyboardPointer.State.Button('S') {
+			w.y -= gl.Float(timePassed * speed)
+			redraw = true
+		} else if keyboardPointer.State.Button('S') && !keyboardPointer.State.Button('W') {
+			w.y += gl.Float(timePassed * speed)
+			redraw = true
+		}
+		if keyboardPointer.State.Button('A') && !keyboardPointer.State.Button('D') {
+			w.x -= gl.Float(timePassed * speed)
+			redraw = true
+		} else if keyboardPointer.State.Button('D') && !keyboardPointer.State.Button('A') {
+			w.x += gl.Float(timePassed * speed)
+			redraw = true
+		}
+	}
+}
+
+// ---
+
 type CompositeWidget struct {
 	Widget
 	Widgets []Widgeter
@@ -293,6 +362,11 @@ func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
 	}
 
 	return hits
+}
+func (w *CompositeWidget) ProcessTimePassed(timePassed float64) {
+	for _, widget := range w.Widgets {
+		widget.ProcessTimePassed(timePassed)
+	}
 }
 
 type SomethingWidget struct {
@@ -379,37 +453,6 @@ type ChannelExpeWidget struct {
 	errCh   <-chan error
 }
 
-// TODO: Fix the duplication of gist.github.com/6096872.git
-func ByteReaderW(r io.Reader) (<-chan []byte, <-chan error) {
-	ch := make(chan []byte)
-	errCh := make(chan error)
-
-	go func() {
-		for {
-			buf := make([]byte, 2048)
-			s := 0
-		inner:
-			for {
-				n, err := r.Read(buf[s:])
-				if n > 0 {
-					redraw = true
-					ch <- buf[s : s+n]
-					s += n
-				}
-				if err != nil {
-					errCh <- err
-					return
-				}
-				if s >= len(buf) {
-					break inner
-				}
-			}
-		}
-	}()
-
-	return ch, errCh
-}
-
 func NewChannelExpeWidget(x, y gl.Float) *ChannelExpeWidget {
 	cmd := exec.Command("ping", "google.com")
 	stdout, err := cmd.StdoutPipe()
@@ -418,7 +461,7 @@ func NewChannelExpeWidget(x, y gl.Float) *ChannelExpeWidget {
 	CheckError(err)
 
 	w := ChannelExpeWidget{Widget: NewWidget(x, y, 0, 0)}
-	w.ch, w.errCh = ByteReaderW(stdout)
+	w.ch, w.errCh = ByteReader(stdout)
 
 	return &w
 }
@@ -427,13 +470,6 @@ func (w *ChannelExpeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
 	gl.Translatef(w.x, w.y, 0)
-
-	// TODO: This needs to go into "ProcessTimePassed" type of thing that gets called even when redraw is false
-	select {
-	case b := <-w.ch:
-		w.Content += string(b)
-	default:
-	}
 
 	LongestLine := uint32(0)
 	lines := GetLines(w.Content)
@@ -457,6 +493,17 @@ func (w *ChannelExpeWidget) Render() {
 		Print(0, float32(16*lineNumber), line)
 	}
 }
+
+func (w *ChannelExpeWidget) ProcessTimePassed(timePassed float64) {
+	select {
+	case b := <-w.ch:
+		w.Content += string(b)
+		redraw = true
+	default:
+	}
+}
+
+// ---
 
 type SpinnerWidget struct {
 	Widget
@@ -623,13 +670,17 @@ type contentLine struct {
 func NewTextBoxWidget(x, y gl.Float) *TextBoxWidget {
 	w := &TextBoxWidget{Widget: NewWidget(x, y, 0, 0)}
 	w.caretPosition.w = w
+	w.UpdateLines()
 	return w
 }
 
 func (w *TextBoxWidget) SetContent(content string) {
 	w.content = content
 	w.UpdateLines()
-	//goon.Dump(w.Content, w.Lines)
+
+	if w.caretPosition.caretPosition > uint32(len(w.content)) {
+		w.caretPosition.Move(+3)
+	}
 }
 
 func (w *TextBoxWidget) UpdateLines() {
@@ -772,6 +823,30 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		w.caretPosition.Move(+1)
 	}
 }
+
+// ---
+
+type TextFileWidget struct {
+	*TextBoxWidget
+	path string
+}
+
+func NewTextFileWidget(x, y gl.Float, path string) *TextFileWidget {
+	return &TextFileWidget{TextBoxWidget: NewTextBoxWidget(x, y), path: path}
+}
+
+func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
+	// Check if the file has been changed externally, and if so, override this widget
+	NewContent := MustReadFile(w.path)
+	if NewContent != w.content {
+		w.TextBoxWidget.SetContent(NewContent)
+		redraw = true
+	}
+
+	w.TextBoxWidget.ProcessTimePassed(timePassed)
+}
+
+// ---
 
 type TextFieldWidget struct {
 	Widget
@@ -1211,7 +1286,7 @@ func main() {
 
 	//window.SetPosition(1600, 600)
 	window.SetPosition(1275, 300)
-	glfw.SwapInterval(1)
+	glfw.SwapInterval(1) // Vsync
 
 	InitFont()
 	defer DeinitFont()
@@ -1251,8 +1326,10 @@ func main() {
 	widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
 	widgets = append(widgets, NewTextFieldWidget(50, 50))
 	widgets = append(widgets, NewMetaTextFieldWidget(50, 70))
-	widgets = append(widgets, NewChannelExpeWidget(-100, 210))
-	widgets = append(widgets, NewTextBoxWidget(100, 20))
+	//widgets = append(widgets, NewChannelExpeWidget(-100, 210))
+	widgets = append(widgets, NewTextBoxWidget(100, 5))
+	widgets = append(widgets, NewTextFileWidget(100, 25, "/Users/Dmitri/Desktop/sample.txt"))
+	widgets = append(widgets, NewKatWidget(370, 20))
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 	keyboardPointer = &Pointer{VirtualCategory: TYPING}
@@ -1359,8 +1436,8 @@ func main() {
 	//gl.ClearColor(0.8, 0.3, 0.01, 1)
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
-	keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
-	widgets[len(widgets)-1].(*TextBoxWidget).SetContent("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")
+	/*keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
+	widgets[len(widgets)-1].(*TextBoxWidget).SetContent("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")*/
 
 	//last := window.GetClipboardString()
 
@@ -1378,6 +1455,10 @@ func main() {
 		// Input
 		inputEventQueue = ProcessInputEventQueue(inputEventQueue)
 
+		for _, widget := range widgets {
+			widget.ProcessTimePassed(1.0 / 60) // TODO: Use proper value?
+		}
+
 		if redraw {
 			redraw = false
 
@@ -1393,7 +1474,7 @@ func main() {
 			spinner.Spinner++
 			//log.Println("swapped buffers")
 		} else {
-			time.Sleep(time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 		}
 
 		//runtime.Gosched()
