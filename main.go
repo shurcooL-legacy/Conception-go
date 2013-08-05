@@ -28,6 +28,9 @@ import (
 	"os/exec"
 
 	. "gist.github.com/5571468.git"
+
+	//"go/parser"
+	//"go/token"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -196,6 +199,20 @@ func (w *Widget) ProcessEvent(inputEvent InputEvent) {}
 func (w *Widget) ProcessTimePassed(timePassed float64) {}
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
+}
+
+// ---
+
+type Test1Widget struct {
+	Widget
+}
+
+func NewTest1Widget(x, y gl.Float) *Test1Widget {
+	return &Test1Widget{Widget: NewWidget(x, y, 300, 300)}
+}
+
+func (w *Test1Widget) Render() {
+	DrawBox(w.x, w.y, w.dx, w.dy)
 }
 
 // ---
@@ -1262,9 +1279,7 @@ func main() {
 	spinner := SpinnerWidget{NewWidget(20, 20, 0, 0), 0}
 	widgets = append(widgets, &spinner)
 	if false {
-		box := &BoxWidget{NewWidget(50, 150, 16, 16), "The Original Box"}
-		widgets = append(widgets, box)
-		//widgets = append(widgets, &Something2Widget{NewWidget(50, 220, 0, 0)})
+		widgets = append(widgets, &BoxWidget{NewWidget(50, 150, 16, 16), "The Original Box"})
 		widgets = append(widgets, &CompositeWidget{NewWidget(150, 150, 0, 0),
 			[]Widgeter{
 				&BoxWidget{NewWidget(0, 0, 16, 16), "Left of Duo"},
@@ -1279,7 +1294,7 @@ func main() {
 		widgets = append(widgets, NewTextFileWidget(100, 25, "/Users/Dmitri/Desktop/sample.txt"))
 		widgets = append(widgets, NewKatWidget(370, 20))
 	} else {
-		//widgets = append(widgets, )
+		widgets = append(widgets, NewTest1Widget(10, 50))
 	}
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
