@@ -23,20 +23,24 @@ import (
 
 	. "gist.github.com/6003701.git"
 
-	. "gist.github.com/6096872.git"
 	. "gist.github.com/5258650.git"
+	. "gist.github.com/6096872.git"
 	"os/exec"
 
 	. "gist.github.com/5571468.git"
 
 	//"go/parser"
 	//"go/token"
+
+	"math"
 )
 
 var _ = UnderscoreSepToCamelCase
 var _ = goon.Dump
 
-var offX, offY gl.Float
+const katOnly = true
+
+var offX, offY gl.Double
 var oFontBase gl.Uint
 
 var redraw bool = true
@@ -51,17 +55,17 @@ func CheckGLError() {
 	}
 }
 
-func PrintLine(x, y float32, s string) {
+func PrintLine(pos mathgl.Vec2d, s string) {
 	segments := strings.Split(s, "\t")
 	var advance uint32
 	for _, segment := range segments {
-		Print(x+float32(8*advance), y, segment)
+		Print(mathgl.Vec2d{pos[0] + float64(8*advance), pos[1]}, segment)
 		advance += uint32(len(segment))
 		advance += 4 - (advance % 4)
 	}
 }
 
-func Print(x, y float32, s string) {
+func Print(pos mathgl.Vec2d, s string) {
 	if 0 == len(s) {
 		return
 	}
@@ -70,8 +74,8 @@ func Print(x, y float32, s string) {
 	gl.Enable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
-	gl.Translatef(gl.Float(x), gl.Float(y), 0)
-	gl.Translatef(-4+0.25, -1, 0)
+	gl.Translated(gl.Double(pos[0]), gl.Double(pos[1]), 0)
+	gl.Translated(-4+0.25, -1, 0)
 	gl.ListBase(oFontBase)
 	gl.CallLists(gl.Sizei(len(s)), gl.UNSIGNED_BYTE, gl.Pointer(&[]byte(s)[0]))
 	gl.PopMatrix()
@@ -90,27 +94,27 @@ func InitFont() {
 	oFontBase = gl.GenLists(256)
 
 	for iLoop1 := 0; iLoop1 < 256; iLoop1++ {
-		fCharX := gl.Float(iLoop1%16) / 16.0
-		fCharY := gl.Float(iLoop1/16) / 16.0
+		fCharX := gl.Double(iLoop1%16) / 16.0
+		fCharY := gl.Double(iLoop1/16) / 16.0
 
 		gl.NewList(oFontBase+gl.Uint(iLoop1), gl.COMPILE)
-		const offset = gl.Float(0.004)
+		const offset = gl.Double(0.004)
 		//#if DECISION_RENDER_TEXT_VCENTERED_MID
-		VerticalOffset := gl.Float(0.00125)
+		VerticalOffset := gl.Double(0.00125)
 		if ('a' <= iLoop1 && iLoop1 <= 'z') || '_' == iLoop1 {
-			VerticalOffset = gl.Float(-0.00225)
+			VerticalOffset = gl.Double(-0.00225)
 		}
 		/*#else
-					VerticalOffset := gl.Float(0.0)
+					VerticalOffset := gl.Double(0.0)
 		//#endif*/
 		gl.Begin(gl.QUADS)
-		gl.TexCoord2f(fCharX+offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
+		gl.TexCoord2d(fCharX+offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
 		gl.Vertex2i(0, 16)
-		gl.TexCoord2f(fCharX+0.0625-offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
+		gl.TexCoord2d(fCharX+0.0625-offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
 		gl.Vertex2i(16, 16)
-		gl.TexCoord2f(fCharX+0.0625-offset, 1-(1-fCharY-offset+VerticalOffset))
+		gl.TexCoord2d(fCharX+0.0625-offset, 1-(1-fCharY-offset+VerticalOffset))
 		gl.Vertex2i(16, 0)
-		gl.TexCoord2f(fCharX+offset, 1-(1-fCharY-offset+VerticalOffset))
+		gl.TexCoord2d(fCharX+offset, 1-(1-fCharY-offset+VerticalOffset))
 		gl.Vertex2i(0, 0)
 		gl.End()
 		gl.Translated(fontWidth, 0.0, 0.0)
@@ -166,28 +170,28 @@ func LoadTexture(path string) {
 
 type Widgeter interface {
 	Render()
-	Hit(mathgl.Vec2f) []Widgeter
+	Hit(mathgl.Vec2d) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
 	ProcessTimePassed(timePassed float64)
 	HoverPointers() map[*Pointer]bool
 }
 
 type Widget struct {
-	x, y          gl.Float
-	dx, dy        gl.Float
+	pos           mathgl.Vec2d
+	size          mathgl.Vec2d
 	hoverPointers map[*Pointer]bool
 }
 
-func NewWidget(x, y, dx, dy gl.Float) Widget {
-	return Widget{x, y, dx, dy, map[*Pointer]bool{}}
+func NewWidget(pos, size mathgl.Vec2d) Widget {
+	return Widget{pos, size, map[*Pointer]bool{}}
 }
 
 func (*Widget) Render() {}
-func (w *Widget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
-	Hit := (ParentPosition[0] >= float32(w.x) &&
-		ParentPosition[1] >= float32(w.y) &&
-		ParentPosition[0] < float32(w.x+w.dx) &&
-		ParentPosition[1] < float32(w.y+w.dy))
+func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	Hit := (ParentPosition[0] >= float64(w.pos[0]) &&
+		ParentPosition[1] >= float64(w.pos[1]) &&
+		ParentPosition[0] < float64(w.pos.Add(w.size)[0]) &&
+		ParentPosition[1] < float64(w.pos.Add(w.size)[1]))
 
 	if Hit {
 		return []Widgeter{w}
@@ -195,7 +199,7 @@ func (w *Widget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
 		return nil
 	}
 }
-func (w *Widget) ProcessEvent(inputEvent InputEvent) {}
+func (w *Widget) ProcessEvent(inputEvent InputEvent)   {}
 func (w *Widget) ProcessTimePassed(timePassed float64) {}
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
@@ -207,12 +211,12 @@ type Test1Widget struct {
 	Widget
 }
 
-func NewTest1Widget(x, y gl.Float) *Test1Widget {
-	return &Test1Widget{Widget: NewWidget(x, y, 300, 300)}
+func NewTest1Widget(pos mathgl.Vec2d) *Test1Widget {
+	return &Test1Widget{Widget: NewWidget(pos, mathgl.Vec2d{300, 300})}
 }
 
 func (w *Test1Widget) Render() {
-	DrawBox(w.x, w.y, w.dx, w.dy)
+	DrawBox(w.pos, w.size)
 }
 
 // ---
@@ -235,14 +239,14 @@ func (w *BoxWidget) Render() {
 
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawGBox(w.x, w.y, w.dx, w.dy)
+		DrawGBox(w.pos, w.size)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.x, w.y, w.dx, w.dy)
+		DrawBox(w.pos, w.size)
 	}
 }
-func (w *BoxWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
+func (w *BoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -273,48 +277,101 @@ func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 }
 
-func DrawBox(x, y, dx, dy gl.Float) {
-	gl.Color3f(0.3, 0.3, 0.3)
-	gl.Rectf(x-1, y-1, x+dx+1, y+dy+1)
-	gl.Color3f(1, 1, 1)
-	gl.Rectf(x, y, x+dx, y+dy)
+func DrawBox(pos, size mathgl.Vec2d) {
+	gl.Color3d(0.3, 0.3, 0.3)
+	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
+	gl.Color3d(1, 1, 1)
+	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
 }
-func DrawYBox(x, y, dx, dy gl.Float) {
-	gl.Color3f(0.898, 0.765, 0.396)
-	gl.Rectf(x-1, y-1, x+dx+1, y+dy+1)
-	gl.Color3f(1, 1, 1)
-	gl.Rectf(x, y, x+dx, y+dy)
+func DrawYBox(pos, size mathgl.Vec2d) {
+	gl.Color3d(0.898, 0.765, 0.396)
+	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
+	gl.Color3d(1, 1, 1)
+	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
 }
-func DrawGBox(x, y, dx, dy gl.Float) {
-	gl.Color3f(0.898, 0.765, 0.396)
-	gl.Rectf(x-1, y-1, x+dx+1, y+dy+1)
-	gl.Color3f(0.75, 0.75, 0.75)
-	gl.Rectf(x, y, x+dx, y+dy)
+func DrawGBox(pos, size mathgl.Vec2d) {
+	gl.Color3d(0.898, 0.765, 0.396)
+	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
+	gl.Color3d(0.75, 0.75, 0.75)
+	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+}
+
+func DrawCircle(Position mathgl.Vec2d, Size mathgl.Vec2d, BackgroundColor, BorderColor mathgl.Vec3d) {
+	const TwoPi = math.Pi * 2
+
+	const x = 64
+
+	gl.Color3dv((*gl.Double)(&BorderColor[0]))
+	gl.Begin(gl.TRIANGLE_FAN)
+	gl.Vertex2d(gl.Double(Position[0]), gl.Double(Position[1]))
+	for i := 0; i <= x; i++ {
+		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*Size[0]/2), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*Size[1]/2))
+	}
+	gl.End()
+
+	gl.Color3dv((*gl.Double)(&BackgroundColor[0]))
+	gl.Begin(gl.TRIANGLE_FAN)
+	gl.Vertex2d(gl.Double(Position[0]), gl.Double(Position[1]))
+	for i := 0; i <= x; i++ {
+		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*(Size[0]/2-1)), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*(Size[1]/2-1)))
+	}
+	gl.End()
+}
+
+func DrawCircleBorder(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColor mathgl.Vec3d) {
+	const TwoPi = math.Pi * 2
+
+	const x = 64
+
+	gl.Color3dv((*gl.Double)(&BorderColor[0]))
+	gl.Begin(gl.TRIANGLE_STRIP)
+	for i := 0; i <= x; i++ {
+		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*Size[0]/2), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*Size[1]/2))
+		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*(Size[0]/2-1)), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*(Size[1]/2-1)))
+	}
+	gl.End()
 }
 
 // ---
 
 type KatWidget struct {
 	Widget
+	target mathgl.Vec2d
+	mode   KatMode
 }
 
-func NewKatWidget(x, y gl.Float) *KatWidget {
-	return &KatWidget{Widget: NewWidget(x, y, 16, 16)}
+const ShunpoRadius = 120
+
+type KatMode uint8
+
+const (
+	AutoAttack KatMode = iota
+	Shunpo
+)
+
+func NewKatWidget(pos mathgl.Vec2d) *KatWidget {
+	return &KatWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), target: pos}
 }
 
 func (w *KatWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if !hasTypingFocus {
-		DrawBox(w.x, w.y, w.dx, w.dy)
+	isHit := len(w.HoverPointers()) > 0
+
+	if !hasTypingFocus && !isHit {
+		DrawCircle(w.pos, w.size, mathgl.Vec3d{1, 1, 1}, mathgl.Vec3d{0.3, 0.3, 0.3})
 	} else {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawCircle(w.pos, w.size, mathgl.Vec3d{1, 1, 1}, mathgl.Vec3d{0.898, 0.765, 0.396})
+	}
+
+	if w.mode == Shunpo {
+		DrawCircleBorder(w.pos, mathgl.Vec2d{ShunpoRadius * 2, ShunpoRadius * 2}, mathgl.Vec3d{0.7, 0.7, 0.7})
 	}
 }
 
-func (w *KatWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
-	if len(w.Widget.Hit(ParentPosition)) > 0 {
+func (w *KatWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if w.pos.Sub(ParentPosition).Len() <= w.size[0]/2 {
 		return []Widgeter{w}
 	} else {
 		return nil
@@ -329,28 +386,56 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		keyboardPointer.OriginMapping = []Widgeter{w}
 	}
+
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
+		w.mode == Shunpo {
+		shunpoTarget := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		if w.pos.Sub(shunpoTarget).Len() <= ShunpoRadius {
+			w.pos = shunpoTarget
+			w.target = w.pos
+			w.mode = AutoAttack
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(1) {
+		w.target = mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 'E' && inputEvent.Buttons[0] == true {
+		w.mode = Shunpo
+	}
 }
 
 func (w *KatWidget) ProcessTimePassed(timePassed float64) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
+	const speed = float64(100.0)
+
 	if hasTypingFocus {
-		speed := 100.0
-		if keyboardPointer.State.Button('W') && !keyboardPointer.State.Button('S') {
-			w.y -= gl.Float(timePassed * speed)
-			redraw = true
-		} else if keyboardPointer.State.Button('S') && !keyboardPointer.State.Button('W') {
-			w.y += gl.Float(timePassed * speed)
-			redraw = true
-		}
 		if keyboardPointer.State.Button('A') && !keyboardPointer.State.Button('D') {
-			w.x -= gl.Float(timePassed * speed)
+			w.pos[0] -= timePassed * speed
 			redraw = true
 		} else if keyboardPointer.State.Button('D') && !keyboardPointer.State.Button('A') {
-			w.x += gl.Float(timePassed * speed)
+			w.pos[0] += timePassed * speed
 			redraw = true
 		}
+		if keyboardPointer.State.Button('W') && !keyboardPointer.State.Button('S') {
+			w.pos[1] -= timePassed * speed
+			redraw = true
+		} else if keyboardPointer.State.Button('S') && !keyboardPointer.State.Button('W') {
+			w.pos[1] += timePassed * speed
+			redraw = true
+		}
+	}
+
+	if w.target.Sub(w.pos).Len() <= speed*timePassed {
+		w.pos = w.target
+	} else {
+		moveBy := w.target.Sub(w.pos)
+		moveBy = moveBy.Normalize().Mul(speed * timePassed)
+		w.pos = w.pos.Add(moveBy)
+		redraw = true
 	}
 }
 
@@ -364,14 +449,14 @@ type CompositeWidget struct {
 func (w *CompositeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translatef(w.x, w.y, 0)
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 
 	for _, widget := range w.Widgets {
 		widget.Render()
 	}
 }
-func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
-	LocalPosition := ParentPosition.Sub(mathgl.Vec2f{float32(w.x), float32(w.y)})
+func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	LocalPosition := ParentPosition.Sub(w.pos)
 
 	hits := []Widgeter{}
 	for _, widget := range w.Widgets {
@@ -394,22 +479,22 @@ type UnderscoreSepToCamelCaseWidget struct {
 func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translatef(w.x, w.y, 0)
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 
 	//s := w.window.GetClipboardString()
 	s := "get_clipboard_string"
 	// E.g., get_clipboard_string -> GetClipboardString
 	s += " -> " + UnderscoreSepToCamelCase(s)
-	w.dx = gl.Float(8 * len(s))
-	w.dy = 16
+	w.size[0] = float64(8 * len(s))
+	w.size[1] = 16
 
-	gl.Color3f(0.3, 0.3, 0.3)
-	gl.Rectf(0-1, 0-1, w.dx+1, w.dy+1)
-	gl.Color3f(1, 1, 1)
-	gl.Rectf(0, 0, w.dx, w.dy)
+	gl.Color3d(0.3, 0.3, 0.3)
+	gl.Rectd(0-1, 0-1, gl.Double(w.size[0]+1), gl.Double(w.size[1]+1))
+	gl.Color3d(1, 1, 1)
+	gl.Rectd(0, 0, gl.Double(w.size[0]), gl.Double(w.size[1]))
 
-	gl.Color3f(0, 0, 0)
-	Print(0, 0, s)
+	gl.Color3d(0, 0, 0)
+	Print(mathgl.Vec2d{0, 0}, s)
 }
 
 type ChannelExpeWidget struct {
@@ -419,14 +504,14 @@ type ChannelExpeWidget struct {
 	errCh   <-chan error
 }
 
-func NewChannelExpeWidget(x, y gl.Float) *ChannelExpeWidget {
+func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	cmd := exec.Command("ping", "google.com")
 	stdout, err := cmd.StdoutPipe()
 	CheckError(err)
 	err = cmd.Start()
 	CheckError(err)
 
-	w := ChannelExpeWidget{Widget: NewWidget(x, y, 0, 0)}
+	w := ChannelExpeWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0})}
 	w.ch, w.errCh = ByteReader(stdout)
 
 	return &w
@@ -435,7 +520,7 @@ func NewChannelExpeWidget(x, y gl.Float) *ChannelExpeWidget {
 func (w *ChannelExpeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translatef(w.x, w.y, 0)
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 
 	LongestLine := uint32(0)
 	lines := GetLines(w.Content)
@@ -446,17 +531,16 @@ func (w *ChannelExpeWidget) Render() {
 		}
 	}
 
-	w.dx = gl.Float(8 * LongestLine)
-	w.dy = gl.Float(16 * len(lines))
+	w.size = mathgl.Vec2d{float64(8 * LongestLine), float64(16 * len(lines))}
 
-	gl.Color3f(0.3, 0.3, 0.3)
-	gl.Rectf(0-1, 0-1, w.dx+1, w.dy+1)
-	gl.Color3f(1, 1, 1)
-	gl.Rectf(0, 0, w.dx, w.dy)
+	gl.Color3d(0.3, 0.3, 0.3)
+	gl.Rectd(0-1, 0-1, gl.Double(w.size[0]+1), gl.Double(w.size[1]+1))
+	gl.Color3d(1, 1, 1)
+	gl.Rectd(0, 0, gl.Double(w.size[0]), gl.Double(w.size[1]))
 
-	gl.Color3f(0, 0, 0)
+	gl.Color3d(0, 0, 0)
 	for lineNumber, line := range lines {
-		Print(0, float32(16*lineNumber), line)
+		Print(mathgl.Vec2d{0, float64(16 * lineNumber)}, line)
 	}
 }
 
@@ -479,10 +563,10 @@ type SpinnerWidget struct {
 func (w *SpinnerWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Color3f(0, 0, 0)
-	gl.Translatef(w.x, w.y, 0)
-	//gl.Rotatef(float32(spinner), 0, 0, 1)
-	gl.Rotatef(gl.Float(w.Spinner), 0, 0, 1)
+	gl.Color3d(0, 0, 0)
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+	//gl.Rotated(float64(spinner), 0, 0, 1)
+	gl.Rotated(gl.Double(w.Spinner), 0, 0, 1)
 	gl.Begin(gl.LINES)
 	gl.Vertex2i(0, -10)
 	gl.Vertex2i(0, 10)
@@ -633,8 +717,8 @@ type contentLine struct {
 	Length uint32
 }
 
-func NewTextBoxWidget(x, y gl.Float) *TextBoxWidget {
-	w := &TextBoxWidget{Widget: NewWidget(x, y, 0, 0)}
+func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
+	w := &TextBoxWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0})}
 	w.caretPosition.w = w
 	w.UpdateLines()
 	return w
@@ -671,11 +755,11 @@ func (w *TextBoxWidget) Render() {
 
 	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
 	if w.longestLine < 3 {
-		w.dx = gl.Float(8 * 3)
+		w.size[0] = float64(8 * 3)
 	} else {
-		w.dx = gl.Float(8 * w.longestLine)
+		w.size[0] = float64(8 * w.longestLine)
 	}
-	w.dy = gl.Float(16 * len(w.lines))
+	w.size[1] = float64(16 * len(w.lines))
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
@@ -689,18 +773,18 @@ func (w *TextBoxWidget) Render() {
 
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else if hasTypingFocus {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.x, w.y, w.dx, w.dy)
+		DrawBox(w.pos, w.size)
 	}
 
-	gl.Color3f(0, 0, 0)
+	gl.Color3d(0, 0, 0)
 	for lineNumber, contentLine := range w.lines {
-		PrintLine(float32(w.x), float32(w.y)+float32(16*lineNumber), w.content[contentLine.Start:contentLine.Start+contentLine.Length])
+		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.content[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
 	if hasTypingFocus {
@@ -709,12 +793,12 @@ func (w *TextBoxWidget) Render() {
 		// Draw caret
 		gl.PushMatrix()
 		defer gl.PopMatrix()
-		gl.Translatef(w.x, w.y, 0)
-		gl.Color3f(0, 0, 0)
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		gl.Color3d(0, 0, 0)
 		gl.Recti(gl.Int(expandedCaretPosition*8-1), gl.Int(caretLine*16), gl.Int(expandedCaretPosition*8+1), gl.Int(caretLine*16)+16)
 	}
 }
-func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
+func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -734,7 +818,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
-		w.caretPosition.SetPositionFromPhysical(inputEvent.Pointer.State.Axes[0]-float64(w.x), inputEvent.Pointer.State.Axes[1]-float64(w.y))
+		w.caretPosition.SetPositionFromPhysical(inputEvent.Pointer.State.Axes[0]-w.pos[0], inputEvent.Pointer.State.Axes[1]-w.pos[1])
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
@@ -797,8 +881,8 @@ type TextFileWidget struct {
 	path string
 }
 
-func NewTextFileWidget(x, y gl.Float, path string) *TextFileWidget {
-	return &TextFileWidget{TextBoxWidget: NewTextBoxWidget(x, y), path: path}
+func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
+	return &TextFileWidget{TextBoxWidget: NewTextBoxWidget(pos), path: path}
 }
 
 func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
@@ -820,8 +904,8 @@ type TextFieldWidget struct {
 	CaretPosition uint32
 }
 
-func NewTextFieldWidget(x, y gl.Float) *TextFieldWidget {
-	return &TextFieldWidget{NewWidget(x, y, 0, 0), "", 0}
+func NewTextFieldWidget(pos mathgl.Vec2d) *TextFieldWidget {
+	return &TextFieldWidget{NewWidget(pos, mathgl.Vec2d{0, 0}), "", 0}
 }
 
 func (w *TextFieldWidget) Render() {
@@ -830,11 +914,11 @@ func (w *TextFieldWidget) Render() {
 
 	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
 	if len(w.Content) < 3 {
-		w.dx = gl.Float(8 * 3)
+		w.size[0] = float64(8 * 3)
 	} else {
-		w.dx = gl.Float(8 * len(w.Content))
+		w.size[0] = float64(8 * len(w.Content))
 	}
-	w.dy = 16
+	w.size[1] = 16
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
@@ -848,28 +932,28 @@ func (w *TextFieldWidget) Render() {
 
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else if hasTypingFocus {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.x, w.y, w.dx, w.dy)
+		DrawBox(w.pos, w.size)
 	}
 
-	gl.Color3f(0, 0, 0)
-	Print(float32(w.x), float32(w.y), w.Content)
+	gl.Color3d(0, 0, 0)
+	Print(w.pos, w.Content)
 
 	if hasTypingFocus {
 		// Draw caret
 		gl.PushMatrix()
 		defer gl.PopMatrix()
-		gl.Translatef(w.x, w.y, 0)
-		gl.Color3f(0, 0, 0)
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		gl.Color3d(0, 0, 0)
 		gl.Recti(gl.Int(w.CaretPosition*8-1), 0, gl.Int(w.CaretPosition*8+1), 16)
 	}
 }
-func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
+func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -889,12 +973,12 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
-		if inputEvent.Pointer.State.Axes[0]-float64(w.x) < 0 {
+		if inputEvent.Pointer.State.Axes[0]-w.pos[0] < 0 {
 			w.CaretPosition = 0
-		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.Content)*8) {
+		} else if inputEvent.Pointer.State.Axes[0]-w.pos[0] > float64(len(w.Content)*8) {
 			w.CaretPosition = uint32(len(w.Content))
 		} else {
-			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0] - float64(w.x) + 4) / 8)
+			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0] - w.pos[0] + 4) / 8)
 		}
 	}
 
@@ -945,8 +1029,8 @@ type MetaTextFieldWidget struct {
 	CaretPosition uint32
 }
 
-func NewMetaTextFieldWidget(x, y gl.Float) *MetaTextFieldWidget {
-	return &MetaTextFieldWidget{NewWidget(x, y, 0, 0), nil, 0}
+func NewMetaTextFieldWidget(pos mathgl.Vec2d) *MetaTextFieldWidget {
+	return &MetaTextFieldWidget{NewWidget(pos, mathgl.Vec2d{0, 0}), nil, 0}
 }
 
 func (w *MetaTextFieldWidget) Render() {
@@ -955,11 +1039,11 @@ func (w *MetaTextFieldWidget) Render() {
 
 	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
 	if len(w.Content) < 3 {
-		w.dx = gl.Float(8 * 3)
+		w.size[0] = float64(8 * 3)
 	} else {
-		w.dx = gl.Float(8 * len(w.Content))
+		w.size[0] = float64(8 * len(w.Content))
 	}
-	w.dy = 16
+	w.size[1] = 16
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
@@ -973,37 +1057,37 @@ func (w *MetaTextFieldWidget) Render() {
 
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else if hasTypingFocus {
-		DrawYBox(w.x, w.y, w.dx, w.dy)
+		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.x, w.y, w.dx, w.dy)
+		DrawBox(w.pos, w.size)
 	}
 
 	now := time.Now().UnixNano()
 	for i, mc := range w.Content {
 		age := now - mc.Timestamp
-		highlight := gl.Float(age) / 10000000000
+		highlight := gl.Double(age) / 10000000000
 
-		gl.Color3f(1, 1, highlight)
-		gl.Rectf(w.x+gl.Float(i*8), w.y, w.x+gl.Float((i+1)*8), w.y+16)
+		gl.Color3d(1, 1, highlight)
+		gl.Rectd(gl.Double(w.pos[0]+float64(i*8)), gl.Double(w.pos[1]), gl.Double(w.pos[0]+float64(i+1)*8), gl.Double(w.pos[1]+16))
 
-		gl.Color3f(0, 0, 0)
-		Print(float32(w.x)+float32(8*i), float32(w.y), string(mc.Character))
+		gl.Color3d(0, 0, 0)
+		Print(mathgl.Vec2d{w.pos[0] + float64(8*i), w.pos[1]}, string(mc.Character))
 	}
 
 	if hasTypingFocus {
 		// Draw caret
 		gl.PushMatrix()
 		defer gl.PopMatrix()
-		gl.Translatef(w.x, w.y, 0)
-		gl.Color3f(0, 0, 0)
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		gl.Color3d(0, 0, 0)
 		gl.Recti(gl.Int(w.CaretPosition*8-1), 0, gl.Int(w.CaretPosition*8+1), 16)
 	}
 }
-func (w *MetaTextFieldWidget) Hit(ParentPosition mathgl.Vec2f) []Widgeter {
+func (w *MetaTextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -1023,12 +1107,12 @@ func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
-		if inputEvent.Pointer.State.Axes[0]-float64(w.x) < 0 {
+		if inputEvent.Pointer.State.Axes[0]-w.pos[0] < 0 {
 			w.CaretPosition = 0
-		} else if inputEvent.Pointer.State.Axes[0]-float64(w.x) > float64(len(w.Content)*8) {
+		} else if inputEvent.Pointer.State.Axes[0]-w.pos[0] > float64(len(w.Content)*8) {
 			w.CaretPosition = uint32(len(w.Content))
 		} else {
-			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0] - float64(w.x) + 4) / 8)
+			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0] - w.pos[0] + 4) / 8)
 		}
 	}
 
@@ -1136,45 +1220,49 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 	for len(inputEventQueue) > 0 {
 		inputEvent := inputEventQueue[0]
 
-		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] {
-			Position := mathgl.Vec2f{float32(inputEvent.Pointer.State.Axes[0]), float32(inputEvent.Pointer.State.Axes[1])}
+		if !katOnly {
+			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] {
+				Position := mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])}
 
-			// Clear previously hit widgets
-			for _, widget := range inputEvent.Pointer.Mapping {
-				delete(widget.HoverPointers(), inputEvent.Pointer)
+				// Clear previously hit widgets
+				for _, widget := range inputEvent.Pointer.Mapping {
+					delete(widget.HoverPointers(), inputEvent.Pointer)
+				}
+				inputEvent.Pointer.Mapping = []Widgeter{}
+
+				// Recalculate currently hit widgets
+				for _, widget := range widgets {
+					inputEvent.Pointer.Mapping = append(inputEvent.Pointer.Mapping, widget.Hit(Position)...)
+				}
+				for _, widget := range inputEvent.Pointer.Mapping {
+					widget.HoverPointers()[inputEvent.Pointer] = true
+				}
 			}
-			inputEvent.Pointer.Mapping = []Widgeter{}
 
-			// Recalculate currently hit widgets
-			for _, widget := range widgets {
-				inputEvent.Pointer.Mapping = append(inputEvent.Pointer.Mapping, widget.Hit(Position)...)
+			// Populate PointerMappings (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
+			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] &&
+				!inputEvent.EventTypes[POINTER_DEACTIVATION] && !inputEvent.Pointer.State.IsActive() {
+				inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
+				copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
 			}
-			for _, widget := range inputEvent.Pointer.Mapping {
-				widget.HoverPointers()[inputEvent.Pointer] = true
+
+			if inputEvent.Pointer == mousePointer && inputEvent.InputId == 0 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
+				//fmt.Println("Left down!")
+			} else if inputEvent.Pointer == mousePointer && inputEvent.InputId == 1 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
+				//fmt.Println("Right down!")
 			}
-		}
 
-		// Populate PointerMappings (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
-		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] &&
-			!inputEvent.EventTypes[POINTER_DEACTIVATION] && !inputEvent.Pointer.State.IsActive() {
-			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
-			copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
-		}
+			for _, widget := range inputEvent.Pointer.OriginMapping {
+				widget.ProcessEvent(inputEvent)
+			}
 
-		if inputEvent.Pointer == mousePointer && inputEvent.InputId == 0 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
-			//fmt.Println("Left down!")
-		} else if inputEvent.Pointer == mousePointer && inputEvent.InputId == 1 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
-			//fmt.Println("Right down!")
-		}
-
-		for _, widget := range inputEvent.Pointer.OriginMapping {
-			widget.ProcessEvent(inputEvent)
-		}
-
-		// Populate PointerMappings (but only upon pointer deactivation event)
-		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[POINTER_DEACTIVATION] {
-			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
-			copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
+			// Populate PointerMappings (but only upon pointer deactivation event)
+			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[POINTER_DEACTIVATION] {
+				inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
+				copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
+			}
+		} else {
+			keyboardPointer.OriginMapping[0].ProcessEvent(inputEvent)
 		}
 
 		inputEventQueue = inputEventQueue[1:]
@@ -1276,25 +1364,25 @@ func main() {
 	}
 	window.SetFramebufferSizeCallback(size)
 
-	spinner := SpinnerWidget{NewWidget(20, 20, 0, 0), 0}
+	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
 	widgets = append(widgets, &spinner)
-	if false {
-		widgets = append(widgets, &BoxWidget{NewWidget(50, 150, 16, 16), "The Original Box"})
-		widgets = append(widgets, &CompositeWidget{NewWidget(150, 150, 0, 0),
+	if true {
+		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
+		widgets = append(widgets, &CompositeWidget{NewWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0}),
 			[]Widgeter{
-				&BoxWidget{NewWidget(0, 0, 16, 16), "Left of Duo"},
-				&BoxWidget{NewWidget(16+2, 0, 16, 16), "Right of Duo"},
+				&BoxWidget{NewWidget(mathgl.Vec2d{0, 0}, mathgl.Vec2d{16, 16}), "Left of Duo"},
+				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
 			},
 		})
-		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(50, 180, 0, 0), window})
-		widgets = append(widgets, NewTextFieldWidget(50, 50))
-		widgets = append(widgets, NewMetaTextFieldWidget(50, 70))
-		//widgets = append(widgets, NewChannelExpeWidget(-100, 210))
-		widgets = append(widgets, NewTextBoxWidget(100, 5))
-		widgets = append(widgets, NewTextFileWidget(100, 25, "/Users/Dmitri/Desktop/sample.txt"))
-		widgets = append(widgets, NewKatWidget(370, 20))
+		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mathgl.Vec2d{50, 180}, mathgl.Vec2d{0, 0}), window})
+		widgets = append(widgets, NewTextFieldWidget(mathgl.Vec2d{50, 50}))
+		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
+		//widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{-100, 210}))
+		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{100, 5}))
+		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Desktop/sample.txt"))
+		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 	} else {
-		widgets = append(widgets, NewTest1Widget(10, 50))
+		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 	}
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
@@ -1305,8 +1393,8 @@ func main() {
 		redraw = true
 		//fmt.Println("MousePos:", x, y)
 
-		//(widgets[len(widgets)-1]).(*CompositeWidget).x = gl.Float(x)
-		//(widgets[len(widgets)-1]).(*CompositeWidget).y = gl.Float(y)
+		//(widgets[len(widgets)-1]).(*CompositeWidget).x = gl.Double(x)
+		//(widgets[len(widgets)-1]).(*CompositeWidget).y = gl.Double(y)
 
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
@@ -1326,8 +1414,8 @@ func main() {
 	window.SetCursorPositionCallback(MousePos)
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
-		offX += gl.Float(xoff * 10)
-		offY += gl.Float(yoff * 10)
+		offX += gl.Double(xoff * 10)
+		offY += gl.Double(yoff * 10)
 		redraw = true
 
 		inputEvent := InputEvent{
@@ -1396,8 +1484,8 @@ func main() {
 	//gl.ClearColor(0.8, 0.3, 0.01, 1)
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
-	/*keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
-	widgets[len(widgets)-1].(*TextBoxWidget).SetContent("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")*/
+	keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
+	//widgets[len(widgets)-1].(*TextBoxWidget).SetContent("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")
 
 	//last := window.GetClipboardString()
 
@@ -1424,7 +1512,7 @@ func main() {
 
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
-			gl.Translatef(offX, offY, 0)
+			gl.Translated(offX, offY, 0)
 
 			for _, widget := range widgets {
 				widget.Render()
