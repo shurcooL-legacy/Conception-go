@@ -38,7 +38,7 @@ import (
 var _ = UnderscoreSepToCamelCase
 var _ = goon.Dump
 
-const katOnly = true
+const katOnly = false
 
 var offX, offY gl.Double
 var oFontBase gl.Uint
@@ -336,8 +336,9 @@ func DrawCircleBorder(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColor math
 
 type KatWidget struct {
 	Widget
-	target mathgl.Vec2d
-	mode   KatMode
+	target      mathgl.Vec2d
+	mode        KatMode
+	skillActive bool
 }
 
 const ShunpoRadius = 120
@@ -389,19 +390,18 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		w.mode == Shunpo {
-		shunpoTarget := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		if w.pos.Sub(shunpoTarget).Len() <= ShunpoRadius {
-			w.pos = shunpoTarget
-			w.target = w.pos
-			w.mode = AutoAttack
-		}
+		w.target = mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		w.skillActive = true
 	}
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(1) {
-		w.target = mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-	}
-
-	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 'E' && inputEvent.Buttons[0] == true {
+		pointerPos := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		if pointerPos.Sub(w.pos).Len() > w.size[0]*2/3 || w.target.Sub(w.pos).Len() > w.size[0]*2/3 {
+			w.target = pointerPos
+		}
+		w.mode = AutoAttack
+		w.skillActive = false
+	} else if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 'E' && inputEvent.Buttons[0] == true {
 		w.mode = Shunpo
 	}
 }
@@ -436,6 +436,12 @@ func (w *KatWidget) ProcessTimePassed(timePassed float64) {
 		moveBy = moveBy.Normalize().Mul(speed * timePassed)
 		w.pos = w.pos.Add(moveBy)
 		redraw = true
+	}
+
+	if w.skillActive && w.target.Sub(w.pos).Len() <= ShunpoRadius {
+		w.pos = w.target
+		w.mode = AutoAttack
+		w.skillActive = false
 	}
 }
 
@@ -887,7 +893,7 @@ func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 
 func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
 	// Check if the file has been changed externally, and if so, override this widget
-	NewContent := MustReadFile(w.path)
+	NewContent := TryReadFile(w.path)
 	if NewContent != w.content {
 		w.TextBoxWidget.SetContent(NewContent)
 		redraw = true
@@ -1379,7 +1385,7 @@ func main() {
 		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
 		//widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{-100, 210}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{100, 5}))
-		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Desktop/sample.txt"))
+		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/sample.txt"))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 	} else {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
