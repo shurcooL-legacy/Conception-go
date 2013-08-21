@@ -48,6 +48,8 @@ var widgets []Widgeter
 var mousePointer *Pointer
 var keyboardPointer *Pointer
 
+var inputEventQueueC []InputEvent
+
 func CheckGLError() {
 	errorCode := gl.GetError()
 	if 0 != errorCode {
@@ -55,23 +57,34 @@ func CheckGLError() {
 	}
 }
 
+func Print(pos mathgl.Vec2d, s string) {
+	lines := GetLines(s)
+	for lineNumber, line := range lines {
+		PrintLine(pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), line)
+	}
+}
+
+// Input shouldn't have newlines
 func PrintLine(pos mathgl.Vec2d, s string) {
 	segments := strings.Split(s, "\t")
 	var advance uint32
 	for _, segment := range segments {
-		Print(mathgl.Vec2d{pos[0] + float64(8*advance), pos[1]}, segment)
+		PrintSegment(mathgl.Vec2d{pos[0] + float64(8*advance), pos[1]}, segment)
 		advance += uint32(len(segment))
 		advance += 4 - (advance % 4)
 	}
 }
 
-func Print(pos mathgl.Vec2d, s string) {
-	if 0 == len(s) {
+// Shouldn't have tabs nor newlines
+func PrintSegment(pos mathgl.Vec2d, s string) {
+	if s == "" {
 		return
 	}
 
 	gl.Enable(gl.BLEND)
 	gl.Enable(gl.TEXTURE_2D)
+	defer gl.Disable(gl.BLEND)
+	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
 	gl.Translated(gl.Double(pos[0]), gl.Double(pos[1]), 0)
@@ -81,9 +94,6 @@ func Print(pos mathgl.Vec2d, s string) {
 	gl.PopMatrix()
 
 	CheckGLError()
-
-	gl.Disable(gl.BLEND)
-	gl.Disable(gl.TEXTURE_2D)
 }
 
 func InitFont() {
@@ -217,6 +227,8 @@ func NewTest1Widget(pos mathgl.Vec2d) *Test1Widget {
 
 func (w *Test1Widget) Render() {
 	DrawBox(w.pos, w.size)
+	gl.Color3d(0, 0, 0)
+	Print(w.pos, goon.Sdump(inputEventQueueC))
 }
 
 // ---
@@ -477,6 +489,8 @@ func (w *CompositeWidget) ProcessTimePassed(timePassed float64) {
 	}
 }
 
+// ---
+
 type UnderscoreSepToCamelCaseWidget struct {
 	Widget
 	window *glfw.Window
@@ -500,8 +514,10 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	gl.Rectd(0, 0, gl.Double(w.size[0]), gl.Double(w.size[1]))
 
 	gl.Color3d(0, 0, 0)
-	Print(mathgl.Vec2d{0, 0}, s)
+	PrintLine(mathgl.Vec2d{0, 0}, s)
 }
+
+// ---
 
 type ChannelExpeWidget struct {
 	Widget
@@ -545,9 +561,7 @@ func (w *ChannelExpeWidget) Render() {
 	gl.Rectd(0, 0, gl.Double(w.size[0]), gl.Double(w.size[1]))
 
 	gl.Color3d(0, 0, 0)
-	for lineNumber, line := range lines {
-		Print(mathgl.Vec2d{0, float64(16 * lineNumber)}, line)
-	}
+	Print(mathgl.Vec2d{}, w.Content)
 }
 
 func (w *ChannelExpeWidget) ProcessTimePassed(timePassed float64) {
@@ -948,7 +962,7 @@ func (w *TextFieldWidget) Render() {
 	}
 
 	gl.Color3d(0, 0, 0)
-	Print(w.pos, w.Content)
+	PrintSegment(w.pos, w.Content)
 
 	if hasTypingFocus {
 		// Draw caret
@@ -1081,7 +1095,7 @@ func (w *MetaTextFieldWidget) Render() {
 		gl.Rectd(gl.Double(w.pos[0]+float64(i*8)), gl.Double(w.pos[1]), gl.Double(w.pos[0]+float64(i+1)*8), gl.Double(w.pos[1]+16))
 
 		gl.Color3d(0, 0, 0)
-		Print(mathgl.Vec2d{w.pos[0] + float64(8*i), w.pos[1]}, string(mc.Character))
+		PrintSegment(mathgl.Vec2d{w.pos[0] + float64(8*i), w.pos[1]}, string(mc.Character))
 	}
 
 	if hasTypingFocus {
@@ -1212,8 +1226,7 @@ const (
 type InputEvent struct {
 	Pointer    *Pointer
 	EventTypes map[EventType]bool
-	//DeviceId   uint8
-	InputId uint16
+	InputId    uint16
 
 	Buttons []bool
 	// TODO: Characters? Split into distinct event types, bundle up in an event frame based on time?
@@ -1372,7 +1385,7 @@ func main() {
 
 	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
 	widgets = append(widgets, &spinner)
-	if true {
+	if false {
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
 		widgets = append(widgets, &CompositeWidget{NewWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0}),
 			[]Widgeter{
@@ -1389,6 +1402,7 @@ func main() {
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 	} else {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
+		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 	}
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
@@ -1405,11 +1419,10 @@ func main() {
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{AXIS_EVENT: true},
-			//DeviceId:   0,
-			InputId: 0,
-			Buttons: nil,
-			Sliders: nil,
-			Axes:    []float64{x, y},
+			InputId:    0,
+			Buttons:    nil,
+			Sliders:    nil,
+			Axes:       []float64{x, y},
 		}
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	}
@@ -1427,11 +1440,10 @@ func main() {
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{SLIDER_EVENT: true},
-			//DeviceId:   0,
-			InputId: 2,
-			Buttons: nil,
-			Sliders: []float64{yoff, xoff},
-			Axes:    nil,
+			InputId:    2,
+			Buttons:    nil,
+			Sliders:    []float64{yoff, xoff},
+			Axes:       nil,
 		}
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	})
@@ -1442,11 +1454,10 @@ func main() {
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
-			//DeviceId:   0,
-			InputId: uint16(button),
-			Buttons: []bool{action != glfw.Release},
-			Sliders: nil,
-			Axes:    nil,
+			InputId:    uint16(button),
+			Buttons:    []bool{action != glfw.Release},
+			Sliders:    nil,
+			Axes:       nil,
 		}
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	})
@@ -1458,9 +1469,8 @@ func main() {
 		}*/
 
 		inputEvent := InputEvent{
-			Pointer:    keyboardPointer,
-			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
-			//DeviceId:   130,
+			Pointer:     keyboardPointer,
+			EventTypes:  map[EventType]bool{BUTTON_EVENT: true},
 			InputId:     uint16(key),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
@@ -1476,11 +1486,10 @@ func main() {
 		inputEvent := InputEvent{
 			Pointer:    keyboardPointer,
 			EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
-			//DeviceId:   130,
-			InputId: uint16(char),
-			Buttons: nil,
-			Sliders: nil,
-			Axes:    nil,
+			InputId:    uint16(char),
+			Buttons:    nil,
+			Sliders:    nil,
+			Axes:       nil,
 		}
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 		redraw = true // HACK
@@ -1490,7 +1499,7 @@ func main() {
 	//gl.ClearColor(0.8, 0.3, 0.01, 1)
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
-	keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
+	//keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
 	//widgets[len(widgets)-1].(*TextBoxWidget).SetContent("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")
 
 	//last := window.GetClipboardString()
@@ -1507,6 +1516,13 @@ func main() {
 		}*/
 
 		// Input
+		if len(inputEventQueue) > 0 {
+			inputEventQueueC = make([]InputEvent, len(inputEventQueue))
+			copy(inputEventQueueC, inputEventQueue)
+			for i := range inputEventQueueC {
+				inputEventQueueC[i].Pointer = nil
+			}
+		}
 		inputEventQueue = ProcessInputEventQueue(inputEventQueue)
 
 		for _, widget := range widgets {
@@ -1526,7 +1542,6 @@ func main() {
 
 			window.SwapBuffers()
 			spinner.Spinner++
-			//log.Println("swapped buffers")
 		} else {
 			time.Sleep(5 * time.Millisecond)
 		}
