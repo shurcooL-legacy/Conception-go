@@ -39,6 +39,8 @@ import (
 	//"io/ioutil"
 	//"runtime/debug"
 	. "gist.github.com/5259939.git"
+
+	"errors"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -46,6 +48,7 @@ var _ = goon.Dump
 var _ = GetDocPackageAll
 var _ = GetThisGoSourceDir
 var _ = SprintAstBare
+var _ = errors.New
 
 const katOnly = false
 
@@ -191,16 +194,21 @@ type Widgeter interface {
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
 	ProcessTimePassed(timePassed float64)
 	HoverPointers() map[*Pointer]bool
+	SetParent(Widgeter)
+
+	ParentToLocal(mathgl.Vec2d) mathgl.Vec2d
+	GlobalToLocal(mathgl.Vec2d) mathgl.Vec2d
 }
 
 type Widget struct {
 	pos           mathgl.Vec2d
 	size          mathgl.Vec2d
 	hoverPointers map[*Pointer]bool
+	parent        Widgeter
 }
 
 func NewWidget(pos, size mathgl.Vec2d) Widget {
-	return Widget{pos, size, map[*Pointer]bool{}}
+	return Widget{pos: pos, size: size, hoverPointers: map[*Pointer]bool{}}
 }
 
 func (*Widget) Render() {}
@@ -220,6 +228,22 @@ func (w *Widget) ProcessEvent(inputEvent InputEvent)   {}
 func (w *Widget) ProcessTimePassed(timePassed float64) {}
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
+}
+func (w *Widget) SetParent(p Widgeter) {
+	w.parent = p
+}
+
+func (w *Widget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+	return ParentPosition.Sub(w.pos)
+}
+func (w *Widget) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+	var ParentPosition mathgl.Vec2d
+	if w.parent != nil {
+		ParentPosition = w.parent.GlobalToLocal(GlobalPosition)
+	} else {
+		ParentPosition = GlobalPosition
+	}
+	return w.ParentToLocal(ParentPosition)
 }
 
 // ---
@@ -271,6 +295,56 @@ func (w *Test1Widget) Render() {
 
 // ---
 
+type ButtonWidget struct {
+	Widget
+	action func()
+}
+
+func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
+	return &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), action: action}
+}
+
+func (w *ButtonWidget) Render() {
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawGBox(w.pos, w.size)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		DrawYBox(w.pos, w.size)
+	} else {
+		DrawBox(w.pos, w.size)
+	}
+}
+func (w *ButtonWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+
+func (w *ButtonWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		if w.action != nil {
+			w.action()
+		}
+	}
+}
+
+// ---
+
 type BoxWidget struct {
 	Widget
 	Name string
@@ -304,16 +378,6 @@ func (w *BoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	}
 }
 
-// TODO: Make this a method of []Widgeter?
-func containsWidget(widgets []Widgeter, targetWidget Widgeter) bool {
-	for _, widget := range mousePointer.Mapping {
-		if widget == targetWidget {
-			return true
-		}
-	}
-	return false
-}
-
 var globalWindow *glfw.Window
 
 func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
@@ -326,6 +390,20 @@ func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 		globalWindow.SetPosition(x-16, y)
 	}
 }
+
+// ---
+
+// TODO: Make this a method of []Widgeter?
+func containsWidget(widgets []Widgeter, targetWidget Widgeter) bool {
+	for _, widget := range mousePointer.Mapping {
+		if widget == targetWidget {
+			return true
+		}
+	}
+	return false
+}
+
+// ---
 
 func DrawBox(pos, size mathgl.Vec2d) {
 	gl.Color3d(0.3, 0.3, 0.3)
@@ -526,6 +604,14 @@ type CompositeWidget struct {
 	Widgets []Widgeter
 }
 
+func NewCompositeWidget(pos, size mathgl.Vec2d, Widgets []Widgeter) *CompositeWidget {
+	w := &CompositeWidget{Widget: NewWidget(pos, size), Widgets: Widgets}
+	for _, s := range w.Widgets {
+		s.SetParent(w)
+	}
+	return w
+}
+
 func (w *CompositeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
@@ -582,10 +668,9 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 // ---
 
 type ChannelExpeWidget struct {
-	Widget
-	Content string
-	ch      <-chan []byte
-	errCh   <-chan error
+	CompositeWidget
+	ch    <-chan []byte
+	errCh <-chan error
 }
 
 func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
@@ -595,13 +680,17 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	err = cmd.Start()
 	CheckError(err)
 
-	w := ChannelExpeWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0})}
+	w := ChannelExpeWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0},
+		[]Widgeter{
+			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
+			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, func() { cmd.Process.Kill() }),
+		})}
 	w.ch, w.errCh = ByteReader(stdout)
 
 	return &w
 }
 
-func (w *ChannelExpeWidget) Render() {
+/*func (w *ChannelExpeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
@@ -624,15 +713,18 @@ func (w *ChannelExpeWidget) Render() {
 
 	gl.Color3d(0, 0, 0)
 	Print(mathgl.Vec2d{}, w.Content)
-}
+}*/
 
 func (w *ChannelExpeWidget) ProcessTimePassed(timePassed float64) {
 	select {
 	case b := <-w.ch:
-		w.Content += string(b)
+		box := w.CompositeWidget.Widgets[0].(*TextBoxWidget)
+		box.SetContent(box.content + string(b))
 		redraw = true
 	default:
 	}
+
+	w.CompositeWidget.ProcessTimePassed(timePassed)
 }
 
 // ---
@@ -763,20 +855,20 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 	}
 }
 
-func (cp *CaretPosition) SetPositionFromPhysical(xf, yf float64) {
+func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 	var y uint32
-	if yf < 0 {
+	if pos[1] < 0 {
 		y = 0
-	} else if yf >= float64(len(cp.w.lines)*16) {
+	} else if pos[1] >= float64(len(cp.w.lines)*16) {
 		y = uint32(len(cp.w.lines) - 1)
 	} else {
-		y = uint32(yf / 16)
+		y = uint32(pos[1] / 16)
 	}
 
-	if xf < 0 {
+	if pos[0] < 0 {
 		cp.targetExpandedX = 0
 	} else {
-		cp.targetExpandedX = uint32((xf + 4) / 8)
+		cp.targetExpandedX = uint32((pos[0] + 4) / 8)
 	}
 
 	line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
@@ -792,6 +884,8 @@ type TextBoxWidget struct {
 
 	lines       []contentLine
 	longestLine uint32 // Line length
+
+	AfterChange func()
 }
 
 type contentLine struct {
@@ -802,20 +896,24 @@ type contentLine struct {
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
 	w := &TextBoxWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0})}
 	w.caretPosition.w = w
-	w.UpdateLines()
+	w.updateLines()
 	return w
 }
 
 func (w *TextBoxWidget) SetContent(content string) {
 	w.content = content
-	w.UpdateLines()
+	w.updateLines()
 
 	if w.caretPosition.caretPosition > uint32(len(w.content)) {
 		w.caretPosition.Move(+3)
 	}
+
+	if w.AfterChange != nil {
+		w.AfterChange()
+	}
 }
 
-func (w *TextBoxWidget) UpdateLines() {
+func (w *TextBoxWidget) updateLines() {
 	lines := GetLines(w.content)
 	w.lines = make([]contentLine, len(lines))
 	w.longestLine = 0
@@ -900,7 +998,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
-		w.caretPosition.SetPositionFromPhysical(inputEvent.Pointer.State.Axes[0]-w.pos[0], inputEvent.Pointer.State.Axes[1]-w.pos[1])
+		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		localPosition := w.GlobalToLocal(globalPosition)
+		w.caretPosition.SetPositionFromPhysical(localPosition)
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
@@ -1449,19 +1549,28 @@ func main() {
 	widgets = append(widgets, &spinner)
 	if true {
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
-		widgets = append(widgets, &CompositeWidget{NewWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0}),
+		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0},
 			[]Widgeter{
 				&BoxWidget{NewWidget(mathgl.Vec2d{0, 0}, mathgl.Vec2d{16, 16}), "Left of Duo"},
 				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
-			},
-		})
+			}))
 		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mathgl.Vec2d{50, 180}, mathgl.Vec2d{0, 0}), window})
 		widgets = append(widgets, NewTextFieldWidget(mathgl.Vec2d{50, 50}))
 		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
-		//widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{-100, 210}))
+		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{100, 5}))
 		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/sample.txt"))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
+
+		{
+			src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
+			dst := NewTextBoxWidget(mathgl.Vec2d{240, 200})
+			src.AfterChange = func() {
+				dst.SetContent(src.content)
+			}
+			widgets = append(widgets, src)
+			widgets = append(widgets, dst)
+		}
 	} else {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
