@@ -33,10 +33,19 @@ import (
 	//"go/token"
 
 	"math"
+
+	. "gist.github.com/5504644.git"
+	. "gist.github.com/5639599.git"
+	//"io/ioutil"
+	//"runtime/debug"
+	. "gist.github.com/5259939.git"
 )
 
 var _ = UnderscoreSepToCamelCase
 var _ = goon.Dump
+var _ = GetDocPackageAll
+var _ = GetThisGoSourceDir
+var _ = SprintAstBare
 
 const katOnly = false
 
@@ -47,8 +56,6 @@ var redraw bool = true
 var widgets []Widgeter
 var mousePointer *Pointer
 var keyboardPointer *Pointer
-
-var inputEventQueueC []InputEvent
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -115,7 +122,7 @@ func InitFont() {
 			VerticalOffset = gl.Double(-0.00225)
 		}
 		/*#else
-					VerticalOffset := gl.Double(0.0)
+		VerticalOffset := gl.Double(0.0)
 		//#endif*/
 		gl.Begin(gl.QUADS)
 		gl.TexCoord2d(fCharX+offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
@@ -228,7 +235,38 @@ func NewTest1Widget(pos mathgl.Vec2d) *Test1Widget {
 func (w *Test1Widget) Render() {
 	DrawBox(w.pos, w.size)
 	gl.Color3d(0, 0, 0)
-	Print(w.pos, goon.Sdump(inputEventQueueC))
+	//Print(w.pos, goon.Sdump(inputEventQueue))
+
+	//x := GetDocPackageAll("gist.github.com/5694308.git")
+	//Print(w.pos, strings.Join(x.Imports, "\n"))
+
+	/*files, _ := ioutil.ReadDir("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/")
+	for lineNumber, file := range files {
+		if file.IsDir() {
+			Print(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), ">>>> " + file.Name() + "/ (FOLDER)")
+		} else {
+			Print(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), file.Name())
+		}
+	}*/
+
+	//Print(w.pos, TryReadFile("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/PrintPackageSummary.go"))
+
+	//pkg := GetThisGoPackage()
+	//Print(w.pos, pkg.ImportPath+" - "+pkg.Name)
+
+	//Print(w.pos, string(debug.Stack()))
+
+	//Print(w.pos, GetThisGoSourceFilepath())
+	//Print(w.pos.Add(mathgl.Vec2d{0, 16}), GetThisGoSourceDir())
+	//Print(w.pos.Add(mathgl.Vec2d{0, 2 * 16}), GetThisGoPackage().ImportPath)
+
+	/*x := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
+	for lineNumber, y := range x.Vars {
+		Print(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), SprintAstBare(y.Decl))
+	}*/
+
+	kat := widgets[len(widgets)-1].(*KatWidget)
+	Print(w.pos, fmt.Sprintf("%v", kat.mode.String()))
 }
 
 // ---
@@ -357,10 +395,27 @@ const ShunpoRadius = 120
 
 type KatMode uint8
 
+/*const (
+	AutoAttack KatMode = iota
+	_
+	Shunpo = 17 * iota
+)*/
 const (
 	AutoAttack KatMode = iota
 	Shunpo
 )
+
+func (mode KatMode) String() string {
+	x := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
+	for _, y := range x.Types {
+		if y.Name == "KatMode" {
+			for _, c := range y.Consts {
+				return c.Names[mode]
+			}
+		}
+	}
+	panic(nil)
+}
 
 func NewKatWidget(pos mathgl.Vec2d) *KatWidget {
 	return &KatWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), target: pos}
@@ -378,7 +433,7 @@ func (w *KatWidget) Render() {
 		DrawCircle(w.pos, w.size, mathgl.Vec3d{1, 1, 1}, mathgl.Vec3d{0.898, 0.765, 0.396})
 	}
 
-	if w.mode == Shunpo {
+	if w.mode == Shunpo && !w.skillActive {
 		DrawCircleBorder(w.pos, mathgl.Vec2d{ShunpoRadius * 2, ShunpoRadius * 2}, mathgl.Vec3d{0.7, 0.7, 0.7})
 	}
 }
@@ -415,6 +470,13 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 		w.skillActive = false
 	} else if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 'E' && inputEvent.Buttons[0] == true {
 		w.mode = Shunpo
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && glfw.Key(inputEvent.InputId) == glfw.KeyEscape && inputEvent.Buttons[0] == true {
+		if w.mode == Shunpo {
+			// TODO: Make this consume the event, so the window doesn't get closed...
+			w.mode = AutoAttack
+		}
 	}
 }
 
@@ -1385,7 +1447,7 @@ func main() {
 
 	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
 	widgets = append(widgets, &spinner)
-	if false {
+	if true {
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
 		widgets = append(widgets, &CompositeWidget{NewWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0}),
 			[]Widgeter{
@@ -1516,13 +1578,6 @@ func main() {
 		}*/
 
 		// Input
-		if len(inputEventQueue) > 0 {
-			inputEventQueueC = make([]InputEvent, len(inputEventQueue))
-			copy(inputEventQueueC, inputEventQueue)
-			for i := range inputEventQueueC {
-				inputEventQueueC[i].Pointer = nil
-			}
-		}
 		inputEventQueue = ProcessInputEventQueue(inputEventQueue)
 
 		for _, widget := range widgets {
