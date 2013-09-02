@@ -1010,6 +1010,10 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.caretPosition.Move(-1)
 				w.SetContent(w.content[:w.caretPosition.Logical()] + w.content[w.caretPosition.Logical()+1:])
 			}
+		case glfw.KeyDelete:
+			if w.caretPosition.Logical()+1 <= uint32(len(w.content)) {
+				w.SetContent(w.content[:w.caretPosition.Logical()] + w.content[w.caretPosition.Logical()+1:])
+			}
 		case glfw.KeyEnter:
 			w.SetContent(w.content[:w.caretPosition.Logical()] + "\n" + w.content[w.caretPosition.Logical():])
 			w.caretPosition.Move(+1)
