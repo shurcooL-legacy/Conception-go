@@ -39,6 +39,7 @@ import (
 	//"io/ioutil"
 	//"runtime/debug"
 	. "gist.github.com/5259939.git"
+	. "gist.github.com/6418462.git"
 
 	"errors"
 )
@@ -323,6 +324,15 @@ func (w *ButtonWidget) Render() {
 	} else {
 		DrawBox(w.pos, w.size)
 	}
+
+	// Tooltip
+	if isHit {
+		mousePointerPositionLocal := w.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		tooltipOffset := mathgl.Vec2d{0, 16}
+		tooltip := NewTextBoxWidget(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
+		tooltip.SetContent(GetSourceAsString(w.action))
+		tooltip.Render()
+	}
 }
 func (w *ButtonWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
@@ -339,6 +349,7 @@ func (w *ButtonWidget) ProcessEvent(inputEvent InputEvent) {
 
 		if w.action != nil {
 			w.action()
+			//println(GetSourceAsString(w.action))
 		}
 	}
 }
@@ -683,7 +694,9 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	w := ChannelExpeWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0},
 		[]Widgeter{
 			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
-			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, func() { cmd.Process.Kill() }),
+			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, func() {
+				cmd.Process.Kill() // Comments are currently not preserved
+			}),
 		})}
 	w.ch, w.errCh = ByteReader(stdout)
 
