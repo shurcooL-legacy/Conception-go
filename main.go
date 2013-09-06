@@ -42,6 +42,8 @@ import (
 	. "gist.github.com/6418462.git"
 
 	"errors"
+
+	"io/ioutil"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -330,7 +332,7 @@ func (w *ButtonWidget) Render() {
 		mousePointerPositionLocal := w.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, 16}
 		tooltip := NewTextBoxWidget(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
-		tooltip.SetContent(GetSourceAsString(w.action))
+		tooltip.Content.Set(GetSourceAsString(w.action))
 		tooltip.Render()
 	}
 }
@@ -732,7 +734,7 @@ func (w *ChannelExpeWidget) ProcessTimePassed(timePassed float64) {
 	select {
 	case b := <-w.ch:
 		box := w.CompositeWidget.Widgets[0].(*TextBoxWidget)
-		box.SetContent(box.content + string(b))
+		box.Content.Set(box.Content.Content() + string(b))
 		redraw = true
 	default:
 	}
@@ -801,7 +803,7 @@ func ExpandedToLogical(s string, expanded uint32) uint32 {
 // ---
 
 type CaretPosition struct {
-	w               *TextBoxWidget
+	w               *MultilineContent
 	caretPosition   uint32
 	targetExpandedX uint32
 }
@@ -813,11 +815,11 @@ func (cp *CaretPosition) Logical() uint32 {
 func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 	caretPosition := cp.caretPosition
 	caretLine := uint32(0)
-	for caretPosition > cp.w.lines[caretLine].Length {
-		caretPosition -= cp.w.lines[caretLine].Length + 1
+	for caretPosition > cp.w.Lines()[caretLine].Length {
+		caretPosition -= cp.w.Lines()[caretLine].Length + 1
 		caretLine++
 	}
-	expandedCaretPosition := ExpandedLength(cp.w.content[cp.w.lines[caretLine].Start : cp.w.lines[caretLine].Start+caretPosition])
+	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Lines()[caretLine].Start : cp.w.Lines()[caretLine].Start+caretPosition])
 
 	return expandedCaretPosition, caretLine
 }
@@ -830,15 +832,15 @@ func (cp *CaretPosition) Move(amount int8) {
 		cp.caretPosition++
 	case amount == -2:
 		_, y := cp.ExpandedPosition()
-		cp.caretPosition = cp.w.lines[y].Start
+		cp.caretPosition = cp.w.Lines()[y].Start
 	case amount == +2:
 		_, y := cp.ExpandedPosition()
-		cp.caretPosition = cp.w.lines[y].Start + cp.w.lines[y].Length
+		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
 	case amount == -3:
 		cp.caretPosition = 0
 	case amount == +3:
-		y := len(cp.w.lines) - 1
-		cp.caretPosition = cp.w.lines[y].Start + cp.w.lines[y].Length
+		y := len(cp.w.Lines()) - 1
+		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
 	}
 
 	x, _ := cp.ExpandedPosition()
@@ -852,16 +854,16 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 	case amount == -1:
 		if y > 0 {
 			y--
-			line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
-			cp.caretPosition = cp.w.lines[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
+			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 		} else {
 			cp.Move(-2)
 		}
 	case amount == +1:
-		if y < uint32(len(cp.w.lines))-1 {
+		if y < uint32(len(cp.w.Lines()))-1 {
 			y++
-			line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
-			cp.caretPosition = cp.w.lines[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
+			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 		} else {
 			cp.Move(+2)
 		}
@@ -872,8 +874,8 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 	var y uint32
 	if pos[1] < 0 {
 		y = 0
-	} else if pos[1] >= float64(len(cp.w.lines)*16) {
-		y = uint32(len(cp.w.lines) - 1)
+	} else if pos[1] >= float64(len(cp.w.Lines())*16) {
+		y = uint32(len(cp.w.Lines()) - 1)
 	} else {
 		y = uint32(pos[1] / 16)
 	}
@@ -884,49 +886,51 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 		cp.targetExpandedX = uint32((pos[0] + 4) / 8)
 	}
 
-	line := cp.w.content[cp.w.lines[y].Start : cp.w.lines[y].Start+cp.w.lines[y].Length]
-	cp.caretPosition = cp.w.lines[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
+	cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 }
 
 // ---
 
-type TextBoxWidget struct {
-	Widget
-	content       string
-	caretPosition CaretPosition
-
-	lines       []contentLine
-	longestLine uint32 // Line length
-
-	AfterChange func()
+type ChangeListener interface {
+	NotifyChange()
 }
+
+// ---
 
 type contentLine struct {
 	Start  uint32
 	Length uint32
 }
 
-func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
-	w := &TextBoxWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0})}
-	w.caretPosition.w = w
-	w.updateLines()
-	return w
+type MultilineContent struct {
+	content     string
+	lines       []contentLine
+	longestLine uint32 // Line length
+
+	ChangeListeners []ChangeListener
 }
 
-func (w *TextBoxWidget) SetContent(content string) {
-	w.content = content
-	w.updateLines()
+func NewMultilineContent() *MultilineContent {
+	mc := new(MultilineContent)
+	mc.updateLines()
+	return mc
+}
 
-	if w.caretPosition.caretPosition > uint32(len(w.content)) {
-		w.caretPosition.Move(+3)
-	}
+func (c *MultilineContent) Content() string      { return c.content }
+func (c *MultilineContent) Lines() []contentLine { return c.lines }
+func (c *MultilineContent) LongestLine() uint32  { return c.longestLine }
 
-	if w.AfterChange != nil {
-		w.AfterChange()
+func (mc *MultilineContent) Set(content string) {
+	mc.content = content
+	mc.updateLines()
+
+	for _, changeListener := range mc.ChangeListeners {
+		changeListener.NotifyChange()
 	}
 }
 
-func (w *TextBoxWidget) updateLines() {
+func (w *MultilineContent) updateLines() {
 	lines := GetLines(w.content)
 	w.lines = make([]contentLine, len(lines))
 	w.longestLine = 0
@@ -942,17 +946,52 @@ func (w *TextBoxWidget) updateLines() {
 	}
 }
 
+// ---
+
+type TextBoxWidget struct {
+	Widget
+	Content       *MultilineContent
+	caretPosition CaretPosition
+
+	AfterChange []func()
+}
+
+func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
+	mc := NewMultilineContent()
+	return NewTextBoxWidgetExternalContent(pos, mc)
+}
+
+func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc *MultilineContent) *TextBoxWidget {
+	w := &TextBoxWidget{
+		Widget:        NewWidget(pos, mathgl.Vec2d{0, 0}),
+		Content:       mc,
+		caretPosition: CaretPosition{w: mc},
+	}
+	mc.ChangeListeners = append(mc.ChangeListeners, w) // TODO: What about removing w when it's "deleted"?
+	return w
+}
+
+func (w *TextBoxWidget) NotifyChange() {
+	if w.caretPosition.caretPosition > uint32(len(w.Content.Content())) {
+		w.caretPosition.Move(+3)
+	}
+
+	for _, f := range w.AfterChange {
+		f()
+	}
+}
+
 func (w *TextBoxWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
-	if w.longestLine < 3 {
+	if w.Content.LongestLine() < 3 {
 		w.size[0] = float64(8 * 3)
 	} else {
-		w.size[0] = float64(8 * w.longestLine)
+		w.size[0] = float64(8 * w.Content.LongestLine())
 	}
-	w.size[1] = float64(16 * len(w.lines))
+	w.size[1] = float64(16 * len(w.Content.Lines()))
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
@@ -976,8 +1015,8 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	gl.Color3d(0, 0, 0)
-	for lineNumber, contentLine := range w.lines {
-		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.content[contentLine.Start:contentLine.Start+contentLine.Length])
+	for lineNumber, contentLine := range w.Content.Lines() {
+		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
 	if hasTypingFocus {
@@ -1021,17 +1060,17 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyBackspace:
 			if w.caretPosition.Logical() >= 1 {
 				w.caretPosition.Move(-1)
-				w.SetContent(w.content[:w.caretPosition.Logical()] + w.content[w.caretPosition.Logical()+1:])
+				w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + w.Content.Content()[w.caretPosition.Logical()+1:])
 			}
 		case glfw.KeyDelete:
-			if w.caretPosition.Logical()+1 <= uint32(len(w.content)) {
-				w.SetContent(w.content[:w.caretPosition.Logical()] + w.content[w.caretPosition.Logical()+1:])
+			if w.caretPosition.Logical()+1 <= uint32(len(w.Content.Content())) {
+				w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + w.Content.Content()[w.caretPosition.Logical()+1:])
 			}
 		case glfw.KeyEnter:
-			w.SetContent(w.content[:w.caretPosition.Logical()] + "\n" + w.content[w.caretPosition.Logical():])
+			w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + "\n" + w.Content.Content()[w.caretPosition.Logical():])
 			w.caretPosition.Move(+1)
 		case glfw.KeyTab:
-			w.SetContent(w.content[:w.caretPosition.Logical()] + "\t" + w.content[w.caretPosition.Logical():])
+			w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + "\t" + w.Content.Content()[w.caretPosition.Logical():])
 			w.caretPosition.Move(+1)
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
@@ -1048,7 +1087,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				// TODO: Rename to TryMove since no check is being made
 				w.caretPosition.Move(+2)
 			} else if inputEvent.ModifierKey == 0 {
-				if w.caretPosition.Logical() < uint32(len(w.content)) {
+				if w.caretPosition.Logical() < uint32(len(w.Content.Content())) {
 					w.caretPosition.Move(+1)
 				}
 			}
@@ -1068,7 +1107,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
-		w.SetContent(w.content[:w.caretPosition.Logical()] + string(byte(inputEvent.InputId)) + w.content[w.caretPosition.Logical():])
+		w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + string(byte(inputEvent.InputId)) + w.Content.Content()[w.caretPosition.Logical():])
 		w.caretPosition.Move(+1)
 	}
 }
@@ -1081,14 +1120,20 @@ type TextFileWidget struct {
 }
 
 func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
-	return &TextFileWidget{TextBoxWidget: NewTextBoxWidget(pos), path: path}
+	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidget(pos), path: path}
+	w.TextBoxWidget.Content.Set(TryReadFile(w.path))
+	w.TextBoxWidget.AfterChange = append(w.TextBoxWidget.AfterChange, func() {
+		err := ioutil.WriteFile(w.path, []byte(w.TextBoxWidget.Content.Content()), 0666)
+		CheckError(err)
+	})
+	return w
 }
 
 func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
 	// Check if the file has been changed externally, and if so, override this widget
 	NewContent := TryReadFile(w.path)
-	if NewContent != w.content {
-		w.TextBoxWidget.SetContent(NewContent)
+	if NewContent != w.Content.Content() {
+		w.TextBoxWidget.Content.Set(NewContent)
 		redraw = true
 	}
 
@@ -1576,15 +1621,24 @@ func main() {
 		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
 		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{100, 5}))
-		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/sample.txt"))
+		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 
 		{
-			src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
+			src := NewTextFileWidget(mathgl.Vec2d{50, 200}, "/Users/Dmitri/Dropbox/Needs Processing/woot.go")
+			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
+			//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
 			dst := NewTextBoxWidget(mathgl.Vec2d{240, 200})
-			src.AfterChange = func() {
-				dst.SetContent(src.content)
-			}
+			src.AfterChange = append(src.AfterChange, func() {
+				//dst.Content.Set("!" + src.Content.Content())
+				cmd := exec.Command("go", "run", src.path)
+				out, err := cmd.CombinedOutput()
+				if err == nil {
+					dst.Content.Set(string(out))
+				} else {
+					dst.Content.Set(err.Error())
+				}
+			})
 			widgets = append(widgets, src)
 			widgets = append(widgets, dst)
 		}
@@ -1688,7 +1742,7 @@ func main() {
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
 	//keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
-	//widgets[len(widgets)-1].(*TextBoxWidget).SetContent("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")
+	//widgets[len(widgets)-1].(*TextBoxWidget).Set("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")
 
 	//last := window.GetClipboardString()
 
