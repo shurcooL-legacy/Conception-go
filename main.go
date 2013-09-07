@@ -70,7 +70,7 @@ func CheckGLError() {
 	}
 }
 
-func Print(pos mathgl.Vec2d, s string) {
+func PrintText(pos mathgl.Vec2d, s string) {
 	lines := GetLines(s)
 	for lineNumber, line := range lines {
 		PrintLine(pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), line)
@@ -196,12 +196,19 @@ type Widgeter interface {
 	Hit(mathgl.Vec2d) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
 	ProcessTimePassed(timePassed float64)
+
+	Pos() mathgl.Vec2d
+	SetPos(mathgl.Vec2d)
+	Size() mathgl.Vec2d
+	SetSize(mathgl.Vec2d)
 	HoverPointers() map[*Pointer]bool
 	SetParent(Widgeter)
 
 	ParentToLocal(mathgl.Vec2d) mathgl.Vec2d
 	GlobalToLocal(mathgl.Vec2d) mathgl.Vec2d
 }
+
+type Widgeters []Widgeter
 
 type Widget struct {
 	pos           mathgl.Vec2d
@@ -229,6 +236,12 @@ func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 }
 func (w *Widget) ProcessEvent(inputEvent InputEvent)   {}
 func (w *Widget) ProcessTimePassed(timePassed float64) {}
+
+func (w *Widget) Pos() mathgl.Vec2d         { return w.pos }
+func (w *Widget) SetPos(pos mathgl.Vec2d)   { w.pos = pos }
+func (w *Widget) Size() mathgl.Vec2d        { return w.size }
+func (w *Widget) SetSize(size mathgl.Vec2d) { w.size = size }
+
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
 }
@@ -262,38 +275,38 @@ func NewTest1Widget(pos mathgl.Vec2d) *Test1Widget {
 func (w *Test1Widget) Render() {
 	DrawBox(w.pos, w.size)
 	gl.Color3d(0, 0, 0)
-	//Print(w.pos, goon.Sdump(inputEventQueue))
+	//PrintText(w.pos, goon.Sdump(inputEventQueue))
 
 	//x := GetDocPackageAll("gist.github.com/5694308.git")
-	//Print(w.pos, strings.Join(x.Imports, "\n"))
+	//PrintText(w.pos, strings.Join(x.Imports, "\n"))
 
 	/*files, _ := ioutil.ReadDir("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/")
 	for lineNumber, file := range files {
 		if file.IsDir() {
-			Print(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), ">>>> " + file.Name() + "/ (FOLDER)")
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), ">>>> " + file.Name() + "/ (FOLDER)")
 		} else {
-			Print(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), file.Name())
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), file.Name())
 		}
 	}*/
 
-	//Print(w.pos, TryReadFile("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/PrintPackageSummary.go"))
+	//PrintText(w.pos, TryReadFile("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/PrintPackageSummary.go"))
 
 	//pkg := GetThisGoPackage()
-	//Print(w.pos, pkg.ImportPath+" - "+pkg.Name)
+	//PrintText(w.pos, pkg.ImportPath+" - "+pkg.Name)
 
-	//Print(w.pos, string(debug.Stack()))
+	//PrintText(w.pos, string(debug.Stack()))
 
-	//Print(w.pos, GetThisGoSourceFilepath())
-	//Print(w.pos.Add(mathgl.Vec2d{0, 16}), GetThisGoSourceDir())
-	//Print(w.pos.Add(mathgl.Vec2d{0, 2 * 16}), GetThisGoPackage().ImportPath)
+	//PrintText(w.pos, GetThisGoSourceFilepath())
+	//PrintText(w.pos.Add(mathgl.Vec2d{0, 16}), GetThisGoSourceDir())
+	//PrintText(w.pos.Add(mathgl.Vec2d{0, 2 * 16}), GetThisGoPackage().ImportPath)
 
 	/*x := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
 	for lineNumber, y := range x.Vars {
-		Print(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), SprintAstBare(y.Decl))
+		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), SprintAstBare(y.Decl))
 	}*/
 
 	kat := widgets[len(widgets)-1].(*KatWidget)
-	Print(w.pos, fmt.Sprintf("%v", kat.mode.String()))
+	PrintText(w.pos, fmt.Sprintf("%v", kat.mode.String()))
 }
 
 // ---
@@ -346,8 +359,8 @@ func (w *ButtonWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 
 func (w *ButtonWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		if w.action != nil {
 			w.action()
@@ -395,8 +408,8 @@ var globalWindow *glfw.Window
 
 func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		fmt.Printf("%q BoxWidget pressed!\n", w.Name)
 		x, y := globalWindow.GetPosition()
@@ -406,8 +419,7 @@ func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
-// TODO: Make this a method of []Widgeter?
-func containsWidget(widgets []Widgeter, targetWidget Widgeter) bool {
+func (widgets *Widgeters) ContainsWidget(targetWidget Widgeter) bool {
 	for _, widget := range mousePointer.Mapping {
 		if widget == targetWidget {
 			return true
@@ -539,8 +551,8 @@ func (w *KatWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 
 func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		keyboardPointer.OriginMapping = []Widgeter{w}
@@ -652,6 +664,28 @@ func (w *CompositeWidget) ProcessTimePassed(timePassed float64) {
 
 // ---
 
+type FlowLayoutWidget struct {
+	CompositeWidget
+}
+
+func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter) *FlowLayoutWidget {
+	w := &FlowLayoutWidget{*NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets)}
+	return w
+}
+
+func (w *FlowLayoutWidget) Render() {
+	// TODO: Only perform layout when children change, rather than every draw?
+	var combinedOffset float64
+	for _, widget := range w.CompositeWidget.Widgets {
+		widget.SetPos(mathgl.Vec2d{combinedOffset, 0})
+		combinedOffset += widget.Size()[0] + 2
+	}
+
+	w.CompositeWidget.Render()
+}
+
+// ---
+
 type UnderscoreSepToCamelCaseWidget struct {
 	Widget
 	window *glfw.Window
@@ -682,8 +716,7 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 
 type ChannelExpeWidget struct {
 	CompositeWidget
-	ch    <-chan []byte
-	errCh <-chan error
+	ch <-chan []byte
 }
 
 func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
@@ -700,7 +733,7 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 				cmd.Process.Kill() // Comments are currently not preserved
 			}),
 		})}
-	w.ch, w.errCh = ByteReader(stdout)
+	w.ch = ByteReader(stdout)
 
 	return &w
 }
@@ -727,19 +760,88 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	gl.Rectd(0, 0, gl.Double(w.size[0]), gl.Double(w.size[1]))
 
 	gl.Color3d(0, 0, 0)
-	Print(mathgl.Vec2d{}, w.Content)
+	PrintText(mathgl.Vec2d{}, w.Content)
 }*/
 
 func (w *ChannelExpeWidget) ProcessTimePassed(timePassed float64) {
 	select {
-	case b := <-w.ch:
-		box := w.CompositeWidget.Widgets[0].(*TextBoxWidget)
-		box.Content.Set(box.Content.Content() + string(b))
-		redraw = true
+	case b, ok := <-w.ch:
+		if ok {
+			box := w.CompositeWidget.Widgets[0].(*TextBoxWidget)
+			box.Content.Set(box.Content.Content() + string(b))
+			redraw = true
+		}
 	default:
 	}
 
 	w.CompositeWidget.ProcessTimePassed(timePassed)
+}
+
+// ---
+
+type LiveCmdExpeWidget struct {
+	FlowLayoutWidget
+	cmd      *exec.Cmd
+	stdoutCh <-chan []byte
+	stderrCh <-chan []byte
+}
+
+func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
+	src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Needs Processing/woot.go")
+	//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
+	//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
+	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
+	w := &LiveCmdExpeWidget{FlowLayoutWidget: *NewFlowLayoutWidget(pos, []Widgeter{src, dst})}
+
+	src.AfterChange = append(src.AfterChange, func() {
+		if w.cmd != nil {
+			w.cmd.Process.Kill()
+		}
+
+		dst.Content.Set("")
+
+		w.cmd = exec.Command("go", "run", src.path)
+		{
+			stdout, err := w.cmd.StdoutPipe()
+			CheckError(err)
+			w.stdoutCh = ByteReader(stdout)
+		}
+		{
+			stderr, err := w.cmd.StderrPipe()
+			CheckError(err)
+			w.stderrCh = ByteReader(stderr)
+		}
+		{
+			err := w.cmd.Start()
+			CheckError(err)
+		}
+	})
+
+	return w
+}
+
+func (w *LiveCmdExpeWidget) ProcessTimePassed(timePassed float64) {
+	select {
+	case b, ok := <-w.stdoutCh:
+		if ok {
+			box := w.FlowLayoutWidget.CompositeWidget.Widgets[1].(*TextBoxWidget)
+			box.Content.Set(box.Content.Content() + string(b))
+			redraw = true
+		}
+	default:
+	}
+
+	select {
+	case b, ok := <-w.stderrCh:
+		if ok {
+			box := w.FlowLayoutWidget.CompositeWidget.Widgets[1].(*TextBoxWidget)
+			box.Content.Set(box.Content.Content() + string(b))
+			redraw = true
+		}
+	default:
+	}
+
+	w.FlowLayoutWidget.ProcessTimePassed(timePassed)
 }
 
 // ---
@@ -825,20 +927,20 @@ func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 }
 
 func (cp *CaretPosition) Move(amount int8) {
-	switch {
-	case amount == -1:
+	switch amount {
+	case -1:
 		cp.caretPosition--
-	case amount == +1:
+	case +1:
 		cp.caretPosition++
-	case amount == -2:
+	case -2:
 		_, y := cp.ExpandedPosition()
 		cp.caretPosition = cp.w.Lines()[y].Start
-	case amount == +2:
+	case +2:
 		_, y := cp.ExpandedPosition()
 		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
-	case amount == -3:
+	case -3:
 		cp.caretPosition = 0
-	case amount == +3:
+	case +3:
 		y := len(cp.w.Lines()) - 1
 		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
 	}
@@ -850,8 +952,8 @@ func (cp *CaretPosition) Move(amount int8) {
 func (cp *CaretPosition) TryMoveV(amount int8) {
 	_, y := cp.ExpandedPosition()
 
-	switch {
-	case amount == -1:
+	switch amount {
+	case -1:
 		if y > 0 {
 			y--
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
@@ -859,7 +961,7 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 		} else {
 			cp.Move(-2)
 		}
-	case amount == +1:
+	case +1:
 		if y < uint32(len(cp.w.Lines()))-1 {
 			y++
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
@@ -1039,8 +1141,8 @@ func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 }
 func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		keyboardPointer.OriginMapping = []Widgeter{w}
@@ -1074,7 +1176,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			w.caretPosition.Move(+1)
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start)
+				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
 				// TODO: Rename to TryMove since no check is being made
 				w.caretPosition.Move(-2)
 			} else if inputEvent.ModifierKey == 0 {
@@ -1130,6 +1232,7 @@ func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 }
 
 func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
+	// TODO: Move this into MultilineContent's ProcessTimePassed
 	// Check if the file has been changed externally, and if so, override this widget
 	NewContent := TryReadFile(w.path)
 	if NewContent != w.Content.Content() {
@@ -1206,8 +1309,8 @@ func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 }
 func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		keyboardPointer.OriginMapping = []Widgeter{w}
@@ -1340,8 +1443,8 @@ func (w *MetaTextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 }
 func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		containsWidget(inputEvent.Pointer.Mapping, w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		containsWidget(inputEvent.Pointer.OriginMapping, w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		keyboardPointer.OriginMapping = []Widgeter{w}
@@ -1404,8 +1507,8 @@ const (
 
 type Pointer struct {
 	VirtualCategory VirtualCategory
-	Mapping         []Widgeter
-	OriginMapping   []Widgeter
+	Mapping         Widgeters
+	OriginMapping   Widgeters
 	State           PointerState
 }
 
@@ -1621,27 +1724,9 @@ func main() {
 		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
 		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{100, 5}))
-		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
+		//widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
-
-		{
-			src := NewTextFileWidget(mathgl.Vec2d{50, 200}, "/Users/Dmitri/Dropbox/Needs Processing/woot.go")
-			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
-			//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
-			dst := NewTextBoxWidget(mathgl.Vec2d{240, 200})
-			src.AfterChange = append(src.AfterChange, func() {
-				//dst.Content.Set("!" + src.Content.Content())
-				cmd := exec.Command("go", "run", src.path)
-				out, err := cmd.CombinedOutput()
-				if err == nil {
-					dst.Content.Set(string(out))
-				} else {
-					dst.Content.Set(err.Error())
-				}
-			})
-			widgets = append(widgets, src)
-			widgets = append(widgets, dst)
-		}
+		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
 	} else {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
