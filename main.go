@@ -207,6 +207,8 @@ type Widgeter interface {
 
 	ParentToLocal(mathgl.Vec2d) mathgl.Vec2d
 	GlobalToLocal(mathgl.Vec2d) mathgl.Vec2d
+
+	AddChangeListener(l ChangeListener)
 }
 
 type Widgeters []Widgeter
@@ -216,6 +218,8 @@ type Widget struct {
 	size          mathgl.Vec2d
 	hoverPointers map[*Pointer]bool
 	parent        Widgeter
+
+	changeListeners []ChangeListener
 }
 
 func NewWidget(pos, size mathgl.Vec2d) Widget {
@@ -262,6 +266,12 @@ func (w *Widget) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathg
 		ParentPosition = GlobalPosition
 	}
 	return w.ParentToLocal(ParentPosition)
+}
+
+func (w *Widget) AddChangeListener(l ChangeListener) {
+	w.changeListeners = append(w.changeListeners, l)
+
+	l.NotifyChange()
 }
 
 // ---
@@ -678,11 +688,19 @@ type FlowLayoutWidget struct {
 
 func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter) *FlowLayoutWidget {
 	w := &FlowLayoutWidget{*NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets)}
+	// TODO: Unsure this is a good way of registering ourselves as a listener... can it be more automated? What if someone manually adds another widget later, this'd get bypassed...
+	for _, widget := range Widgets {
+		widget.AddChangeListener(w)
+	}
 	return w
 }
 
+func (w *FlowLayoutWidget) NotifyChange() {
+	w.Layout()
+}
+
 func (w *FlowLayoutWidget) Layout() {
-	w.CompositeWidget.Layout()
+	//w.CompositeWidget.Layout()
 
 	// TODO: Only perform layout when children change, rather than every draw?
 	var combinedOffset float64
@@ -796,6 +814,7 @@ type LiveCmdExpeWidget struct {
 
 func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Needs Processing/woot.go")
+	//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
 	//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 	//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
 	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
@@ -1078,6 +1097,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc *MultilineContent) *Te
 		caretPosition: CaretPosition{w: mc},
 	}
 	mc.ChangeListeners = append(mc.ChangeListeners, w) // TODO: What about removing w when it's "deleted"?
+	w.Layout()                                         // TODO: Shouldn't setting the ChangeListener above perform a NotifyChange()?
 	return w
 }
 
@@ -1086,13 +1106,19 @@ func (w *TextBoxWidget) NotifyChange() {
 		w.caretPosition.Move(+3)
 	}
 
+	w.Layout()
+
+	for _, changeListener := range w.changeListeners {
+		changeListener.NotifyChange()
+	}
+
 	for _, f := range w.AfterChange {
 		f()
 	}
 }
 
 func (w *TextBoxWidget) Layout() {
-	// TODO: Only perform layout when children change, rather than every draw?
+	// TODO: Only perform layout when content changes, rather than every draw?
 	if w.Content.LongestLine() < 3 {
 		w.size[0] = float64(8 * 3)
 	} else {
@@ -1234,6 +1260,7 @@ type TextFileWidget struct {
 func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidget(pos), path: path}
 	w.TextBoxWidget.Content.Set(TryReadFile(w.path))
+	// TODO: This should happen at the MultilineContent level, not at TextBoxWidget
 	w.TextBoxWidget.AfterChange = append(w.TextBoxWidget.AfterChange, func() {
 		err := ioutil.WriteFile(w.path, []byte(w.TextBoxWidget.Content.Content()), 0666)
 		CheckError(err)
@@ -1866,10 +1893,10 @@ func main() {
 			gl.LoadIdentity()
 			gl.Translated(offX, offY, 0)
 
-			// TODO: Only perform layout when children change, rather than every draw?
-			for _, widget := range widgets {
+			// TODO: Only perform layout when something changes, rather than every draw?
+			/*for _, widget := range widgets {
 				widget.Layout()
-			}
+			}*/
 
 			for _, widget := range widgets {
 				widget.Render()
