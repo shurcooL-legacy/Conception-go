@@ -191,6 +191,27 @@ func LoadTexture(path string) {
 	CheckGLError()
 }
 
+// ---
+
+type DepNode struct {
+	changeListeners []ChangeListener
+}
+
+func (this *DepNode) AddChangeListener(l ChangeListener) {
+	this.changeListeners = append(this.changeListeners, l)
+
+	l.NotifyChange() // TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
+}
+
+func (this *DepNode) NotifyAllListeners() {
+	// TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
+	for _, changeListener := range this.changeListeners {
+		changeListener.NotifyChange()
+	}
+}
+
+// ---
+
 type Widgeter interface {
 	Layout()
 	Render()
@@ -219,7 +240,7 @@ type Widget struct {
 	hoverPointers map[*Pointer]bool
 	parent        Widgeter
 
-	changeListeners []ChangeListener
+	DepNode
 }
 
 func NewWidget(pos, size mathgl.Vec2d) Widget {
@@ -270,12 +291,6 @@ func (w *Widget) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathg
 		ParentPosition = GlobalPosition
 	}
 	return w.ParentToLocal(ParentPosition)
-}
-
-func (w *Widget) AddChangeListener(l ChangeListener) {
-	w.changeListeners = append(w.changeListeners, l)
-
-	l.NotifyChange() // TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
 }
 
 // ---
@@ -1035,7 +1050,7 @@ type MultilineContent struct {
 	lines       []contentLine
 	longestLine uint32 // Line length
 
-	ChangeListeners []ChangeListener
+	DepNode
 }
 
 func NewMultilineContent() *MultilineContent {
@@ -1052,9 +1067,7 @@ func (mc *MultilineContent) Set(content string) {
 	mc.content = content
 	mc.updateLines()
 
-	for _, changeListener := range mc.ChangeListeners {
-		changeListener.NotifyChange()
-	}
+	mc.NotifyAllListeners()
 }
 
 func (w *MultilineContent) updateLines() {
@@ -1094,8 +1107,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc *MultilineContent) *Te
 		Content:       mc,
 		caretPosition: CaretPosition{w: mc},
 	}
-	mc.ChangeListeners = append(mc.ChangeListeners, w) // TODO: What about removing w when it's "deleted"?
-	w.Layout()                                         // TODO: Shouldn't setting the ChangeListener above perform a NotifyChange()?
+	mc.AddChangeListener(w) // TODO: What about removing w when it's "deleted"?
 	return w
 }
 
@@ -1106,9 +1118,7 @@ func (w *TextBoxWidget) NotifyChange() {
 
 	w.Layout()
 
-	for _, changeListener := range w.changeListeners {
-		changeListener.NotifyChange()
-	}
+	w.NotifyAllListeners()
 
 	for _, f := range w.AfterChange {
 		f()
@@ -1258,8 +1268,8 @@ type TextFileWidget struct {
 
 func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidget(pos), path: path}
+	// TODO: Both things below should happen at the MultilineContent level, not at TextBoxWidget
 	w.TextBoxWidget.Content.Set(TryReadFile(w.path))
-	// TODO: This should happen at the MultilineContent level, not at TextBoxWidget
 	w.TextBoxWidget.AfterChange = append(w.TextBoxWidget.AfterChange, func() {
 		err := ioutil.WriteFile(w.path, []byte(w.TextBoxWidget.Content.Content()), 0666)
 		CheckError(err)
