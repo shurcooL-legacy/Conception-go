@@ -226,7 +226,11 @@ func NewWidget(pos, size mathgl.Vec2d) Widget {
 	return Widget{pos: pos, size: size, hoverPointers: map[*Pointer]bool{}}
 }
 
-func (*Widget) Layout() {}
+func (w *Widget) Layout() {
+	if w.parent != nil {
+		w.parent.Layout()
+	}
+}
 func (*Widget) Render() {}
 func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	Hit := (ParentPosition[0] >= float64(w.pos[0]) &&
@@ -271,7 +275,7 @@ func (w *Widget) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathg
 func (w *Widget) AddChangeListener(l ChangeListener) {
 	w.changeListeners = append(w.changeListeners, l)
 
-	l.NotifyChange()
+	l.NotifyChange() // TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
 }
 
 // ---
@@ -644,17 +648,12 @@ type CompositeWidget struct {
 
 func NewCompositeWidget(pos, size mathgl.Vec2d, Widgets []Widgeter) *CompositeWidget {
 	w := &CompositeWidget{Widget: NewWidget(pos, size), Widgets: Widgets}
-	for _, s := range w.Widgets {
-		s.SetParent(w)
+	for _, widget := range w.Widgets {
+		widget.SetParent(w)
 	}
 	return w
 }
 
-func (w *CompositeWidget) Layout() {
-	for _, widget := range w.Widgets {
-		widget.Layout()
-	}
-}
 func (w *CompositeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
@@ -689,25 +688,24 @@ type FlowLayoutWidget struct {
 func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter) *FlowLayoutWidget {
 	w := &FlowLayoutWidget{*NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets)}
 	// TODO: Unsure this is a good way of registering ourselves as a listener... can it be more automated? What if someone manually adds another widget later, this'd get bypassed...
-	for _, widget := range Widgets {
+	/*for _, widget := range Widgets {
 		widget.AddChangeListener(w)
+	}*/
+	for _, widget := range w.Widgets {
+		widget.SetParent(w)
 	}
+	w.Layout() // TODO: Should this be automatic from above SetParent()?
 	return w
 }
 
-func (w *FlowLayoutWidget) NotifyChange() {
-	w.Layout()
-}
-
 func (w *FlowLayoutWidget) Layout() {
-	//w.CompositeWidget.Layout()
-
-	// TODO: Only perform layout when children change, rather than every draw?
 	var combinedOffset float64
 	for _, widget := range w.CompositeWidget.Widgets {
 		widget.SetPos(mathgl.Vec2d{combinedOffset, 0})
 		combinedOffset += widget.Size()[0] + 2
 	}
+
+	w.Widget.Layout()
 }
 
 // ---
@@ -1118,13 +1116,14 @@ func (w *TextBoxWidget) NotifyChange() {
 }
 
 func (w *TextBoxWidget) Layout() {
-	// TODO: Only perform layout when content changes, rather than every draw?
 	if w.Content.LongestLine() < 3 {
 		w.size[0] = float64(8 * 3)
 	} else {
 		w.size[0] = float64(8 * w.Content.LongestLine())
 	}
 	w.size[1] = float64(16 * len(w.Content.Lines()))
+
+	w.Widget.Layout()
 }
 
 func (w *TextBoxWidget) Render() {
@@ -1892,11 +1891,6 @@ func main() {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
 			gl.Translated(offX, offY, 0)
-
-			// TODO: Only perform layout when something changes, rather than every draw?
-			/*for _, widget := range widgets {
-				widget.Layout()
-			}*/
 
 			for _, widget := range widgets {
 				widget.Render()
