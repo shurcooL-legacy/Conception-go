@@ -192,6 +192,7 @@ func LoadTexture(path string) {
 }
 
 type Widgeter interface {
+	Layout()
 	Render()
 	Hit(mathgl.Vec2d) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
@@ -221,6 +222,7 @@ func NewWidget(pos, size mathgl.Vec2d) Widget {
 	return Widget{pos: pos, size: size, hoverPointers: map[*Pointer]bool{}}
 }
 
+func (*Widget) Layout() {}
 func (*Widget) Render() {}
 func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	Hit := (ParentPosition[0] >= float64(w.pos[0]) &&
@@ -346,6 +348,7 @@ func (w *ButtonWidget) Render() {
 		tooltipOffset := mathgl.Vec2d{0, 16}
 		tooltip := NewTextBoxWidget(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
 		tooltip.Content.Set(GetSourceAsString(w.action))
+		tooltip.Layout()
 		tooltip.Render()
 	}
 }
@@ -637,6 +640,11 @@ func NewCompositeWidget(pos, size mathgl.Vec2d, Widgets []Widgeter) *CompositeWi
 	return w
 }
 
+func (w *CompositeWidget) Layout() {
+	for _, widget := range w.Widgets {
+		widget.Layout()
+	}
+}
 func (w *CompositeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
@@ -673,15 +681,15 @@ func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter) *FlowLayoutWidget
 	return w
 }
 
-func (w *FlowLayoutWidget) Render() {
+func (w *FlowLayoutWidget) Layout() {
+	w.CompositeWidget.Layout()
+
 	// TODO: Only perform layout when children change, rather than every draw?
 	var combinedOffset float64
 	for _, widget := range w.CompositeWidget.Widgets {
 		widget.SetPos(mathgl.Vec2d{combinedOffset, 0})
 		combinedOffset += widget.Size()[0] + 2
 	}
-
-	w.CompositeWidget.Render()
 }
 
 // ---
@@ -1083,17 +1091,19 @@ func (w *TextBoxWidget) NotifyChange() {
 	}
 }
 
-func (w *TextBoxWidget) Render() {
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
-
-	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
+func (w *TextBoxWidget) Layout() {
+	// TODO: Only perform layout when children change, rather than every draw?
 	if w.Content.LongestLine() < 3 {
 		w.size[0] = float64(8 * 3)
 	} else {
 		w.size[0] = float64(8 * w.Content.LongestLine())
 	}
 	w.size[1] = float64(16 * len(w.Content.Lines()))
+}
+
+func (w *TextBoxWidget) Render() {
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
@@ -1855,6 +1865,11 @@ func main() {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
 			gl.Translated(offX, offY, 0)
+
+			// TODO: Only perform layout when children change, rather than every draw?
+			for _, widget := range widgets {
+				widget.Layout()
+			}
 
 			for _, widget := range widgets {
 				widget.Render()
