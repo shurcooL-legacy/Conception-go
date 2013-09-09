@@ -1222,7 +1222,6 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
-				// TODO: Rename to TryMove since no check is being made
 				w.caretPosition.Move(-2)
 			} else if inputEvent.ModifierKey == 0 {
 				if w.caretPosition.Logical() >= 1 {
@@ -1231,7 +1230,6 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyRight:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				// TODO: Rename to TryMove since no check is being made
 				w.caretPosition.Move(+2)
 			} else if inputEvent.ModifierKey == 0 {
 				if w.caretPosition.Logical() < uint32(len(w.Content.Content())) {
@@ -1282,10 +1280,42 @@ func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
 	// Check if the file has been changed externally, and if so, override this widget
 	NewContent := TryReadFile(w.path)
 	if NewContent != w.Content.Content() {
-		w.TextBoxWidget.Content.Set(NewContent)
+		w.Content.Set(NewContent)
 		redraw = true
 	}
 
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.TextBoxWidget.ProcessTimePassed(timePassed)
+}
+
+// ---
+
+type TextBoxWidgetContentFuncTest struct {
+	TextBoxWidget
+	ContentFunc func() string
+}
+
+func NewTextBoxWidgetContentFuncTest(pos mathgl.Vec2d) *TextBoxWidgetContentFuncTest {
+	mc := NewMultilineContent()
+	w := &TextBoxWidgetContentFuncTest{
+		TextBoxWidget: TextBoxWidget{
+			Widget:        NewWidget(pos, mathgl.Vec2d{0, 0}),
+			Content:       mc,
+			caretPosition: CaretPosition{w: mc},
+		},
+	}
+	mc.AddChangeListener(w) // TODO: What about removing w when it's "deleted"?
+	return w
+}
+
+func (w *TextBoxWidgetContentFuncTest) ProcessTimePassed(timePassed float64) {
+	NewContent := w.ContentFunc()
+	if NewContent != w.Content.Content() {
+		w.Content.Set(NewContent)
+		redraw = true
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.TextBoxWidget.ProcessTimePassed(timePassed)
 }
 
@@ -1730,8 +1760,15 @@ func main() {
 	}
 	fmt.Println(gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
 
-	//window.SetPosition(1600, 600)
-	window.SetPosition(1275, 300)
+	// Put the window on the right edge of primary monitor
+	{
+		m, err := glfw.GetPrimaryMonitor()
+		CheckError(err)
+		vm, err := m.GetVideoMode()
+		CheckError(err)
+
+		window.SetPosition(vm.Width-410, (vm.Height-410)/2)
+	}
 	glfw.SwapInterval(1) // Vsync
 
 	InitFont()
@@ -1770,9 +1807,14 @@ func main() {
 		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
 		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{100, 5}))
-		//widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
+		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
+		{
+			test2 := NewTextBoxWidgetContentFuncTest(mathgl.Vec2d{390, 5})
+			test2.ContentFunc = func() string { return goon.Sdump(widgets[8]) }
+			widgets = append(widgets, test2)
+		}
 	} else {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
