@@ -152,7 +152,7 @@ func DeinitFont() {
 }
 
 func LoadTexture(path string) {
-	fmt.Printf("Trying to load texture %q: ", path)
+	//fmt.Printf("Trying to load texture %q: ", path)
 
 	// Open the file
 	file, err := os.Open(path)
@@ -168,7 +168,7 @@ func LoadTexture(path string) {
 	}
 
 	bounds := img.Bounds()
-	fmt.Printf("loaded %vx%v texture.\n", bounds.Dx(), bounds.Dy())
+	//fmt.Printf("loaded %vx%v texture.\n", bounds.Dx(), bounds.Dy())
 
 	var pixPointer *uint8
 	switch img := img.(type) {
@@ -1574,6 +1574,28 @@ func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 }
 
+// ---
+
+type Clock struct {
+	DepNode
+
+	TimePassed float64
+}
+
+var UniversalClock Clock
+
+// ---
+
+type ThisIsATest struct{}
+
+func (w *ThisIsATest) NotifyChange() {
+	println("tick", time.Now().UnixNano())
+}
+
+var thisIsATest ThisIsATest
+
+// ---
+
 type VirtualCategory uint8
 
 const (
@@ -1825,11 +1847,7 @@ func main() {
 	inputEventQueue := []InputEvent{}
 
 	MousePos := func(w *glfw.Window, x, y float64) {
-		redraw = true
 		//fmt.Println("MousePos:", x, y)
-
-		//(widgets[len(widgets)-1]).(*CompositeWidget).x = gl.Double(x)
-		//(widgets[len(widgets)-1]).(*CompositeWidget).y = gl.Double(y)
 
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
@@ -1840,17 +1858,17 @@ func main() {
 			Axes:       []float64{x, y},
 		}
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
 	}
+	window.SetCursorPositionCallback(MousePos)
 	{
 		x, y := window.GetCursorPosition()
 		MousePos(window, x, y)
 	}
-	window.SetCursorPositionCallback(MousePos)
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		offX += gl.Double(xoff * 10)
 		offY += gl.Double(yoff * 10)
-		redraw = true
 
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
@@ -1861,11 +1879,10 @@ func main() {
 			Axes:       nil,
 		}
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
 	})
 
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
-		// TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
-		redraw = true
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
@@ -1875,6 +1892,7 @@ func main() {
 			Axes:       nil,
 		}
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
 	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
@@ -1919,6 +1937,8 @@ func main() {
 
 	//last := window.GetClipboardString()
 
+	UniversalClock.AddChangeListener(&thisIsATest)
+
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
 		//glfw.WaitEvents()
 		glfw.PollEvents()
@@ -1936,6 +1956,8 @@ func main() {
 		for _, widget := range widgets {
 			widget.ProcessTimePassed(1.0 / 60) // TODO: Use proper value?
 		}
+		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
+		UniversalClock.NotifyAllListeners()
 
 		if redraw {
 			redraw = false
