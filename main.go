@@ -945,7 +945,7 @@ func ExpandedToLogical(s string, expanded uint32) uint32 {
 // ---
 
 type CaretPosition struct {
-	w               *MultilineContent
+	w               MultilineContentI
 	caretPosition   uint32
 	targetExpandedX uint32
 }
@@ -1040,6 +1040,18 @@ type ChangeListener interface {
 
 // ---
 
+type MultilineContentI interface {
+	Content() string
+	Lines() []contentLine
+	LongestLine() uint32
+
+	Set(content string)
+
+	AddChangeListener(l ChangeListener)
+}
+
+// ---
+
 type contentLine struct {
 	Start  uint32
 	Length uint32
@@ -1088,9 +1100,45 @@ func (w *MultilineContent) updateLines() {
 
 // ---
 
+type MultilineContentFile struct {
+	*MultilineContent // TODO: Explore this being a pointer vs value
+	path              string
+}
+
+func NewMultilineContentFile(path string) *MultilineContentFile {
+	this := &MultilineContentFile{MultilineContent: NewMultilineContent(), path: path}
+	this.Set(TryReadFile(this.path))
+	UniversalClock.AddChangeListener(this)
+	return this
+}
+
+func (this *MultilineContentFile) Set(content string) {
+	this.content = content
+	this.updateLines()
+
+	// TODO: This shouldn't be triggered from TryReadFile() update below...
+	{
+		err := ioutil.WriteFile(this.path, []byte(this.Content()), 0666)
+		CheckError(err)
+	}
+
+	this.NotifyAllListeners()
+}
+
+func (this *MultilineContentFile) NotifyChange() {
+	// Check if the file has been changed externally, and if so, override this widget
+	NewContent := TryReadFile(this.path)
+	if NewContent != this.Content() {
+		// TODO: Have this not trigger WriteFile() somehow...
+		this.Set(NewContent)
+	}
+}
+
+// ---
+
 type TextBoxWidget struct {
 	Widget
-	Content       *MultilineContent
+	Content       MultilineContentI
 	caretPosition CaretPosition
 
 	AfterChange []func()
@@ -1101,7 +1149,7 @@ func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
 	return NewTextBoxWidgetExternalContent(pos, mc)
 }
 
-func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc *MultilineContent) *TextBoxWidget {
+func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *TextBoxWidget {
 	w := &TextBoxWidget{
 		Widget:        NewWidget(pos, mathgl.Vec2d{0, 0}),
 		Content:       mc,
@@ -1261,28 +1309,35 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 type TextFileWidget struct {
 	*TextBoxWidget
-	path string
+	path string // TODO: Remove this because it's duplicate
 }
 
 func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
-	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidget(pos), path: path}
+	// TODO: Opening the same file shouldn't result in a new MultilineContentFile
+	ec := NewMultilineContentFile(path)
+	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec), path: path}
+	ec.AddChangeListener(w)
 	// TODO: Both things below should happen at the MultilineContent level, not at TextBoxWidget
-	w.TextBoxWidget.Content.Set(TryReadFile(w.path))
+	/*w.TextBoxWidget.Content.Set(TryReadFile(w.path))
 	w.TextBoxWidget.AfterChange = append(w.TextBoxWidget.AfterChange, func() {
 		err := ioutil.WriteFile(w.path, []byte(w.TextBoxWidget.Content.Content()), 0666)
 		CheckError(err)
-	})
+	})*/
 	return w
+}
+
+func (w *TextFileWidget) NotifyChange() {
+	redraw = true
 }
 
 func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
 	// TODO: Move this into MultilineContent's ProcessTimePassed
 	// Check if the file has been changed externally, and if so, override this widget
-	NewContent := TryReadFile(w.path)
+	/*NewContent := TryReadFile(w.path)
 	if NewContent != w.Content.Content() {
 		w.Content.Set(NewContent)
 		redraw = true
-	}
+	}*/
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.TextBoxWidget.ProcessTimePassed(timePassed)
@@ -1830,13 +1885,14 @@ func main() {
 		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{100, 5}))
 		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 80}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
-		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
+		/*widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
 		{
 			test2 := NewTextBoxWidgetContentFuncTest(mathgl.Vec2d{390, 5})
 			test2.ContentFunc = func() string { return goon.Sdump(widgets[8]) }
 			widgets = append(widgets, test2)
-		}
+		}*/
 	} else {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
@@ -1937,7 +1993,7 @@ func main() {
 
 	//last := window.GetClipboardString()
 
-	UniversalClock.AddChangeListener(&thisIsATest)
+	//UniversalClock.AddChangeListener(&thisIsATest)
 
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
 		//glfw.WaitEvents()
