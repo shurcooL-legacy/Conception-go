@@ -840,7 +840,7 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 
 		dst.Content.Set("")
 
-		w.cmd = exec.Command("go", "run", src.path)
+		w.cmd = exec.Command("go", "run", src.Path())
 		{
 			stdout, err := w.cmd.StdoutPipe()
 			CheckError(err)
@@ -1116,7 +1116,7 @@ func (this *MultilineContentFile) Set(content string) {
 	this.content = content
 	this.updateLines()
 
-	// TODO: This shouldn't be triggered from TryReadFile() update below...
+	// TODO: This shouldn't be triggered from TryReadFile() update below... Nor this.Set() in NewMultilineContentFile().
 	{
 		err := ioutil.WriteFile(this.path, []byte(this.Content()), 0666)
 		CheckError(err)
@@ -1131,6 +1131,36 @@ func (this *MultilineContentFile) NotifyChange() {
 	if NewContent != this.Content() {
 		// TODO: Have this not trigger WriteFile() somehow...
 		this.Set(NewContent)
+	}
+}
+
+func (this *MultilineContentFile) Path() string {
+	return this.path
+}
+
+// ---
+
+type MultilineContentFunc struct {
+	*MultilineContent // TODO: Explore this being a pointer vs value
+	contentFunc       func() string
+}
+
+func NewMultilineContentFunc(contentFunc func() string) *MultilineContentFunc {
+	this := &MultilineContentFunc{MultilineContent: NewMultilineContent(), contentFunc: contentFunc}
+	UniversalClock.AddChangeListener(this)
+	return this
+}
+
+func (*MultilineContentFunc) Set(string) {
+	// TODO: Figure out if it's okay to effectively ignore this... or should I prevent it from being possible to call Set()?
+	// Do nothing because the content of MultilineContentFunc can't be set as a string
+}
+
+func (this *MultilineContentFunc) NotifyChange() {
+	// Check if the file has been changed externally, and if so, override this widget
+	NewContent := this.contentFunc()
+	if NewContent != this.MultilineContent.Content() {
+		this.MultilineContent.Set(NewContent)
 	}
 }
 
@@ -1171,6 +1201,9 @@ func (w *TextBoxWidget) NotifyChange() {
 	for _, f := range w.AfterChange {
 		f()
 	}
+
+	// TODO: Figure out if this should be here... is it a big deal if it gets called here AND elsewhere?
+	redraw = true
 }
 
 func (w *TextBoxWidget) Layout() {
@@ -1309,13 +1342,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 type TextFileWidget struct {
 	*TextBoxWidget
-	path string // TODO: Remove this because it's duplicate
 }
 
 func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 	// TODO: Opening the same file shouldn't result in a new MultilineContentFile
 	ec := NewMultilineContentFile(path)
-	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec), path: path}
+	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec)}
 	ec.AddChangeListener(w)
 	// TODO: Both things below should happen at the MultilineContent level, not at TextBoxWidget
 	/*w.TextBoxWidget.Content.Set(TryReadFile(w.path))
@@ -1326,44 +1358,41 @@ func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 	return w
 }
 
+func (w *TextFileWidget) Path() string {
+	return w.TextBoxWidget.Content.(*MultilineContentFile).Path()
+}
+
 func (w *TextFileWidget) NotifyChange() {
 	redraw = true
 }
 
-func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
+/*func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
 	// TODO: Move this into MultilineContent's ProcessTimePassed
 	// Check if the file has been changed externally, and if so, override this widget
-	/*NewContent := TryReadFile(w.path)
+	NewContent := TryReadFile(w.path)
 	if NewContent != w.Content.Content() {
 		w.Content.Set(NewContent)
 		redraw = true
-	}*/
+	}
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.TextBoxWidget.ProcessTimePassed(timePassed)
-}
+}*/
 
 // ---
 
 type TextBoxWidgetContentFuncTest struct {
-	TextBoxWidget
-	ContentFunc func() string
+	*TextBoxWidget
 }
 
-func NewTextBoxWidgetContentFuncTest(pos mathgl.Vec2d) *TextBoxWidgetContentFuncTest {
-	mc := NewMultilineContent()
-	w := &TextBoxWidgetContentFuncTest{
-		TextBoxWidget: TextBoxWidget{
-			Widget:        NewWidget(pos, mathgl.Vec2d{0, 0}),
-			Content:       mc,
-			caretPosition: CaretPosition{w: mc},
-		},
-	}
-	mc.AddChangeListener(w) // TODO: What about removing w when it's "deleted"?
+func NewTextBoxWidgetContentFuncTest(pos mathgl.Vec2d, contentFunc func() string) *TextBoxWidgetContentFuncTest {
+	mc := NewMultilineContentFunc(contentFunc)
+	w := &TextBoxWidgetContentFuncTest{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, mc)}
 	return w
 }
 
-func (w *TextBoxWidgetContentFuncTest) ProcessTimePassed(timePassed float64) {
+/*func (w *TextBoxWidgetContentFuncTest) ProcessTimePassed(timePassed float64) {
+	// TODO: Push this into MultilineContentI
 	NewContent := w.ContentFunc()
 	if NewContent != w.Content.Content() {
 		w.Content.Set(NewContent)
@@ -1372,7 +1401,7 @@ func (w *TextBoxWidgetContentFuncTest) ProcessTimePassed(timePassed float64) {
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.TextBoxWidget.ProcessTimePassed(timePassed)
-}
+}*/
 
 // ---
 
@@ -1803,9 +1832,10 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 
 	postStateActive := inputEvent.Pointer.State.IsActive()
 
-	if !preStateActive && postStateActive {
+	switch {
+	case !preStateActive && postStateActive:
 		inputEvent.EventTypes[POINTER_ACTIVATION] = true
-	} else if preStateActive && !postStateActive {
+	case preStateActive && !postStateActive:
 		inputEvent.EventTypes[POINTER_DEACTIVATION] = true
 	}
 
@@ -1887,12 +1917,12 @@ func main() {
 		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 80}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
-		/*widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
-		{
-			test2 := NewTextBoxWidgetContentFuncTest(mathgl.Vec2d{390, 5})
-			test2.ContentFunc = func() string { return goon.Sdump(widgets[8]) }
+		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
+		if false {
+			contentFunc := func() string { return goon.Sdump(widgets[8]) }
+			test2 := NewTextBoxWidgetContentFuncTest(mathgl.Vec2d{390, 5}, contentFunc)
 			widgets = append(widgets, test2)
-		}*/
+		}
 	} else {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
