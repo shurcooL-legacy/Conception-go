@@ -16,6 +16,7 @@ import (
 	//"github.com/go-gl/gl"
 	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3"
+	//"github.com/go-gl/glu"
 
 	"github.com/Jragonmiris/mathgl"
 
@@ -44,6 +45,9 @@ import (
 	"errors"
 
 	"io/ioutil"
+
+	. "gist.github.com/6418290.git"
+	. "gist.github.com/6545684.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -52,6 +56,7 @@ var _ = GetDocPackageAll
 var _ = GetThisGoSourceDir
 var _ = SprintAstBare
 var _ = errors.New
+var _ = GetVarName
 
 const katOnly = false
 
@@ -217,7 +222,6 @@ type Widgeter interface {
 	Render()
 	Hit(mathgl.Vec2d) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
-	ProcessTimePassed(timePassed float64)
 
 	Pos() mathgl.Vec2d
 	SetPos(mathgl.Vec2d)
@@ -265,8 +269,7 @@ func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 		return nil
 	}
 }
-func (w *Widget) ProcessEvent(inputEvent InputEvent)   {}
-func (w *Widget) ProcessTimePassed(timePassed float64) {}
+func (w *Widget) ProcessEvent(inputEvent InputEvent) {}
 
 func (w *Widget) Pos() mathgl.Vec2d         { return w.pos }
 func (w *Widget) SetPos(pos mathgl.Vec2d)   { w.pos = pos }
@@ -338,6 +341,32 @@ func (w *Test1Widget) Render() {
 
 	kat := widgets[len(widgets)-1].(*KatWidget)
 	PrintText(w.pos, fmt.Sprintf("%v", kat.mode.String()))
+}
+
+// ---
+
+type GpcFileWidget struct {
+	Widget
+	p Polygon
+}
+
+func NewGpcFileWidget(pos mathgl.Vec2d, path string) *GpcFileWidget {
+	return &GpcFileWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0}), p: ReadGpcFile(path)}
+}
+
+func (w *GpcFileWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+
+	gl.Color3d(0, 0, 0)
+	for _, contour := range w.p.Contours {
+		gl.Begin(gl.LINE_LOOP)
+		for _, vertex := range contour.Vertices {
+			gl.Vertex2dv((*gl.Double)(&vertex[0]))
+		}
+		gl.End()
+	}
 }
 
 // ---
@@ -517,6 +546,20 @@ func DrawCircleBorder(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColor math
 	gl.End()
 }
 
+func DrawCircleBorderCustom(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColor mathgl.Vec3d, borderWidth float64, totalSlices, startSlice, endSlice int32) {
+	const TwoPi = math.Pi * 2
+
+	var x = float64(totalSlices)
+
+	gl.Color3dv((*gl.Double)(&BorderColor[0]))
+	gl.Begin(gl.TRIANGLE_STRIP)
+	for i := startSlice; i <= endSlice; i++ {
+		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*Size[0]/2), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*Size[1]/2))
+		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*(Size[0]/2-borderWidth)), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*(Size[1]/2-borderWidth)))
+	}
+	gl.End()
+}
+
 // ---
 
 type KatWidget struct {
@@ -553,12 +596,14 @@ func (mode KatMode) String() string {
 }
 
 func NewKatWidget(pos mathgl.Vec2d) *KatWidget {
-	return &KatWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), target: pos}
+	w := &KatWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), target: pos}
+	UniversalClock.AddChangeListener(w)
+	return w
 }
 
 func (w *KatWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	/*hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	isHit := len(w.HoverPointers()) > 0
 
@@ -566,6 +611,51 @@ func (w *KatWidget) Render() {
 		DrawCircle(w.pos, w.size, mathgl.Vec3d{1, 1, 1}, mathgl.Vec3d{0.3, 0.3, 0.3})
 	} else {
 		DrawCircle(w.pos, w.size, mathgl.Vec3d{1, 1, 1}, mathgl.Vec3d{0.898, 0.765, 0.396})
+	}*/
+
+	// Shadow
+	{
+		gl.PushMatrix()
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+
+		gl.Enable(gl.BLEND)
+		gl.Begin(gl.TRIANGLE_FAN)
+		{
+			gl.Color4d(0, 0, 0, 0.3)
+			gl.Vertex2d(0, 0)
+			gl.Color4d(0, 0, 0, 0)
+			nSlices := 16
+			PLAYER_HALF_WIDTH := 7.74597
+			dShadowRadius := PLAYER_HALF_WIDTH * 1.75
+			for nSlice := 0; nSlice <= nSlices; nSlice++ {
+				gl.Vertex2d(gl.Double(math.Cos(2*math.Pi*float64(nSlice)/float64(nSlices))*dShadowRadius), gl.Double(math.Sin(2*math.Pi*float64(nSlice)/float64(nSlices))*dShadowRadius))
+			}
+		}
+		gl.End()
+		gl.Disable(gl.BLEND)
+
+		gl.PopMatrix()
+	}
+
+	// eX0 Player
+	{
+		gl.PushMatrix()
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		gl.Rotated(180, 0, 0, 1)
+
+		DrawCircleBorderCustom(mathgl.Vec2d{}, mathgl.Vec2d{16, 16}, mathgl.Vec3d{1, 0, 0}, 2, 12, 1, 11)
+
+		// Draw the gun
+		{
+			gl.Begin(gl.QUADS)
+			gl.Vertex2d(gl.Double(-1), gl.Double(3+10))
+			gl.Vertex2d(gl.Double(-1), gl.Double(3-1))
+			gl.Vertex2d(gl.Double(1), gl.Double(3-1))
+			gl.Vertex2d(gl.Double(1), gl.Double(3+10))
+			gl.End()
+		}
+
+		gl.PopMatrix()
 	}
 
 	if w.mode == Shunpo && !w.skillActive {
@@ -615,7 +705,9 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 }
 
-func (w *KatWidget) ProcessTimePassed(timePassed float64) {
+func (w *KatWidget) NotifyChange() {
+	var timePassed float64 = UniversalClock.TimePassed
+
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
@@ -688,11 +780,6 @@ func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 
 	return hits
 }
-func (w *CompositeWidget) ProcessTimePassed(timePassed float64) {
-	for _, widget := range w.Widgets {
-		widget.ProcessTimePassed(timePassed)
-	}
-}
 
 // ---
 
@@ -720,6 +807,7 @@ func (w *FlowLayoutWidget) Layout() {
 		combinedOffset += widget.Size()[0] + 2
 	}
 
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
 }
 
@@ -765,7 +853,7 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	err = cmd.Start()
 	CheckError(err)
 
-	w := ChannelExpeWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0},
+	w := &ChannelExpeWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0},
 		[]Widgeter{
 			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
 			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, func() {
@@ -774,7 +862,9 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 		})}
 	w.ch = ByteReader(stdout)
 
-	return &w
+	UniversalClock.AddChangeListener(w)
+
+	return w
 }
 
 /*func (w *ChannelExpeWidget) Render() {
@@ -802,7 +892,7 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	PrintText(mathgl.Vec2d{}, w.Content)
 }*/
 
-func (w *ChannelExpeWidget) ProcessTimePassed(timePassed float64) {
+func (w *ChannelExpeWidget) NotifyChange() {
 	select {
 	case b, ok := <-w.ch:
 		if ok {
@@ -812,8 +902,6 @@ func (w *ChannelExpeWidget) ProcessTimePassed(timePassed float64) {
 		}
 	default:
 	}
-
-	w.CompositeWidget.ProcessTimePassed(timePassed)
 }
 
 // ---
@@ -832,6 +920,8 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
 	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
 	w := &LiveCmdExpeWidget{FlowLayoutWidget: *NewFlowLayoutWidget(pos, []Widgeter{src, dst})}
+
+	UniversalClock.AddChangeListener(w)
 
 	src.AfterChange = append(src.AfterChange, func() {
 		if w.cmd != nil {
@@ -860,7 +950,7 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	return w
 }
 
-func (w *LiveCmdExpeWidget) ProcessTimePassed(timePassed float64) {
+func (w *LiveCmdExpeWidget) NotifyChange() {
 	select {
 	case b, ok := <-w.stdoutCh:
 		if ok {
@@ -880,8 +970,6 @@ func (w *LiveCmdExpeWidget) ProcessTimePassed(timePassed float64) {
 		}
 	default:
 	}
-
-	w.FlowLayoutWidget.ProcessTimePassed(timePassed)
 }
 
 // ---
@@ -1157,7 +1245,6 @@ func (*MultilineContentFunc) Set(string) {
 }
 
 func (this *MultilineContentFunc) NotifyChange() {
-	// Check if the file has been changed externally, and if so, override this widget
 	NewContent := this.contentFunc()
 	if NewContent != this.MultilineContent.Content() {
 		this.MultilineContent.Set(NewContent)
@@ -1366,19 +1453,6 @@ func (w *TextFileWidget) NotifyChange() {
 	redraw = true
 }
 
-/*func (w *TextFileWidget) ProcessTimePassed(timePassed float64) {
-	// TODO: Move this into MultilineContent's ProcessTimePassed
-	// Check if the file has been changed externally, and if so, override this widget
-	NewContent := TryReadFile(w.path)
-	if NewContent != w.Content.Content() {
-		w.Content.Set(NewContent)
-		redraw = true
-	}
-
-	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
-	w.TextBoxWidget.ProcessTimePassed(timePassed)
-}*/
-
 // ---
 
 type TextBoxWidgetContentFuncTest struct {
@@ -1390,18 +1464,6 @@ func NewTextBoxWidgetContentFuncTest(pos mathgl.Vec2d, contentFunc func() string
 	w := &TextBoxWidgetContentFuncTest{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, mc)}
 	return w
 }
-
-/*func (w *TextBoxWidgetContentFuncTest) ProcessTimePassed(timePassed float64) {
-	// TODO: Push this into MultilineContentI
-	NewContent := w.ContentFunc()
-	if NewContent != w.Content.Content() {
-		w.Content.Set(NewContent)
-		redraw = true
-	}
-
-	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
-	w.TextBoxWidget.ProcessTimePassed(timePassed)
-}*/
 
 // ---
 
@@ -1900,9 +1962,12 @@ func main() {
 	}
 	window.SetFramebufferSizeCallback(size)
 
+	mousePointer = &Pointer{VirtualCategory: POINTING}
+	keyboardPointer = &Pointer{VirtualCategory: TYPING}
+
 	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
 	widgets = append(widgets, &spinner)
-	if true {
+	if false {
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
 		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0},
 			[]Widgeter{
@@ -1918,18 +1983,17 @@ func main() {
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 80}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
-		if false {
+		{
 			contentFunc := func() string { return goon.Sdump(widgets[8]) }
 			test2 := NewTextBoxWidgetContentFuncTest(mathgl.Vec2d{390, 5}, contentFunc)
 			widgets = append(widgets, test2)
 		}
 	} else {
+		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 	}
 
-	mousePointer = &Pointer{VirtualCategory: POINTING}
-	keyboardPointer = &Pointer{VirtualCategory: TYPING}
 	inputEventQueue := []InputEvent{}
 
 	MousePos := func(w *glfw.Window, x, y float64) {
@@ -2039,9 +2103,6 @@ func main() {
 		// Input
 		inputEventQueue = ProcessInputEventQueue(inputEventQueue)
 
-		for _, widget := range widgets {
-			widget.ProcessTimePassed(1.0 / 60) // TODO: Use proper value?
-		}
 		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
 		UniversalClock.NotifyAllListeners()
 
