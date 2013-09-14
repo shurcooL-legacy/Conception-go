@@ -533,17 +533,7 @@ func DrawCircle(Position mathgl.Vec2d, Size mathgl.Vec2d, BackgroundColor, Borde
 }
 
 func DrawCircleBorder(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColor mathgl.Vec3d) {
-	const TwoPi = math.Pi * 2
-
-	const x = 64
-
-	gl.Color3dv((*gl.Double)(&BorderColor[0]))
-	gl.Begin(gl.TRIANGLE_STRIP)
-	for i := 0; i <= x; i++ {
-		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*Size[0]/2), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*Size[1]/2))
-		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*(Size[0]/2-1)), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*(Size[1]/2-1)))
-	}
-	gl.End()
+	DrawCircleBorderCustom(Position, Size, BorderColor, 1, 64, 0, 64)
 }
 
 func DrawCircleBorderCustom(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColor mathgl.Vec3d, borderWidth float64, totalSlices, startSlice, endSlice int32) {
@@ -1916,7 +1906,7 @@ func main() {
 	}
 	defer glfw.Terminate()
 
-	//glfw.WindowHint(glfw.Samples, 32)
+	//glfw.WindowHint(glfw.Samples, 32) // Anti-aliasing
 	//glfw.WindowHint(glfw.Decorated, glfw.False)
 	window, err := glfw.CreateWindow(400, 400, "", nil, nil)
 	globalWindow = window
