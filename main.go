@@ -544,8 +544,8 @@ func DrawCircleBorderCustom(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColo
 	gl.Color3dv((*gl.Double)(&BorderColor[0]))
 	gl.Begin(gl.TRIANGLE_STRIP)
 	for i := startSlice; i <= endSlice; i++ {
-		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*Size[0]/2), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*Size[1]/2))
-		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*(Size[0]/2-borderWidth)), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*(Size[1]/2-borderWidth)))
+		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*Size[0]/2), gl.Double(Position[1]-math.Cos(TwoPi*float64(i)/x)*Size[1]/2))
+		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*(Size[0]/2-borderWidth)), gl.Double(Position[1]-math.Cos(TwoPi*float64(i)/x)*(Size[1]/2-borderWidth)))
 	}
 	gl.End()
 }
@@ -555,6 +555,7 @@ func DrawCircleBorderCustom(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColo
 type KatWidget struct {
 	Widget
 	target      mathgl.Vec2d
+	rotation    float64
 	mode        KatMode
 	skillActive bool
 }
@@ -631,17 +632,17 @@ func (w *KatWidget) Render() {
 	{
 		gl.PushMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
-		gl.Rotated(180, 0, 0, 1)
+		gl.Rotated(gl.Double(w.rotation), 0, 0, 1)
 
 		DrawCircleBorderCustom(mathgl.Vec2d{}, mathgl.Vec2d{16, 16}, mathgl.Vec3d{1, 0, 0}, 2, 12, 1, 11)
 
 		// Draw the gun
 		{
 			gl.Begin(gl.QUADS)
-			gl.Vertex2d(gl.Double(-1), gl.Double(3+10))
-			gl.Vertex2d(gl.Double(-1), gl.Double(3-1))
-			gl.Vertex2d(gl.Double(1), gl.Double(3-1))
-			gl.Vertex2d(gl.Double(1), gl.Double(3+10))
+			gl.Vertex2d(gl.Double(-1), -gl.Double(3+10))
+			gl.Vertex2d(gl.Double(-1), -gl.Double(3-1))
+			gl.Vertex2d(gl.Double(1), -gl.Double(3-1))
+			gl.Vertex2d(gl.Double(1), -gl.Double(3+10))
 			gl.End()
 		}
 
@@ -701,22 +702,42 @@ func (w *KatWidget) NotifyChange() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	const speed = float64(100.0)
+	var speed = float64(100.0)
 
 	if hasTypingFocus {
+		if keyboardPointer.State.Button(int(glfw.KeyLeftShift)) || keyboardPointer.State.Button(int(glfw.KeyLeftShift)) {
+			speed *= 0.4
+		}
+
+		if keyboardPointer.State.Button(int(glfw.KeyLeft)) && !keyboardPointer.State.Button(int(glfw.KeyRight)) {
+			w.rotation -= 180 * timePassed
+			redraw = true
+		} else if keyboardPointer.State.Button(int(glfw.KeyRight)) && !keyboardPointer.State.Button(int(glfw.KeyLeft)) {
+			w.rotation += 180 * timePassed
+			redraw = true
+		}
+
+		var direction mathgl.Vec2d
 		if keyboardPointer.State.Button('A') && !keyboardPointer.State.Button('D') {
-			w.pos[0] -= timePassed * speed
+			direction[0] = -1
 			redraw = true
 		} else if keyboardPointer.State.Button('D') && !keyboardPointer.State.Button('A') {
-			w.pos[0] += timePassed * speed
+			direction[0] = +1
 			redraw = true
 		}
 		if keyboardPointer.State.Button('W') && !keyboardPointer.State.Button('S') {
-			w.pos[1] -= timePassed * speed
+			direction[1] = -1
 			redraw = true
 		} else if keyboardPointer.State.Button('S') && !keyboardPointer.State.Button('W') {
-			w.pos[1] += timePassed * speed
+			direction[1] = +1
 			redraw = true
+		}
+		if direction.Len() != 0 {
+			rotM := mathgl.Rotate2Dd(w.rotation)
+			direction = rotM.Mul2x1(direction)
+
+			w.target = w.pos.Add(direction.Normalize().Mul(speed * timePassed))
+			w.pos = w.target
 		}
 	}
 
