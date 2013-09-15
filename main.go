@@ -46,6 +46,7 @@ import (
 
 	"io/ioutil"
 
+	. "gist.github.com/5892738.git"
 	. "gist.github.com/6418290.git"
 	. "gist.github.com/6545684.git"
 )
@@ -341,6 +342,31 @@ func (w *Test1Widget) Render() {
 
 	kat := widgets[len(widgets)-1].(*KatWidget)
 	PrintText(w.pos, fmt.Sprintf("%v", kat.mode.String()))
+}
+
+// ---
+
+type Test2Widget struct {
+	*TextBoxWidget
+	field *float64
+}
+
+func NewTest2Widget(pos mathgl.Vec2d, field *float64) *Test2Widget {
+	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetContentFunc(pos, func() string { return TrimLastNewline(goon.Sdump(*field)) }), field: field}
+}
+
+func (w *Test2Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+
+func (w *Test2Widget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) && (inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 0) {
+		*w.field += inputEvent.Sliders[0]
+	}
 }
 
 // ---
@@ -705,7 +731,7 @@ func (w *KatWidget) NotifyChange() {
 	var speed = float64(100.0)
 
 	if hasTypingFocus {
-		if keyboardPointer.State.Button(int(glfw.KeyLeftShift)) || keyboardPointer.State.Button(int(glfw.KeyLeftShift)) {
+		if keyboardPointer.State.Button(int(glfw.KeyLeftShift)) || keyboardPointer.State.Button(int(glfw.KeyRightShift)) {
 			speed *= 0.4
 		}
 
@@ -1375,7 +1401,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := w.GlobalToLocal(globalPosition)
 		w.caretPosition.SetPositionFromPhysical(localPosition)
@@ -1466,13 +1492,9 @@ func (w *TextFileWidget) NotifyChange() {
 
 // ---
 
-type TextBoxWidgetContentFuncTest struct {
-	*TextBoxWidget
-}
-
-func NewTextBoxWidgetContentFuncTest(pos mathgl.Vec2d, contentFunc func() string) *TextBoxWidgetContentFuncTest {
+func NewTextBoxWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string) *TextBoxWidget {
 	mc := NewMultilineContentFunc(contentFunc)
-	w := &TextBoxWidgetContentFuncTest{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, mc)}
+	w := NewTextBoxWidgetExternalContent(pos, mc)
 	return w
 }
 
@@ -1552,7 +1574,7 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) {
 		if inputEvent.Pointer.State.Axes[0]-w.pos[0] < 0 {
 			w.CaretPosition = 0
 		} else if inputEvent.Pointer.State.Axes[0]-w.pos[0] > float64(len(w.Content)*8) {
@@ -1686,7 +1708,7 @@ func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) == true || inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0) {
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) {
 		if inputEvent.Pointer.State.Axes[0]-w.pos[0] < 0 {
 			w.CaretPosition = 0
 		} else if inputEvent.Pointer.State.Axes[0]-w.pos[0] > float64(len(w.Content)*8) {
@@ -1809,6 +1831,7 @@ type InputEvent struct {
 	Pointer    *Pointer
 	EventTypes map[EventType]bool
 	InputId    uint16
+	// TODO: Add pointers to BeforeState and AfterState?
 
 	Buttons []bool
 	// TODO: Characters? Split into distinct event types, bundle up in an event frame based on time?
@@ -1978,7 +2001,7 @@ func main() {
 
 	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
 	widgets = append(widgets, &spinner)
-	if false {
+	if true {
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
 		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0},
 			[]Widgeter{
@@ -1994,11 +2017,12 @@ func main() {
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 80}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
-		{
-			contentFunc := func() string { return goon.Sdump(widgets[8]) }
-			test2 := NewTextBoxWidgetContentFuncTest(mathgl.Vec2d{390, 5}, contentFunc)
+		if false {
+			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[8])) }
+			test2 := NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, 25}, contentFunc)
 			widgets = append(widgets, test2)
 		}
+		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{390, 5}, &widgets[8].(*TextFileWidget).pos[0]))
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
@@ -2007,25 +2031,26 @@ func main() {
 
 	inputEventQueue := []InputEvent{}
 
+	var lastMousePos mathgl.Vec2d
+	lastMousePos[0], lastMousePos[1] = window.GetCursorPosition()
 	MousePos := func(w *glfw.Window, x, y float64) {
 		//fmt.Println("MousePos:", x, y)
 
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[EventType]bool{AXIS_EVENT: true},
+			EventTypes: map[EventType]bool{SLIDER_EVENT: true, AXIS_EVENT: true},
 			InputId:    0,
 			Buttons:    nil,
-			Sliders:    nil,
+			Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
 			Axes:       []float64{x, y},
 		}
+		lastMousePos[0] = x
+		lastMousePos[1] = y
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
 	}
 	window.SetCursorPositionCallback(MousePos)
-	{
-		x, y := window.GetCursorPosition()
-		MousePos(window, x, y)
-	}
+	MousePos(window, lastMousePos[0], lastMousePos[1])
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		offX += gl.Double(xoff * 10)
