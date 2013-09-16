@@ -163,6 +163,7 @@ func LoadTexture(path string) {
 	// Open the file
 	file, err := os.Open(path)
 	if err != nil {
+		fmt.Println(os.Getwd())
 		log.Fatal(err)
 	}
 	defer file.Close()
@@ -482,6 +483,17 @@ func (w *BoxWidget) Render() {
 	} else {
 		DrawBox(w.pos, w.size)
 	}
+
+	// Tooltip
+	if isHit {
+		mousePointerPositionLocal := w.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		tooltip := NewTextBoxWidget(mathgl.Vec2d{})
+		tooltip.Content.Set(GetSourceAsString((*BoxWidget).ProcessEvent))
+		tooltip.Layout()
+		tooltipOffset := mathgl.Vec2d{0, -4 - tooltip.Size()[1]}
+		tooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
+		tooltip.Render()
+	}
 }
 func (w *BoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
@@ -733,6 +745,8 @@ func (w *KatWidget) NotifyChange() {
 	if hasTypingFocus {
 		if keyboardPointer.State.Button(int(glfw.KeyLeftShift)) || keyboardPointer.State.Button(int(glfw.KeyRightShift)) {
 			speed *= 0.4
+		} else if keyboardPointer.State.Button(int(glfw.KeySpace)) {
+			speed *= 10
 		}
 
 		if keyboardPointer.State.Button(int(glfw.KeyLeft)) && !keyboardPointer.State.Button(int(glfw.KeyRight)) {
@@ -1453,6 +1467,16 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			} else if inputEvent.ModifierKey == 0 {
 				w.caretPosition.TryMoveV(+1)
 			}
+		// TEST: Closing this widget...
+		case glfw.KeyW:
+			if inputEvent.ModifierKey == glfw.ModControl {
+				for i, widget := range widgets {
+					if widget == w {
+						widgets = append(widgets[:i], widgets[i+1:]...)
+						break
+					}
+				}
+			}
 		}
 	}
 
@@ -2012,17 +2036,18 @@ func main() {
 		widgets = append(widgets, NewTextFieldWidget(mathgl.Vec2d{50, 50}))
 		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
 		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
-		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{100, 5}))
+		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
 		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 80}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
 		if false {
-			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[8])) }
+			widgets[7].(*TextBoxWidget).Content.Set("Run-time reflection!")
+			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
 			test2 := NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, 25}, contentFunc)
 			widgets = append(widgets, test2)
 		}
-		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{390, 5}, &widgets[8].(*TextFileWidget).pos[0]))
+		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{250, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
