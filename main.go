@@ -49,6 +49,8 @@ import (
 	. "gist.github.com/5892738.git"
 	. "gist.github.com/6418290.git"
 	. "gist.github.com/6545684.git"
+
+	. "gist.github.com/4727543.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -199,6 +201,10 @@ func LoadTexture(path string) {
 }
 
 // ---
+
+type DepNodeI interface {
+	AddChangeListener(l ChangeListener)
+}
 
 type DepNode struct {
 	changeListeners []ChangeListener
@@ -353,7 +359,7 @@ type Test2Widget struct {
 }
 
 func NewTest2Widget(pos mathgl.Vec2d, field *float64) *Test2Widget {
-	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetContentFunc(pos, func() string { return TrimLastNewline(goon.Sdump(*field)) }), field: field}
+	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetContentFunc(pos, func() string { return TrimLastNewline(goon.Sdump(*field)) }, []DepNodeI{&UniversalClock}), field: field}
 }
 
 func (w *Test2Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -545,6 +551,12 @@ func DrawGBox(pos, size mathgl.Vec2d) {
 	gl.Color3d(0.898, 0.765, 0.396)
 	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
 	gl.Color3d(0.75, 0.75, 0.75)
+	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+}
+func DrawLGBox(pos, size mathgl.Vec2d) {
+	gl.Color3d(0.6, 0.6, 0.6)
+	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
+	gl.Color3d(0.95, 0.95, 0.95)
 	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
 }
 
@@ -1209,6 +1221,11 @@ func NewMultilineContent() *MultilineContent {
 	mc.updateLines()
 	return mc
 }
+func NewMultilineContentString(content string) *MultilineContent {
+	mc := new(MultilineContent)
+	mc.Set(content)
+	return mc
+}
 
 func (c *MultilineContent) Content() string      { return c.content }
 func (c *MultilineContent) Lines() []contentLine { return c.lines }
@@ -1284,9 +1301,12 @@ type MultilineContentFunc struct {
 	contentFunc       func() string
 }
 
-func NewMultilineContentFunc(contentFunc func() string) *MultilineContentFunc {
+// TODO: Merge the func and dependees into one struct? Maybe can't if funcs can have different signatures...
+func NewMultilineContentFunc(contentFunc func() string, dependees []DepNodeI) *MultilineContentFunc {
 	this := &MultilineContentFunc{MultilineContent: NewMultilineContent(), contentFunc: contentFunc}
-	UniversalClock.AddChangeListener(this)
+	for _, dependee := range dependees {
+		dependee.AddChangeListener(this)
+	}
 	return this
 }
 
@@ -1299,6 +1319,52 @@ func (this *MultilineContentFunc) NotifyChange() {
 	NewContent := this.contentFunc()
 	if NewContent != this.MultilineContent.Content() {
 		this.MultilineContent.Set(NewContent)
+	}
+}
+
+// ---
+
+type TextLabelWidget struct {
+	Widget
+	Content MultilineContentI
+}
+
+func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *TextLabelWidget {
+	w := &TextLabelWidget{
+		Widget:  NewWidget(pos, mathgl.Vec2d{0, 0}),
+		Content: mc,
+	}
+	mc.AddChangeListener(w) // TODO: What about removing w when it's "deleted"?
+	return w
+}
+
+func (w *TextLabelWidget) NotifyChange() {
+	w.Layout()
+
+	w.NotifyAllListeners()
+
+	// TODO: Figure out if this should be here... is it a big deal if it gets called here AND elsewhere?
+	redraw = true
+}
+
+func (w *TextLabelWidget) Layout() {
+	if w.Content.LongestLine() < 3 {
+		w.size[0] = float64(8 * 3)
+	} else {
+		w.size[0] = float64(8 * w.Content.LongestLine())
+	}
+	w.size[1] = float64(16 * len(w.Content.Lines()))
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *TextLabelWidget) Render() {
+	DrawLGBox(w.pos, w.size)
+
+	gl.Color3d(0, 0, 0)
+	for lineNumber, contentLine := range w.Content.Lines() {
+		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 }
 
@@ -1352,6 +1418,7 @@ func (w *TextBoxWidget) Layout() {
 	}
 	w.size[1] = float64(16 * len(w.Content.Lines()))
 
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
 }
 
@@ -1415,7 +1482,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) {
+	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := w.GlobalToLocal(globalPosition)
 		w.caretPosition.SetPositionFromPhysical(localPosition)
@@ -1516,8 +1584,8 @@ func (w *TextFileWidget) NotifyChange() {
 
 // ---
 
-func NewTextBoxWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string) *TextBoxWidget {
-	mc := NewMultilineContentFunc(contentFunc)
+func NewTextBoxWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string, dependees []DepNodeI) *TextBoxWidget {
+	mc := NewMultilineContentFunc(contentFunc, dependees)
 	w := NewTextBoxWidgetExternalContent(pos, mc)
 	return w
 }
@@ -1598,7 +1666,8 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) {
+	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
 		if inputEvent.Pointer.State.Axes[0]-w.pos[0] < 0 {
 			w.CaretPosition = 0
 		} else if inputEvent.Pointer.State.Axes[0]-w.pos[0] > float64(len(w.Content)*8) {
@@ -1732,7 +1801,8 @@ func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) {
+	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
 		if inputEvent.Pointer.State.Axes[0]-w.pos[0] < 0 {
 			w.CaretPosition = 0
 		} else if inputEvent.Pointer.State.Axes[0]-w.pos[0] > float64(len(w.Content)*8) {
@@ -2038,16 +2108,40 @@ func main() {
 		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
 		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 80}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
+		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{100, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
 		if false {
 			widgets[7].(*TextBoxWidget).Content.Set("Run-time reflection!")
 			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
-			test2 := NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, 25}, contentFunc)
+			test2 := NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, 25}, contentFunc, []DepNodeI{&UniversalClock})
 			widgets = append(widgets, test2)
 		}
 		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{250, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
+
+		// GoForcedUseWidget
+		{
+			src := NewTextBoxWidget(mathgl.Vec2d{0, 0})
+			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{0, 0}, NewMultilineContentString("go Forced Use"))
+
+			/*dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
+			src.AfterChange = append(src.AfterChange, func() {
+				// TODO: Async?
+				dst.Content.Set(GetForcedUseFromImport(src.Content.Content()))
+			})*/
+			dst := NewTextBoxWidgetContentFunc(mathgl.Vec2d{0, 0}, func() string {
+				// TODO: Async?
+				println("beep")
+				if strings.TrimSpace(src.Content.Content()) != "" {
+					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
+				} else {
+					return ""
+				}
+			}, []DepNodeI{src})
+
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}))
+		}
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
