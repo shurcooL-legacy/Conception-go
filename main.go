@@ -973,7 +973,7 @@ func (w *ChannelExpeWidget) NotifyChange() {
 // ---
 
 type LiveCmdExpeWidget struct {
-	FlowLayoutWidget
+	*FlowLayoutWidget
 	cmd      *exec.Cmd
 	stdoutCh <-chan []byte
 	stderrCh <-chan []byte
@@ -985,7 +985,7 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 	//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
 	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
-	w := &LiveCmdExpeWidget{FlowLayoutWidget: *NewFlowLayoutWidget(pos, []Widgeter{src, dst})}
+	w := &LiveCmdExpeWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, dst})}
 
 	UniversalClock.AddChangeListener(w)
 
@@ -1036,6 +1036,76 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 		}
 	default:
 	}
+}
+
+// ---
+
+type LiveGoroutineExpeWidget struct {
+	*FlowLayoutWidget
+	outCh chan string
+}
+
+func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, action func(in string) string) *LiveGoroutineExpeWidget {
+	src := NewTextBoxWidget(mathgl.Vec2d{0, 0})
+	label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{0, 0}, NewMultilineContentString("go Forced Use"))
+
+	/*dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
+	src.AfterChange = append(src.AfterChange, func() {
+		// TODO: Async?
+		dst.Content.Set(GetForcedUseFromImport(src.Content.Content()))
+	})*/
+	/*dst := NewTextBoxWidgetContentFunc(mathgl.Vec2d{0, 0}, func() string {
+		// TODO: Async?
+		if strings.TrimSpace(src.Content.Content()) != "" {
+			time.Sleep(time.Second)
+			return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
+		} else {
+			return ""
+		}
+	}, []DepNodeI{src})*/
+	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
+
+	w := &LiveGoroutineExpeWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, label, dst})}
+
+	UniversalClock.AddChangeListener(w)
+
+	w.outCh = make(chan string)
+
+	src.AfterChange = append(src.AfterChange, func() {
+		if w.outCh != nil {
+			//close(*w.outCh)
+		}
+
+		//dst.Content.Set("")
+
+		// TODO: Fix problem where older updates may come later and override newer ones
+		{
+			//outCh := make(chan string)
+			//w.outCh = &outCh
+
+			//dst.Content.Set(action(src.Content.Content()))
+			go func() {
+				//defer close(outCh)
+				w.outCh <- action(src.Content.Content())
+			}()
+		}
+	})
+
+	return w
+}
+
+func (w *LiveGoroutineExpeWidget) NotifyChange() {
+	//if w.outCh != nil {
+	select {
+	case s, ok := <-w.outCh:
+		if ok {
+			box := w.FlowLayoutWidget.CompositeWidget.Widgets[2].(*TextBoxWidget)
+			box.Content.Set(s)
+			redraw = true
+		}
+	default:
+	}
+	//}
 }
 
 // ---
@@ -2116,25 +2186,16 @@ func main() {
 
 		// GoForcedUseWidget
 		{
-			src := NewTextBoxWidget(mathgl.Vec2d{0, 0})
-			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{0, 0}, NewMultilineContentString("go Forced Use"))
-
-			/*dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
-			src.AfterChange = append(src.AfterChange, func() {
-				// TODO: Async?
-				dst.Content.Set(GetForcedUseFromImport(src.Content.Content()))
-			})*/
-			dst := NewTextBoxWidgetContentFunc(mathgl.Vec2d{0, 0}, func() string {
-				// TODO: Async?
-				if strings.TrimSpace(src.Content.Content()) != "" {
+			action := func(in string) string {
+				if strings.TrimSpace(in) != "" {
 					time.Sleep(time.Second)
-					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
+					return GetForcedUseFromImport(strings.TrimSpace(in))
 				} else {
 					return ""
 				}
-			}, []DepNodeI{src})
+			}
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}))
+			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{80, 130}, action))
 		}
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
