@@ -406,11 +406,17 @@ func (w *GpcFileWidget) Render() {
 
 type ButtonWidget struct {
 	Widget
-	action func()
+	action  func()
+	tooltip Widgeter
 }
 
 func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
-	return &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), action: action}
+	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), action: action}
+
+	mc := NewMultilineContentString(GetSourceAsString(w.action))
+	w.tooltip = NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
+
+	return w
 }
 
 func (w *ButtonWidget) Render() {
@@ -437,10 +443,8 @@ func (w *ButtonWidget) Render() {
 	if isHit {
 		mousePointerPositionLocal := w.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, 16}
-		tooltip := NewTextBoxWidget(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
-		tooltip.Content.Set(GetSourceAsString(w.action))
-		tooltip.Layout()
-		tooltip.Render()
+		w.tooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
+		w.tooltip.Render()
 	}
 }
 func (w *ButtonWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -470,6 +474,8 @@ type BoxWidget struct {
 	Name string
 }
 
+var boxWidgetTooltip = NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(GetSourceAsString((*BoxWidget).ProcessEvent)))
+
 func (w *BoxWidget) Render() {
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
@@ -493,12 +499,9 @@ func (w *BoxWidget) Render() {
 	// Tooltip
 	if isHit {
 		mousePointerPositionLocal := w.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
-		tooltip := NewTextBoxWidget(mathgl.Vec2d{})
-		tooltip.Content.Set(GetSourceAsString((*BoxWidget).ProcessEvent))
-		tooltip.Layout()
-		tooltipOffset := mathgl.Vec2d{0, -4 - tooltip.Size()[1]}
-		tooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
-		tooltip.Render()
+		tooltipOffset := mathgl.Vec2d{0, -4 - boxWidgetTooltip.Size()[1]}
+		boxWidgetTooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
+		boxWidgetTooltip.Render()
 	}
 }
 func (w *BoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -1859,16 +1862,6 @@ var UniversalClock Clock
 
 // ---
 
-type ThisIsATest struct{}
-
-func (w *ThisIsATest) NotifyChange() {
-	println("tick", time.Now().UnixNano())
-}
-
-var thisIsATest ThisIsATest
-
-// ---
-
 type VirtualCategory uint8
 
 const (
@@ -2042,6 +2035,7 @@ func main() {
 	if !glfw.Init() {
 		panic("glfw.Init()")
 	}
+	fmt.Printf("glfw %d.%d.%d; ", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision)
 	defer glfw.Terminate()
 
 	//glfw.WindowHint(glfw.Samples, 32) // Anti-aliasing
@@ -2132,8 +2126,8 @@ func main() {
 			})*/
 			dst := NewTextBoxWidgetContentFunc(mathgl.Vec2d{0, 0}, func() string {
 				// TODO: Async?
-				println("beep")
 				if strings.TrimSpace(src.Content.Content()) != "" {
+					time.Sleep(time.Second)
 					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
 				} else {
 					return ""
@@ -2242,8 +2236,6 @@ func main() {
 
 	//last := window.GetClipboardString()
 
-	//UniversalClock.AddChangeListener(&thisIsATest)
-
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
 		//glfw.WaitEvents()
 		glfw.PollEvents()
@@ -2262,8 +2254,6 @@ func main() {
 		UniversalClock.NotifyAllListeners()
 
 		if redraw {
-			redraw = false
-
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
 			gl.Translated(offX, offY, 0)
@@ -2274,6 +2264,8 @@ func main() {
 
 			window.SwapBuffers()
 			spinner.Spinner++
+
+			redraw = false
 		} else {
 			time.Sleep(5 * time.Millisecond)
 		}
