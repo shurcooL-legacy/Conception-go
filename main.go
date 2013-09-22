@@ -1042,7 +1042,13 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 
 type LiveGoroutineExpeWidget struct {
 	*FlowLayoutWidget
-	outCh chan string
+	outCh                       chan timestampString
+	lastStartedT, lastFinishedT uint32
+}
+
+type timestampString struct {
+	s string
+	t uint32
 }
 
 func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, action func(in string) string) *LiveGoroutineExpeWidget {
@@ -1065,11 +1071,9 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, action func(in string) string)
 	}, []DepNodeI{src})*/
 	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
 
-	w := &LiveGoroutineExpeWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, label, dst})}
+	w := &LiveGoroutineExpeWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, label, dst}), outCh: make(chan timestampString)}
 
 	UniversalClock.AddChangeListener(w)
-
-	w.outCh = make(chan string)
 
 	src.AfterChange = append(src.AfterChange, func() {
 		if w.outCh != nil {
@@ -1083,10 +1087,13 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, action func(in string) string)
 			//outCh := make(chan string)
 			//w.outCh = &outCh
 
+			t := w.lastStartedT
+			w.lastStartedT++
+
 			//dst.Content.Set(action(src.Content.Content()))
 			go func() {
 				//defer close(outCh)
-				w.outCh <- action(src.Content.Content())
+				w.outCh <- timestampString{action(src.Content.Content()), t}
 			}()
 		}
 	})
@@ -1099,9 +1106,13 @@ func (w *LiveGoroutineExpeWidget) NotifyChange() {
 	select {
 	case s, ok := <-w.outCh:
 		if ok {
-			box := w.FlowLayoutWidget.CompositeWidget.Widgets[2].(*TextBoxWidget)
-			box.Content.Set(s)
-			redraw = true
+			if s.t >= w.lastFinishedT {
+				w.lastFinishedT = s.t
+
+				box := w.FlowLayoutWidget.CompositeWidget.Widgets[2].(*TextBoxWidget)
+				box.Content.Set(s.s)
+				redraw = true
+			}
 		}
 	default:
 	}
@@ -2188,7 +2199,7 @@ func main() {
 		{
 			action := func(in string) string {
 				if strings.TrimSpace(in) != "" {
-					time.Sleep(time.Second)
+					//time.Sleep(time.Second)
 					return GetForcedUseFromImport(strings.TrimSpace(in))
 				} else {
 					return ""
