@@ -315,7 +315,7 @@ func NewTest1Widget(pos mathgl.Vec2d) *Test1Widget {
 }
 
 func (w *Test1Widget) Render() {
-	DrawBox(w.pos, w.size)
+	DrawNBox(w.pos, w.size)
 	gl.Color3d(0, 0, 0)
 	//PrintText(w.pos, goon.Sdump(inputEventQueue))
 
@@ -436,7 +436,7 @@ func (w *ButtonWidget) Render() {
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
 		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.pos, w.size)
+		DrawNBox(w.pos, w.size)
 	}
 
 	// Tooltip
@@ -493,7 +493,7 @@ func (w *BoxWidget) Render() {
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
 		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.pos, w.size)
+		DrawNBox(w.pos, w.size)
 	}
 
 	// Tooltip
@@ -538,67 +538,61 @@ func (widgets *Widgeters) ContainsWidget(targetWidget Widgeter) bool {
 
 // ---
 
-func DrawBox(pos, size mathgl.Vec2d) {
-	gl.Color3d(0.3, 0.3, 0.3)
+func DrawBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
-	gl.Color3d(1, 1, 1)
+	gl.Color3dv((*gl.Double)(&backgroundColor[0]))
 	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+}
+func DrawNBox(pos, size mathgl.Vec2d) {
+	DrawBox(pos, size, mathgl.Vec3d{0.3, 0.3, 0.3}, mathgl.Vec3d{1, 1, 1})
 }
 func DrawYBox(pos, size mathgl.Vec2d) {
-	gl.Color3d(0.898, 0.765, 0.396)
-	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
-	gl.Color3d(1, 1, 1)
-	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+	DrawBox(pos, size, mathgl.Vec3d{0.898, 0.765, 0.396}, mathgl.Vec3d{1, 1, 1})
 }
 func DrawGBox(pos, size mathgl.Vec2d) {
-	gl.Color3d(0.898, 0.765, 0.396)
-	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
-	gl.Color3d(0.75, 0.75, 0.75)
-	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+	DrawBox(pos, size, mathgl.Vec3d{0.898, 0.765, 0.396}, mathgl.Vec3d{0.75, 0.75, 0.75})
 }
 func DrawLGBox(pos, size mathgl.Vec2d) {
-	gl.Color3d(0.6, 0.6, 0.6)
-	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
-	gl.Color3d(0.95, 0.95, 0.95)
-	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+	DrawBox(pos, size, mathgl.Vec3d{0.6, 0.6, 0.6}, mathgl.Vec3d{0.95, 0.95, 0.95})
 }
 
-func DrawCircle(Position mathgl.Vec2d, Size mathgl.Vec2d, BackgroundColor, BorderColor mathgl.Vec3d) {
+func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
 	const TwoPi = math.Pi * 2
 
 	const x = 64
 
-	gl.Color3dv((*gl.Double)(&BorderColor[0]))
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Begin(gl.TRIANGLE_FAN)
-	gl.Vertex2d(gl.Double(Position[0]), gl.Double(Position[1]))
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
 	for i := 0; i <= x; i++ {
-		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*Size[0]/2), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*Size[1]/2))
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), gl.Double(pos[1]+math.Cos(TwoPi*float64(i)/x)*size[1]/2))
 	}
 	gl.End()
 
-	gl.Color3dv((*gl.Double)(&BackgroundColor[0]))
+	gl.Color3dv((*gl.Double)(&backgroundColor[0]))
 	gl.Begin(gl.TRIANGLE_FAN)
-	gl.Vertex2d(gl.Double(Position[0]), gl.Double(Position[1]))
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
 	for i := 0; i <= x; i++ {
-		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*(Size[0]/2-1)), gl.Double(Position[1]+math.Cos(TwoPi*float64(i)/x)*(Size[1]/2-1)))
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*(size[0]/2-1)), gl.Double(pos[1]+math.Cos(TwoPi*float64(i)/x)*(size[1]/2-1)))
 	}
 	gl.End()
 }
 
-func DrawCircleBorder(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColor mathgl.Vec3d) {
-	DrawCircleBorderCustom(Position, Size, BorderColor, 1, 64, 0, 64)
+func DrawCircleBorder(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor mathgl.Vec3d) {
+	DrawCircleBorderCustom(pos, size, borderColor, 1, 64, 0, 64)
 }
 
-func DrawCircleBorderCustom(Position mathgl.Vec2d, Size mathgl.Vec2d, BorderColor mathgl.Vec3d, borderWidth float64, totalSlices, startSlice, endSlice int32) {
+func DrawCircleBorderCustom(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor mathgl.Vec3d, borderWidth float64, totalSlices, startSlice, endSlice int32) {
 	const TwoPi = math.Pi * 2
 
 	var x = float64(totalSlices)
 
-	gl.Color3dv((*gl.Double)(&BorderColor[0]))
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Begin(gl.TRIANGLE_STRIP)
 	for i := startSlice; i <= endSlice; i++ {
-		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*Size[0]/2), gl.Double(Position[1]-math.Cos(TwoPi*float64(i)/x)*Size[1]/2))
-		gl.Vertex2d(gl.Double(Position[0]+math.Sin(TwoPi*float64(i)/x)*(Size[0]/2-borderWidth)), gl.Double(Position[1]-math.Cos(TwoPi*float64(i)/x)*(Size[1]/2-borderWidth)))
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), gl.Double(pos[1]-math.Cos(TwoPi*float64(i)/x)*size[1]/2))
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*(size[0]/2-borderWidth)), gl.Double(pos[1]-math.Cos(TwoPi*float64(i)/x)*(size[1]/2-borderWidth)))
 	}
 	gl.End()
 }
@@ -652,9 +646,9 @@ func (w *KatWidget) Render() {
 	isHit := len(w.HoverPointers()) > 0
 
 	if !hasTypingFocus && !isHit {
-		DrawCircle(w.pos, w.size, mathgl.Vec3d{1, 1, 1}, mathgl.Vec3d{0.3, 0.3, 0.3})
+		DrawCircle(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, mathgl.Vec3d{1, 1, 1})
 	} else {
-		DrawCircle(w.pos, w.size, mathgl.Vec3d{1, 1, 1}, mathgl.Vec3d{0.898, 0.765, 0.396})
+		DrawCircle(w.pos, w.size, mathgl.Vec3d{0.898, 0.765, 0.396}, mathgl.Vec3d{1, 1, 1})
 	}*/
 
 	// Shadow
@@ -1087,13 +1081,16 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, action func(in string) string)
 			//outCh := make(chan string)
 			//w.outCh = &outCh
 
-			t := w.lastStartedT
 			w.lastStartedT++
+			t := w.lastStartedT
 
 			//dst.Content.Set(action(src.Content.Content()))
 			go func() {
 				//defer close(outCh)
-				w.outCh <- timestampString{action(src.Content.Content()), t}
+				started := time.Now()
+				ts := timestampString{action(src.Content.Content()), t}
+				fmt.Println(time.Since(started).Seconds())
+				w.outCh <- ts
 			}()
 		}
 	})
@@ -1106,7 +1103,7 @@ func (w *LiveGoroutineExpeWidget) NotifyChange() {
 	select {
 	case s, ok := <-w.outCh:
 		if ok {
-			if s.t >= w.lastFinishedT {
+			if s.t > w.lastFinishedT {
 				w.lastFinishedT = s.t
 
 				box := w.FlowLayoutWidget.CompositeWidget.Widgets[2].(*TextBoxWidget)
@@ -1528,7 +1525,7 @@ func (w *TextBoxWidget) Render() {
 	} else if hasTypingFocus {
 		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.pos, w.size)
+		DrawNBox(w.pos, w.size)
 	}
 
 	gl.Color3d(0, 0, 0)
@@ -1716,7 +1713,7 @@ func (w *TextFieldWidget) Render() {
 	} else if hasTypingFocus {
 		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.pos, w.size)
+		DrawNBox(w.pos, w.size)
 	}
 
 	gl.Color3d(0, 0, 0)
@@ -1842,7 +1839,7 @@ func (w *MetaTextFieldWidget) Render() {
 	} else if hasTypingFocus {
 		DrawYBox(w.pos, w.size)
 	} else {
-		DrawBox(w.pos, w.size)
+		DrawNBox(w.pos, w.size)
 	}
 
 	now := time.Now().UnixNano()
@@ -2188,10 +2185,8 @@ func main() {
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
 		if false {
-			widgets[7].(*TextBoxWidget).Content.Set("Run-time reflection!")
 			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
-			test2 := NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, 25}, contentFunc, []DepNodeI{&UniversalClock})
-			widgets = append(widgets, test2)
+			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, -1525}, contentFunc, []DepNodeI{&UniversalClock}))
 		}
 		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{250, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
 
@@ -2207,6 +2202,27 @@ func main() {
 			}
 
 			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{80, 130}, action))
+		}
+		// GoForcedUseWidget2
+		{
+			action := func(in string) string {
+				if strings.TrimSpace(in) != "" {
+					//time.Sleep(time.Second)
+					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
+					//cmd := exec.Command("echo", strings.TrimSpace(in))
+					stdinPipe, err := cmd.StdinPipe()
+					CheckError(err)
+					stdinPipe.Write([]byte(strings.TrimSpace(in)))
+					stdinPipe.Close()
+					out, err := cmd.CombinedOutput()
+					CheckError(err)
+					return string(out)
+				} else {
+					return ""
+				}
+			}
+
+			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{80, 150}, action))
 		}
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
