@@ -296,10 +296,11 @@ func (w *Widget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathg
 }
 func (w *Widget) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
 	var ParentPosition mathgl.Vec2d
-	if w.parent != nil {
-		ParentPosition = w.parent.GlobalToLocal(GlobalPosition)
-	} else {
+	switch w.parent {
+	case nil:
 		ParentPosition = GlobalPosition
+	default:
+		ParentPosition = w.parent.GlobalToLocal(GlobalPosition)
 	}
 	return w.ParentToLocal(ParentPosition)
 }
@@ -843,16 +844,25 @@ func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 
 // ---
 
+type FlowLayoutType uint8
+
+const (
+	HorizontalLayout FlowLayoutType = iota
+	VerticalLayout
+)
+
 type FlowLayoutWidget struct {
 	CompositeWidget
+	flowLayoutType FlowLayoutType // TODO: Currently no public way to set
 }
 
 func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter) *FlowLayoutWidget {
-	w := &FlowLayoutWidget{*NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets)}
+	w := &FlowLayoutWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets)}
 	// TODO: Unsure this is a good way of registering ourselves as a listener... can it be more automated? What if someone manually adds another widget later, this'd get bypassed...
 	/*for _, widget := range Widgets {
 		widget.AddChangeListener(w)
 	}*/
+	// TODO: This is a hack, I'm manually overriding parents of each widget that were set in NewCompositeWidget()
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
 	}
@@ -863,8 +873,10 @@ func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter) *FlowLayoutWidget
 func (w *FlowLayoutWidget) Layout() {
 	var combinedOffset float64
 	for _, widget := range w.CompositeWidget.Widgets {
-		widget.SetPos(mathgl.Vec2d{combinedOffset, 0})
-		combinedOffset += widget.Size()[0] + 2
+		pos := mathgl.Vec2d{}
+		pos[w.flowLayoutType] = combinedOffset
+		widget.SetPos(pos)
+		combinedOffset += widget.Size()[w.flowLayoutType] + 2
 	}
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
