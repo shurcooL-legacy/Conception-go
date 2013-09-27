@@ -51,6 +51,11 @@ import (
 	. "gist.github.com/6545684.git"
 
 	. "gist.github.com/4727543.git"
+
+	. "gist.github.com/6445065.git"
+	"go/ast"
+	"go/parser"
+	"go/token"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -375,6 +380,50 @@ func (w *Test2Widget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) && (inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 0) {
 		*w.field += inputEvent.Sliders[0]
 	}
+}
+
+// ---
+
+type Test3Widget struct {
+	*TextBoxWidget
+	target *TextBoxWidget
+}
+
+func NewTest3Widget(pos mathgl.Vec2d, target *TextBoxWidget) *Test3Widget {
+	w := &Test3Widget{TextBoxWidget: NewTextBoxWidget(pos), target: target}
+	target.caretPosition.AddChangeListener(w)
+	return w
+}
+
+func (w *Test3Widget) NotifyChange() {
+	fs := token.NewFileSet()
+	fileAst, err := parser.ParseFile(fs, "", w.target.Content.Content(), 1*parser.ParseComments)
+	CheckError(err)
+
+	index := w.target.caretPosition.Logical()
+
+	query := func(i interface{}) bool {
+		if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
+			return true
+		}
+		return false
+	}
+	found := FindAll(fileAst, query)
+
+	out := ""
+	smallest := len(w.target.Content.Content())
+	for v := range found {
+		size := int(v.(ast.Node).End() - v.(ast.Node).Pos())
+		if size < smallest {
+			out = fmt.Sprintf("%d-%d, ", v.(ast.Node).Pos()-1, v.(ast.Node).End()-1)
+			out += fmt.Sprintf("%p, %T\n", v, v)
+			out += SprintAst(fs, v) + "\n\n"
+			out += goon.Sdump(v)
+
+			smallest = size
+		}
+	}
+	w.TextBoxWidget.Content.Set(out)
 }
 
 // ---
@@ -1192,6 +1241,8 @@ type CaretPosition struct {
 	w               MultilineContentI
 	caretPosition   uint32
 	targetExpandedX uint32
+
+	DepNode
 }
 
 func (cp *CaretPosition) Logical() uint32 {
@@ -1231,6 +1282,8 @@ func (cp *CaretPosition) Move(amount int8) {
 
 	x, _ := cp.ExpandedPosition()
 	cp.targetExpandedX = x
+
+	cp.NotifyAllListeners()
 }
 
 func (cp *CaretPosition) TryMoveV(amount int8) {
@@ -1242,6 +1295,8 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 			y--
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+
+			cp.NotifyAllListeners()
 		} else {
 			cp.Move(-2)
 		}
@@ -1250,6 +1305,8 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 			y++
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+
+			cp.NotifyAllListeners()
 		} else {
 			cp.Move(+2)
 		}
@@ -1274,6 +1331,8 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 
 	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 	cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+
+	cp.NotifyAllListeners()
 }
 
 // ---
@@ -1667,13 +1726,8 @@ func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 	// TODO: Opening the same file shouldn't result in a new MultilineContentFile
 	ec := NewMultilineContentFile(path)
 	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec)}
+	// TODO: So now both TextBoxWidget and TextFileWidget are set to receive change notifications from ec... Is that cool? Or should I remove TextBoxWidget here? Or go from TextBoxWidget to TextFileWidget rather than from ec directly?
 	ec.AddChangeListener(w)
-	// TODO: Both things below should happen at the MultilineContent level, not at TextBoxWidget
-	/*w.TextBoxWidget.Content.Set(TryReadFile(w.path))
-	w.TextBoxWidget.AfterChange = append(w.TextBoxWidget.AfterChange, func() {
-		err := ioutil.WriteFile(w.path, []byte(w.TextBoxWidget.Content.Content()), 0666)
-		CheckError(err)
-	})*/
 	return w
 }
 
@@ -2245,6 +2299,14 @@ func main() {
 			}
 
 			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{80, 150}, action))
+		}
+
+		// TODO: Use NewLiveGoroutineExpeWidget tech (i.e. make it async)
+		{
+			w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			widgets[12].(*LiveCmdExpeWidget).Widgets = append(widgets[12].(*LiveCmdExpeWidget).Widgets, w)
+			w.SetParent(widgets[12].(*LiveCmdExpeWidget).FlowLayoutWidget)
+			widgets[12].(*LiveCmdExpeWidget).Layout()
 		}
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
