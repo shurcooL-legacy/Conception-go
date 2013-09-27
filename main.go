@@ -1628,6 +1628,16 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			} else if inputEvent.ModifierKey == 0 {
 				w.caretPosition.TryMoveV(+1)
 			}
+		case glfw.KeyV:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if clipboard, err := globalWindow.GetClipboardString(); err == nil && clipboard != "" {
+					//EraseSelectionIfAny();
+					w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + clipboard + w.Content.Content()[w.caretPosition.Logical():])
+					for _ = range []byte(clipboard) { // TODO
+						w.caretPosition.Move(+1)
+					}
+				}
+			}
 		// TEST: Closing this widget...
 		case glfw.KeyW:
 			if inputEvent.ModifierKey == glfw.ModControl {
