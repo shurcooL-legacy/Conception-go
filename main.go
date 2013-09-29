@@ -411,9 +411,9 @@ func (w *Test3Widget) NotifyChange() {
 	found := FindAll(fileAst, query)
 
 	out := ""
-	smallest := len(w.target.Content.Content())
+	smallest := uint64(math.MaxUint64)
 	for v := range found {
-		size := int(v.(ast.Node).End() - v.(ast.Node).Pos())
+		size := uint64(v.(ast.Node).End() - v.(ast.Node).Pos())
 		if size < smallest {
 			out = fmt.Sprintf("%d-%d, ", v.(ast.Node).Pos()-1, v.(ast.Node).End()-1)
 			out += fmt.Sprintf("%p, %T\n", v, v)
