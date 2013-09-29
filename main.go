@@ -384,22 +384,40 @@ func (w *Test2Widget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
+type parsedFile struct {
+	source MultilineContentI // THINK: I only need this because NotifyChange doesn't tell where the change comes from, maybe it should?
+
+	fs      *token.FileSet
+	fileAst *ast.File
+
+	DepNode
+}
+
+func (t *parsedFile) NotifyChange() {
+	var err error
+	t.fs = token.NewFileSet()
+	t.fileAst, err = parser.ParseFile(t.fs, "", t.source.Content(), 1*parser.ParseComments)
+	CheckError(err)
+
+	t.NotifyAllListeners()
+}
+
 type Test3Widget struct {
 	*TextBoxWidget
-	target *TextBoxWidget
+	target     *TextBoxWidget
+	parsedFile parsedFile
 }
 
 func NewTest3Widget(pos mathgl.Vec2d, target *TextBoxWidget) *Test3Widget {
-	w := &Test3Widget{TextBoxWidget: NewTextBoxWidget(pos), target: target}
+	w := &Test3Widget{TextBoxWidget: NewTextBoxWidget(pos), target: target, parsedFile: parsedFile{source: target.Content}}
 	target.caretPosition.AddChangeListener(w)
+	//target.caretPosition.AddChangeListener(&w.parsedFile)
+	target.Content.AddChangeListener(&w.parsedFile)
+	w.parsedFile.AddChangeListener(w)
 	return w
 }
 
 func (w *Test3Widget) NotifyChange() {
-	fs := token.NewFileSet()
-	fileAst, err := parser.ParseFile(fs, "", w.target.Content.Content(), 1*parser.ParseComments)
-	CheckError(err)
-
 	index := w.target.caretPosition.Logical()
 
 	query := func(i interface{}) bool {
@@ -408,7 +426,7 @@ func (w *Test3Widget) NotifyChange() {
 		}
 		return false
 	}
-	found := FindAll(fileAst, query)
+	found := FindAll(w.parsedFile.fileAst, query)
 
 	out := ""
 	smallest := uint64(math.MaxUint64)
@@ -417,7 +435,7 @@ func (w *Test3Widget) NotifyChange() {
 		if size < smallest {
 			out = fmt.Sprintf("%d-%d, ", v.(ast.Node).Pos()-1, v.(ast.Node).End()-1)
 			out += fmt.Sprintf("%p, %T\n", v, v)
-			out += SprintAst(fs, v) + "\n\n"
+			out += SprintAst(w.parsedFile.fs, v) + "\n\n"
 			out += goon.Sdump(v)
 
 			smallest = size
