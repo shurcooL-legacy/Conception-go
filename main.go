@@ -461,12 +461,16 @@ type ButtonWidget struct {
 }
 
 func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
-	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), action: action}
-
-	mc := NewMultilineContentString(GetSourceAsString(w.action))
-	w.tooltip = NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
+	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16})}
+	w.SetAction(action)
 
 	return w
+}
+
+func (w *ButtonWidget) SetAction(action func()) {
+	w.action = action
+	mc := NewMultilineContentString(GetSourceAsString(w.action))
+	w.tooltip = NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
 }
 
 func (w *ButtonWidget) Render() {
@@ -964,24 +968,29 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 
 type ChannelExpeWidget struct {
 	CompositeWidget
-	ch <-chan []byte
+	cmd *exec.Cmd
+	ch  <-chan []byte
 }
 
 func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
-	cmd := exec.Command("ping", "google.com")
-	stdout, err := cmd.StdoutPipe()
-	CheckError(err)
-	err = cmd.Start()
-	CheckError(err)
-
 	w := &ChannelExpeWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0},
 		[]Widgeter{
 			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
-			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, func() {
-				cmd.Process.Kill() // Comments are currently not preserved
-			}),
+			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, nil),
 		})}
-	w.ch = ByteReader(stdout)
+	w.Widgets[1].(*ButtonWidget).SetAction(func() {
+		if w.cmd == nil {
+			w.cmd = exec.Command("ping", "google.com")
+			stdout, err := w.cmd.StdoutPipe()
+			CheckError(err)
+			err = w.cmd.Start()
+			CheckError(err)
+			w.ch = ByteReader(stdout)
+		} else {
+			w.cmd.Process.Kill() // Comments are currently not preserved
+			w.cmd = nil
+		}
+	})
 
 	UniversalClock.AddChangeListener(w)
 
