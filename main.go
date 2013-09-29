@@ -394,10 +394,15 @@ type parsedFile struct {
 }
 
 func (t *parsedFile) NotifyChange() {
-	var err error
-	t.fs = token.NewFileSet()
-	t.fileAst, err = parser.ParseFile(t.fs, "", t.source.Content(), 1*parser.ParseComments)
-	CheckError(err)
+	fs := token.NewFileSet()
+	fileAst, err := parser.ParseFile(fs, "", t.source.Content(), 1*parser.ParseComments)
+	if err == nil {
+		t.fs = fs
+		t.fileAst = fileAst
+	} else {
+		t.fs = nil
+		t.fileAst = nil
+	}
 
 	t.NotifyAllListeners()
 }
