@@ -407,46 +407,39 @@ func (t *parsedFile) NotifyChange() {
 	t.NotifyAllListeners()
 }
 
-type Test3Widget struct {
-	*TextBoxWidget
-	target     *TextBoxWidget
-	parsedFile parsedFile
-}
+func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeWidget {
+	parsedFile := &parsedFile{source: source.Content}
+	source.Content.AddChangeListener(parsedFile)
 
-func NewTest3Widget(pos mathgl.Vec2d, target *TextBoxWidget) *Test3Widget {
-	w := &Test3Widget{TextBoxWidget: NewTextBoxWidget(pos), target: target, parsedFile: parsedFile{source: target.Content}}
-	target.caretPosition.AddChangeListener(w)
-	//target.caretPosition.AddChangeListener(&w.parsedFile)
-	target.Content.AddChangeListener(&w.parsedFile)
-	w.parsedFile.AddChangeListener(w)
+	action := func() string {
+		index := source.caretPosition.Logical()
+
+		query := func(i interface{}) bool {
+			if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
+				return true
+			}
+			return false
+		}
+		found := FindAll(parsedFile.fileAst, query)
+
+		out := ""
+		smallest := uint64(math.MaxUint64)
+		for v := range found {
+			size := uint64(v.(ast.Node).End() - v.(ast.Node).Pos())
+			if size < smallest {
+				out = fmt.Sprintf("%d-%d, ", v.(ast.Node).Pos()-1, v.(ast.Node).End()-1)
+				out += fmt.Sprintf("%p, %T\n", v, v)
+				out += SprintAst(parsedFile.fs, v) + "\n\n"
+				out += goon.Sdump(v)
+
+				smallest = size
+			}
+		}
+		return out
+	}
+
+	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{parsedFile, &source.caretPosition}, action)
 	return w
-}
-
-func (w *Test3Widget) NotifyChange() {
-	index := w.target.caretPosition.Logical()
-
-	query := func(i interface{}) bool {
-		if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
-			return true
-		}
-		return false
-	}
-	found := FindAll(w.parsedFile.fileAst, query)
-
-	out := ""
-	smallest := uint64(math.MaxUint64)
-	for v := range found {
-		size := uint64(v.(ast.Node).End() - v.(ast.Node).Pos())
-		if size < smallest {
-			out = fmt.Sprintf("%d-%d, ", v.(ast.Node).Pos()-1, v.(ast.Node).End()-1)
-			out += fmt.Sprintf("%p, %T\n", v, v)
-			out += SprintAst(w.parsedFile.fs, v) + "\n\n"
-			out += goon.Sdump(v)
-
-			smallest = size
-		}
-	}
-	w.TextBoxWidget.Content.Set(out)
 }
 
 // ---
@@ -1127,8 +1120,27 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 
 // ---
 
+type actionNode struct {
+	owner  *LiveGoroutineExpeWidget
+	action func() string
+}
+
+func (this *actionNode) NotifyChange() {
+	this.owner.lastStartedT++
+	ti := this.owner.lastStartedT
+
+	//this.owner.Content.Set(this.action()); _ = ti
+	go func() {
+		//defer close(outCh)
+		started := time.Now()
+		ts := timestampString{this.action(), ti}
+		fmt.Println(time.Since(started).Seconds())
+		this.owner.outCh <- ts
+	}()
+}
+
 type LiveGoroutineExpeWidget struct {
-	*FlowLayoutWidget
+	*TextBoxWidget
 	outCh                       chan timestampString
 	lastStartedT, lastFinishedT uint32
 }
@@ -1138,10 +1150,7 @@ type timestampString struct {
 	t uint32
 }
 
-func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, action func(in string) string) *LiveGoroutineExpeWidget {
-	src := NewTextBoxWidget(mathgl.Vec2d{0, 0})
-	label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{0, 0}, NewMultilineContentString("go Forced Use"))
-
+func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, action func() string) *LiveGoroutineExpeWidget {
 	/*dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
 	src.AfterChange = append(src.AfterChange, func() {
 		// TODO: Async?
@@ -1156,37 +1165,16 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, action func(in string) string)
 			return ""
 		}
 	}, []DepNodeI{src})*/
-	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
 
-	w := &LiveGoroutineExpeWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, label, dst}), outCh: make(chan timestampString)}
+	w := &LiveGoroutineExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), outCh: make(chan timestampString)}
 
 	UniversalClock.AddChangeListener(w)
 
-	src.AfterChange = append(src.AfterChange, func() {
-		if w.outCh != nil {
-			//close(*w.outCh)
-		}
-
-		//dst.Content.Set("")
-
-		// TODO: Fix problem where older updates may come later and override newer ones
-		{
-			//outCh := make(chan string)
-			//w.outCh = &outCh
-
-			w.lastStartedT++
-			t := w.lastStartedT
-
-			//dst.Content.Set(action(src.Content.Content()))
-			go func() {
-				//defer close(outCh)
-				started := time.Now()
-				ts := timestampString{action(src.Content.Content()), t}
-				fmt.Println(time.Since(started).Seconds())
-				w.outCh <- ts
-			}()
-		}
-	})
+	// THINK: The only reason to have a separate action node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
+	actionNode := &actionNode{owner: w, action: action}
+	for _, dependee := range dependees {
+		dependee.AddChangeListener(actionNode)
+	}
 
 	return w
 }
@@ -1199,8 +1187,7 @@ func (w *LiveGoroutineExpeWidget) NotifyChange() {
 			if s.t > w.lastFinishedT {
 				w.lastFinishedT = s.t
 
-				box := w.FlowLayoutWidget.CompositeWidget.Widgets[2].(*TextBoxWidget)
-				box.Content.Set(s.s)
+				w.Content.Set(s.s)
 				redraw = true
 			}
 		}
@@ -2300,27 +2287,35 @@ func main() {
 
 		// GoForcedUseWidget
 		{
-			action := func(in string) string {
-				if strings.TrimSpace(in) != "" {
+			src := NewTextBoxWidget(mathgl.Vec2d{})
+			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString("go Forced Use"))
+
+			action := func() string {
+				if strings.TrimSpace(src.Content.Content()) != "" {
 					//time.Sleep(time.Second)
-					return GetForcedUseFromImport(strings.TrimSpace(in))
+					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
 				} else {
 					return ""
 				}
 			}
+			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, action)
 
-			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{80, 130}, action))
+			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst})
+			widgets = append(widgets, w)
 		}
 		// GoForcedUseWidget2
 		{
-			action := func(in string) string {
-				if strings.TrimSpace(in) != "" {
+			src := NewTextBoxWidget(mathgl.Vec2d{})
+			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString("go Forced Use"))
+
+			action := func() string {
+				if strings.TrimSpace(src.Content.Content()) != "" {
 					//time.Sleep(time.Second)
 					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
-					//cmd := exec.Command("echo", strings.TrimSpace(in))
+					//cmd := exec.Command("echo", strings.TrimSpace(src.Content.Content()))
 					stdinPipe, err := cmd.StdinPipe()
 					CheckError(err)
-					stdinPipe.Write([]byte(strings.TrimSpace(in)))
+					stdinPipe.Write([]byte(strings.TrimSpace(src.Content.Content())))
 					stdinPipe.Close()
 					out, err := cmd.CombinedOutput()
 					CheckError(err)
@@ -2329,16 +2324,25 @@ func main() {
 					return ""
 				}
 			}
+			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, action)
 
-			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{80, 150}, action))
+			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst})
+			widgets = append(widgets, w)
 		}
 
-		// TODO: Use NewLiveGoroutineExpeWidget tech (i.e. make it async)
+		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
 		{
 			w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
 			widgets[12].(*LiveCmdExpeWidget).Widgets = append(widgets[12].(*LiveCmdExpeWidget).Widgets, w)
 			w.SetParent(widgets[12].(*LiveCmdExpeWidget).FlowLayoutWidget)
 			widgets[12].(*LiveCmdExpeWidget).Layout()
+		}
+
+		// NumGoroutine
+		{
+			contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
+			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
+			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 		}
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
