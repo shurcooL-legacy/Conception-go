@@ -1236,6 +1236,9 @@ func (w *FpsWidget) Render() {
 	defer gl.PopMatrix()
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 	gl.Begin(gl.LINES)
+	gl.Color3d(1, 0, 0)
+	gl.Vertex2d(gl.Double(0), gl.Double(-1000.0/60))
+	gl.Vertex2d(gl.Double(30), gl.Double(-1000.0/60))
 	for index, sample := range w.samples {
 		if sample <= 1000.0/60*1.5 {
 			gl.Color3d(0, 0, 0)
@@ -2492,11 +2495,6 @@ func main() {
 		//glfw.WaitEvents()
 		glfw.PollEvents()
 
-		// TODO: Calculate this better
-		now := time.Now()
-		timePassed := now.Sub(last)
-		last = time.Now()
-
 		/*now := window.GetClipboardString()
 		if now != last {
 			last = now
@@ -2520,12 +2518,20 @@ func main() {
 			}
 
 			window.SwapBuffers()
+			{
+				// TODO: Calculate this better
+				now := time.Now()
+				timePassed := now.Sub(last)
+				last = now
+				fpsWidget.Push(timePassed.Seconds() * 1000)
+			}
 			spinner.Spinner++
-			fpsWidget.Push(timePassed.Seconds() * 1000)
 
 			redraw = false
 		} else {
 			time.Sleep(5 * time.Millisecond)
+
+			last = time.Now()
 		}
 
 		//runtime.Gosched()
