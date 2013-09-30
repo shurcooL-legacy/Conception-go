@@ -412,7 +412,10 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 	source.Content.AddChangeListener(parsedFile)
 
 	action := func() string {
+		// TODO: Race condition? This may get changed outside
 		index := source.caretPosition.Logical()
+		fs := parsedFile.fs
+		fileAst := parsedFile.fileAst
 
 		query := func(i interface{}) bool {
 			if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
@@ -420,7 +423,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 			}
 			return false
 		}
-		found := FindAll(parsedFile.fileAst, query)
+		found := FindAll(fileAst, query)
 
 		out := ""
 		smallest := uint64(math.MaxUint64)
@@ -429,7 +432,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 			if size < smallest {
 				out = fmt.Sprintf("%d-%d, ", v.(ast.Node).Pos()-1, v.(ast.Node).End()-1)
 				out += fmt.Sprintf("%p, %T\n", v, v)
-				out += SprintAst(parsedFile.fs, v) + "\n\n"
+				out += SprintAst(fs, v) + "\n\n"
 				out += goon.Sdump(v)
 
 				smallest = size
@@ -1072,6 +1075,7 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	src.AfterChange = append(src.AfterChange, func() {
 		if w.cmd != nil {
 			w.cmd.Process.Kill()
+			w.cmd = nil
 		}
 
 		dst.Content.Set("")
@@ -1132,9 +1136,9 @@ func (this *actionNode) NotifyChange() {
 	//this.owner.Content.Set(this.action()); _ = ti
 	go func() {
 		//defer close(outCh)
-		started := time.Now()
+		//started := time.Now()
 		ts := timestampString{this.action(), ti}
-		fmt.Println(time.Since(started).Seconds())
+		//fmt.Println(time.Since(started).Seconds())
 		this.owner.outCh <- ts
 	}()
 }
@@ -1214,6 +1218,42 @@ func (w *SpinnerWidget) Render() {
 	gl.Vertex2i(0, -10)
 	gl.Vertex2i(0, 10)
 	gl.End()
+}
+
+// ---
+
+type FpsWidget struct {
+	Widget
+	samples []float64
+}
+
+func NewFpsWidget(pos mathgl.Vec2d) *FpsWidget {
+	return &FpsWidget{Widget: NewWidget(pos, mathgl.Vec2d{})}
+}
+
+func (w *FpsWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+	gl.Begin(gl.LINES)
+	for index, sample := range w.samples {
+		if sample <= 1000.0/60*1.5 {
+			gl.Color3d(0, 0, 0)
+		} else {
+			gl.Color3d(1, 0, 0)
+		}
+
+		gl.Vertex2d(gl.Double(30-len(w.samples)+index), gl.Double(-sample))
+		gl.Vertex2d(gl.Double(30-len(w.samples)+index), 0)
+	}
+	gl.End()
+}
+
+func (w *FpsWidget) Push(sample float64) {
+	w.samples = append(w.samples, sample)
+	if len(w.samples) > 30 {
+		w.samples = w.samples[len(w.samples)-30:]
+	}
 }
 
 // ---
@@ -2349,6 +2389,8 @@ func main() {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 	}
+	fpsWidget := NewFpsWidget(mathgl.Vec2d{10, 120})
+	widgets = append(widgets, fpsWidget)
 
 	inputEventQueue := []InputEvent{}
 
@@ -2444,9 +2486,16 @@ func main() {
 
 	//last := window.GetClipboardString()
 
+	last := time.Now()
+
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
 		//glfw.WaitEvents()
 		glfw.PollEvents()
+
+		// TODO: Calculate this better
+		now := time.Now()
+		timePassed := now.Sub(last)
+		last = time.Now()
 
 		/*now := window.GetClipboardString()
 		if now != last {
@@ -2472,6 +2521,7 @@ func main() {
 
 			window.SwapBuffers()
 			spinner.Spinner++
+			fpsWidget.Push(timePassed.Seconds() * 1000)
 
 			redraw = false
 		} else {
