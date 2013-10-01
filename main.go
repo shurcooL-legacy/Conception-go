@@ -353,7 +353,7 @@ func (w *Test1Widget) Render() {
 		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), SprintAstBare(y.Decl))
 	}*/
 
-	kat := widgets[len(widgets)-1].(*KatWidget)
+	kat := widgets[len(widgets)-2].(*KatWidget)
 	PrintText(w.pos, fmt.Sprintf("%v", kat.mode.String()))
 }
 
@@ -1240,7 +1240,7 @@ func (w *FpsWidget) Render() {
 	gl.Vertex2d(gl.Double(0), gl.Double(-1000.0/60))
 	gl.Vertex2d(gl.Double(30), gl.Double(-1000.0/60))
 	for index, sample := range w.samples {
-		if sample <= 1000.0/60*1.5 {
+		if sample <= 1000.0/60*1.25 {
 			gl.Color3d(0, 0, 0)
 		} else {
 			gl.Color3d(1, 0, 0)
@@ -2388,7 +2388,7 @@ func main() {
 			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 		}
 	} else {
-		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dmitri/^Work/^GitHub/eX0/eX0/levels/test3.wwl"))
+		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 	}
@@ -2489,9 +2489,9 @@ func main() {
 
 	//last := window.GetClipboardString()
 
-	last := time.Now()
-
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
+		frameStartTime := time.Now()
+
 		//glfw.WaitEvents()
 		glfw.PollEvents()
 
@@ -2517,21 +2517,12 @@ func main() {
 				widget.Render()
 			}
 
-			window.SwapBuffers()
-			{
-				// TODO: Calculate this better
-				now := time.Now()
-				timePassed := now.Sub(last)
-				last = now
-				fpsWidget.Push(timePassed.Seconds() * 1000)
-			}
 			spinner.Spinner++
-
 			redraw = false
+			fpsWidget.Push(time.Since(frameStartTime).Seconds() * 1000)
+			window.SwapBuffers()
 		} else {
 			time.Sleep(5 * time.Millisecond)
-
-			last = time.Now()
 		}
 
 		//runtime.Gosched()
