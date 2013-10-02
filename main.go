@@ -56,6 +56,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+
+	"reflect"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -891,9 +893,24 @@ func NewCompositeWidget(pos, size mathgl.Vec2d, Widgets []Widgeter) *CompositeWi
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
 	}
+	w.Layout() // TODO: Should this be automatic from above SetParent()?
 	return w
 }
 
+func (w *CompositeWidget) Layout() {
+	w.size = mathgl.Vec2d{}
+	for _, widget := range w.Widgets {
+		bottomRight := widget.Pos().Add(widget.Size())
+		for d := 0; d < len(w.size); d++ {
+			if bottomRight[d] > w.size[d] {
+				w.size[d] = bottomRight[d]
+			}
+		}
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
 func (w *CompositeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
@@ -924,12 +941,19 @@ const (
 )
 
 type FlowLayoutWidget struct {
-	CompositeWidget
-	flowLayoutType FlowLayoutType // TODO: Currently no public way to set
+	CompositeWidget // THINK: Should I use a pointer or value?
+	options         FlowLayoutWidgetOptions
 }
 
-func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter) *FlowLayoutWidget {
-	w := &FlowLayoutWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets)}
+type FlowLayoutWidgetOptions struct {
+	FlowLayoutType
+}
+
+func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *FlowLayoutWidgetOptions) *FlowLayoutWidget {
+	if options == nil {
+		options = &FlowLayoutWidgetOptions{}
+	}
+	w := &FlowLayoutWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets), options: *options}
 	// TODO: Unsure this is a good way of registering ourselves as a listener... can it be more automated? What if someone manually adds another widget later, this'd get bypassed...
 	/*for _, widget := range Widgets {
 		widget.AddChangeListener(w)
@@ -946,9 +970,9 @@ func (w *FlowLayoutWidget) Layout() {
 	var combinedOffset float64
 	for _, widget := range w.CompositeWidget.Widgets {
 		pos := mathgl.Vec2d{}
-		pos[w.flowLayoutType] = combinedOffset
+		pos[w.options.FlowLayoutType] = combinedOffset
 		widget.SetPos(pos)
-		combinedOffset += widget.Size()[w.flowLayoutType] + 2
+		combinedOffset += widget.Size()[w.options.FlowLayoutType] + 2
 	}
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
@@ -1068,7 +1092,7 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 	//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
 	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
-	w := &LiveCmdExpeWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, dst})}
+	w := &LiveCmdExpeWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, dst}, nil)}
 
 	UniversalClock.AddChangeListener(w)
 
@@ -1257,6 +1281,131 @@ func (w *FpsWidget) Push(sample float64) {
 	if len(w.samples) > 30 {
 		w.samples = w.samples[len(w.samples)-30:]
 	}
+}
+
+// ---
+
+type Bool struct {
+	bool
+	DepNode
+}
+
+func (t *Bool) Get() bool {
+	return t.bool
+}
+func (t *Bool) Toggle() {
+	t.bool = !t.bool
+	t.NotifyAllListeners()
+}
+
+type GoonWidget struct {
+	*CompositeWidget
+	a        interface{}
+	expanded bool
+}
+
+func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
+	/*expanded := &Bool{}
+
+	action := func() {
+		expanded.Toggle()
+	}
+	b := NewButtonWidget(mathgl.Vec2d{}, action)
+
+	contentFunc := func() string {
+		if expanded.Get() {
+			return goon.Sdump(a)
+		} else {
+			return fmt.Sprintf("(%T)(%v)", a, a)
+		}
+	}
+	dependees := []DepNodeI{expanded}
+	mc := NewMultilineContentFunc(contentFunc, dependees)
+	mc.NotifyChange()
+	t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{16 + 2}, mc)
+
+	return &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{b, t}), a: a}*/
+
+	b := NewButtonWidget(mathgl.Vec2d{}, nil)
+	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{b, &Widget{}}), a: a}
+	b.SetAction(func() { w.flip() })
+	w.setupInternals()
+	return w
+}
+
+func (w *GoonWidget) flip() {
+	w.expanded = !w.expanded
+	w.setupInternals()
+}
+func (w *GoonWidget) setupInternals() {
+	var f *FlowLayoutWidget
+	if !w.expanded {
+		mc := NewMultilineContentString(fmt.Sprintf("(%T)(%v)", w.a, w.a))
+		t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
+		f = NewFlowLayoutWidget(mathgl.Vec2d{16 + 2}, []Widgeter{t}, nil)
+	} else {
+		f = setupInternals2(w.a)
+		if f == nil {
+			f = NewFlowLayoutWidget(mathgl.Vec2d{16 + 2}, []Widgeter{}, nil)
+		}
+	}
+	f.SetParent(w) // HACK: This needs to be automated, it's too easy to forget to do
+	w.Widgets[1] = f
+	f.Layout()
+}
+
+func setupInternals2(a interface{}) (f *FlowLayoutWidget) {
+	v := reflect.ValueOf(a)
+
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		// TODO: Instead of skipping nil values, maybe pass the info as a bool parameter to query?
+		if v.IsNil() {
+			return
+		}
+	}
+
+	widgets := []Widgeter(nil)
+
+	switch v.Kind() {
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if vv := v.Field(i); vv.CanInterface() {
+				w := NewGoonWidget(mathgl.Vec2d{}, vv.Interface())
+				widgets = append(widgets, w)
+			} else {
+				//mc := NewMultilineContentString(goon.Sdump(vv))
+				mc := NewMultilineContentString(fmt.Sprintf("(?)(can't intf...%s)", vv.String()))
+				w := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
+				widgets = append(widgets, w)
+			}
+		}
+		/*case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				s.findAll(v.Field(i), query)
+			}
+		case reflect.Map:
+			for _, key := range v.MapKeys() {
+				s.findAll(v.MapIndex(key), query)
+			}
+		case reflect.Array, reflect.Slice:
+			for i := 0; i < v.Len(); i++ {
+				s.findAll(v.Index(i), query)
+			}
+		case reflect.Ptr:
+			if !v.IsNil() {
+				if !s.Visited[v.Pointer()] {
+					s.Visited[v.Pointer()] = true
+					s.findAll(v.Elem(), query)
+				}
+			}
+		case reflect.Interface:
+			if !v.IsNil() {
+				s.findAll(v.Elem(), query)
+			}*/
+	}
+
+	return NewFlowLayoutWidget(mathgl.Vec2d{16 + 2}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 }
 
 // ---
@@ -1515,7 +1664,7 @@ type MultilineContentFunc struct {
 	contentFunc       func() string
 }
 
-// TODO: Merge the func and dependees into one struct? Maybe can't if funcs can have different signatures...
+// THINK: Merge the func and dependees into one struct? Maybe can't if funcs can have different signatures...
 func NewMultilineContentFunc(contentFunc func() string, dependees []DepNodeI) *MultilineContentFunc {
 	this := &MultilineContentFunc{MultilineContent: NewMultilineContent(), contentFunc: contentFunc}
 	for _, dependee := range dependees {
@@ -1748,6 +1897,10 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.caretPosition.Move(+3)
 			} else if inputEvent.ModifierKey == 0 {
 				w.caretPosition.TryMoveV(+1)
+			}
+		case glfw.KeyC:
+			if inputEvent.ModifierKey == glfw.ModControl { // TODO: Use ModSuper when it works
+				globalWindow.SetClipboardString(w.Content.Content())
 			}
 		case glfw.KeyV:
 			if inputEvent.ModifierKey == glfw.ModSuper {
@@ -2256,7 +2409,7 @@ func main() {
 
 	//glfw.WindowHint(glfw.Samples, 32) // Anti-aliasing
 	//glfw.WindowHint(glfw.Decorated, glfw.False)
-	window, err := glfw.CreateWindow(400, 400, "", nil, nil)
+	window, err := glfw.CreateWindow(600, 400, "", nil, nil)
 	globalWindow = window
 	CheckError(err)
 	window.MakeContextCurrent()
@@ -2268,13 +2421,13 @@ func main() {
 	fmt.Println(gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
 
 	// Put the window on the right edge of primary monitor
-	{
+	if false {
 		m, err := glfw.GetPrimaryMonitor()
 		CheckError(err)
 		vm, err := m.GetVideoMode()
 		CheckError(err)
 
-		window.SetPosition(vm.Width-410, (vm.Height-410)/2)
+		window.SetPosition(vm.Width-610, (vm.Height-410)/2)
 	}
 	glfw.SwapInterval(1) // Vsync
 
@@ -2343,7 +2496,7 @@ func main() {
 			}
 			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, action)
 
-			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst})
+			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
 		}
 		// GoForcedUseWidget2
@@ -2369,7 +2522,7 @@ func main() {
 			}
 			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, action)
 
-			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst})
+			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
 		}
 
@@ -2387,6 +2540,29 @@ func main() {
 			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
 			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 		}
+
+		type Inner struct {
+			Field1 string
+			Field2 int
+		}
+		type Lang struct {
+			Name  string
+			Year  int
+			URL   string
+			Inner Inner
+		}
+		x := Lang{
+			Name: "Go",
+			Year: 2009,
+			URL:  "http",
+			Inner: Inner{
+				Field1: "Secret!",
+			},
+		}
+
+		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
+		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, x))
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
