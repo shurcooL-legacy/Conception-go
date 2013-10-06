@@ -490,8 +490,7 @@ func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
 
 func (w *ButtonWidget) SetAction(action func()) {
 	w.action = action
-	mc := NewMultilineContentString(GetSourceAsString(w.action))
-	w.tooltip = NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
+	w.tooltip = NewTextLabelWidgetString(mathgl.Vec2d{}, GetSourceAsString(w.action))
 }
 
 func (w *ButtonWidget) Render() {
@@ -544,12 +543,47 @@ func (w *ButtonWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
+type TriButtonWidget struct {
+	*ButtonWidget
+	state bool
+}
+
+func NewTriButtonWidget(pos mathgl.Vec2d) *TriButtonWidget {
+	w := &TriButtonWidget{ButtonWidget: NewButtonWidget(pos, nil)}
+	//w.SetAction()
+
+	return w
+}
+
+func (w *TriButtonWidget) Render() {
+	if !w.state {
+		gl.Color3d(0, 0, 0)
+		gl.Begin(gl.TRIANGLES)
+		gl.Vertex2d(gl.Double(w.pos[0]), gl.Double(w.pos[1]))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]), gl.Double(w.pos[1]+w.size[1]/2))
+		gl.Vertex2d(gl.Double(w.pos[0]), gl.Double(w.pos[1]+w.size[1]))
+		gl.End()
+	} else {
+		gl.Begin(gl.TRIANGLES)
+		gl.Vertex2d(gl.Double(w.pos[0]), gl.Double(w.pos[1]))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]), gl.Double(w.pos[1]))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]/2), gl.Double(w.pos[1]+w.size[1]))
+		gl.End()
+	}
+}
+
+func (w *TriButtonWidget) State() bool {
+	return w.state
+}
+
+// ---
+
 type BoxWidget struct {
 	Widget
 	Name string
 }
 
-var boxWidgetTooltip = NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(GetSourceAsString((*BoxWidget).ProcessEvent)))
+var boxWidgetTooltip = NewTextLabelWidgetString(mathgl.Vec2d{}, GetSourceAsString((*BoxWidget).ProcessEvent))
 
 func (w *BoxWidget) Render() {
 	// HACK: Brute-force check the mouse pointer if it contains this widget
@@ -1316,9 +1350,9 @@ func (t *Bool) Toggle() {
 }
 
 type GoonWidget struct {
-	*FlowLayoutWidget
+	*CompositeWidget
 	a        interface{}
-	expanded bool
+	expanded *TriButtonWidget
 }
 
 func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
@@ -1343,35 +1377,38 @@ func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
 
 	return &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{b, t}), a: a}*/
 
-	w := &GoonWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, nil, nil), a: a}
+	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, nil), a: a}
 	w.setupInternals()
 	return w
 }
 
 func (w *GoonWidget) flip() {
-	w.expanded = !w.expanded
+	w.expanded.state = !w.expanded.state
 	w.setupInternals()
 }
 func (w *GoonWidget) setupInternals() {
 	expandable := w.checkInternals()
 	if expandable {
-		b := NewButtonWidget(mathgl.Vec2d{}, nil)
-		b.SetAction(func() { w.flip() })
+		if w.expanded == nil {
+			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-16 - 2})
+			w.expanded.SetAction(func() { w.flip() })
+			w.expanded.state = !w.expanded.state
+		}
 
-		w.FlowLayoutWidget = NewFlowLayoutWidget(w.pos, []Widgeter{b, &Widget{}}, nil)
+		w.CompositeWidget = NewCompositeWidget(w.pos, mathgl.Vec2d{}, []Widgeter{w.expanded, &Widget{}})
 	} else {
-		w.FlowLayoutWidget = NewFlowLayoutWidget(w.pos, []Widgeter{&Widget{}}, nil)
+		w.CompositeWidget = NewCompositeWidget(w.pos, mathgl.Vec2d{}, []Widgeter{&Widget{}})
 	}
 
 	var f *FlowLayoutWidget
-	if !w.expanded {
-		var mc *MultilineContent
+	if w.expanded == nil || !w.expanded.State() {
+		var s string
 		if !expandable {
-			mc = NewMultilineContentString(fmt.Sprintf("(%T)(%v)", w.a, w.a))
+			s = fmt.Sprintf("(%T)(%v)", w.a, w.a)
 		} else {
-			mc = NewMultilineContentString(fmt.Sprintf("%s{...}", reflect.TypeOf(w.a).Name()))
+			s = fmt.Sprintf("%s{...}", reflect.TypeOf(w.a).Name())
 		}
-		t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
+		t := NewTextLabelWidgetString(mathgl.Vec2d{}, s)
 		f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{t}, nil)
 	} else {
 		f = setupInternals2(w.a)
@@ -1416,20 +1453,22 @@ func setupInternals2(a interface{}) (f *FlowLayoutWidget) {
 		}
 	}
 
-	widgets := []Widgeter(nil)
+	widgets := []Widgeter{NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", reflect.TypeOf(a).Name()))}
 
 	switch v.Kind() {
 	case reflect.Struct:
 		for i := 0; i < v.NumField(); i++ {
+			var w Widgeter
+			tab := mathgl.Vec2d{8 * 4}
 			if vv := v.Field(i); vv.CanInterface() {
-				w := NewGoonWidget(mathgl.Vec2d{}, vv.Interface())
-				widgets = append(widgets, w)
+				w = NewGoonWidget(tab, vv.Interface())
 			} else {
 				//mc := NewMultilineContentString(goon.Sdump(vv))
-				mc := NewMultilineContentString(fmt.Sprintf("(?)(can't intf...%s)", vv.String()))
-				w := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
-				widgets = append(widgets, w)
+				w = NewTextLabelWidgetString(tab, fmt.Sprintf("(?)(can't intf...%s)", vv.String()))
 			}
+
+			spacer := NewCompositeWidget(mathgl.Vec2d{}, mathgl.Vec2d{}, []Widgeter{w})
+			widgets = append(widgets, spacer)
 		}
 		/*case reflect.Struct:
 			for i := 0; i < v.NumField(); i++ {
@@ -1455,6 +1494,8 @@ func setupInternals2(a interface{}) (f *FlowLayoutWidget) {
 				s.findAll(v.Elem(), query)
 			}*/
 	}
+
+	widgets = append(widgets, NewTextLabelWidgetString(mathgl.Vec2d{}, "}"))
 
 	return NewFlowLayoutWidget(mathgl.Vec2d{}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 }
@@ -1749,6 +1790,12 @@ func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *
 		Content: mc,
 	}
 	mc.AddChangeListener(w) // TODO: What about removing w when it's "deleted"?
+	return w
+}
+
+func NewTextLabelWidgetString(pos mathgl.Vec2d, s string) *TextLabelWidget {
+	mc := NewMultilineContentString(s)
+	w := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
 	return w
 }
 
@@ -2711,7 +2758,11 @@ func main() {
 
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, x))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 10}, x))
+		if false {
+			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[17])) }
+			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{600, 10}, contentFunc, []DepNodeI{&UniversalClock}))
+		}
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
