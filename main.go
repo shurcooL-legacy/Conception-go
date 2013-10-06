@@ -1388,17 +1388,18 @@ func (w *GoonWidget) flip() {
 }
 func (w *GoonWidget) setupInternals() {
 	expandable := w.checkInternals()
+	oldParent := w.parent
 	if expandable {
 		if w.expanded == nil {
 			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-16 - 2})
 			w.expanded.SetAction(func() { w.flip() })
-			w.expanded.state = !w.expanded.state
 		}
 
 		w.CompositeWidget = NewCompositeWidget(w.pos, mathgl.Vec2d{}, []Widgeter{w.expanded, &Widget{}})
 	} else {
 		w.CompositeWidget = NewCompositeWidget(w.pos, mathgl.Vec2d{}, []Widgeter{&Widget{}})
 	}
+	w.SetParent(oldParent)
 
 	var f *FlowLayoutWidget
 	if w.expanded == nil || !w.expanded.State() {
