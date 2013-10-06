@@ -967,12 +967,20 @@ func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *FlowLayo
 }
 
 func (w *FlowLayoutWidget) Layout() {
+	w.size = mathgl.Vec2d{}
 	var combinedOffset float64
 	for _, widget := range w.CompositeWidget.Widgets {
 		pos := mathgl.Vec2d{}
 		pos[w.options.FlowLayoutType] = combinedOffset
 		widget.SetPos(pos)
 		combinedOffset += widget.Size()[w.options.FlowLayoutType] + 2
+
+		bottomRight := widget.Pos().Add(widget.Size())
+		for d := 0; d < len(w.size); d++ {
+			if bottomRight[d] > w.size[d] {
+				w.size[d] = bottomRight[d]
+			}
+		}
 	}
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
@@ -1246,9 +1254,11 @@ func (w *SpinnerWidget) Render() {
 
 // ---
 
+type fpsSample struct{ Render, Total float64 }
+
 type FpsWidget struct {
 	Widget
-	samples []float64
+	samples []fpsSample
 }
 
 func NewFpsWidget(pos mathgl.Vec2d) *FpsWidget {
@@ -1264,23 +1274,30 @@ func (w *FpsWidget) Render() {
 	gl.Vertex2d(gl.Double(0), gl.Double(-1000.0/60))
 	gl.Vertex2d(gl.Double(30), gl.Double(-1000.0/60))
 	for index, sample := range w.samples {
-		if sample <= 1000.0/60*1.25 {
+		if sample.Render <= 1000.0/60*1.25 {
 			gl.Color3d(0, 0, 0)
 		} else {
 			gl.Color3d(1, 0, 0)
 		}
 
-		gl.Vertex2d(gl.Double(30-len(w.samples)+index), gl.Double(-sample))
+		gl.Vertex2d(gl.Double(30-len(w.samples)+index), gl.Double(-sample.Render))
 		gl.Vertex2d(gl.Double(30-len(w.samples)+index), 0)
+
+		gl.Color3d(0.65, 0.65, 0.65)
+		gl.Vertex2d(gl.Double(30-len(w.samples)+index), gl.Double(-sample.Total))
+		gl.Vertex2d(gl.Double(30-len(w.samples)+index), gl.Double(-sample.Render))
 	}
 	gl.End()
 }
 
-func (w *FpsWidget) Push(sample float64) {
-	w.samples = append(w.samples, sample)
+func (w *FpsWidget) PushTimeToRender(sample float64) {
+	w.samples = append(w.samples, fpsSample{Render: sample})
 	if len(w.samples) > 30 {
 		w.samples = w.samples[len(w.samples)-30:]
 	}
+}
+func (w *FpsWidget) PushTimeTotal(sample float64) {
+	w.samples[len(w.samples)-1].Total = sample
 }
 
 // ---
@@ -1299,7 +1316,7 @@ func (t *Bool) Toggle() {
 }
 
 type GoonWidget struct {
-	*CompositeWidget
+	*FlowLayoutWidget
 	a        interface{}
 	expanded bool
 }
@@ -1326,9 +1343,7 @@ func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
 
 	return &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{b, t}), a: a}*/
 
-	b := NewButtonWidget(mathgl.Vec2d{}, nil)
-	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{b, &Widget{}}), a: a}
-	b.SetAction(func() { w.flip() })
+	w := &GoonWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, nil, nil), a: a}
 	w.setupInternals()
 	return w
 }
@@ -1338,20 +1353,56 @@ func (w *GoonWidget) flip() {
 	w.setupInternals()
 }
 func (w *GoonWidget) setupInternals() {
+	expandable := w.checkInternals()
+	if expandable {
+		b := NewButtonWidget(mathgl.Vec2d{}, nil)
+		b.SetAction(func() { w.flip() })
+
+		w.FlowLayoutWidget = NewFlowLayoutWidget(w.pos, []Widgeter{b, &Widget{}}, nil)
+	} else {
+		w.FlowLayoutWidget = NewFlowLayoutWidget(w.pos, []Widgeter{&Widget{}}, nil)
+	}
+
 	var f *FlowLayoutWidget
 	if !w.expanded {
-		mc := NewMultilineContentString(fmt.Sprintf("(%T)(%v)", w.a, w.a))
+		var mc *MultilineContent
+		if !expandable {
+			mc = NewMultilineContentString(fmt.Sprintf("(%T)(%v)", w.a, w.a))
+		} else {
+			mc = NewMultilineContentString(fmt.Sprintf("%s{...}", reflect.TypeOf(w.a).Name()))
+		}
 		t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
-		f = NewFlowLayoutWidget(mathgl.Vec2d{16 + 2}, []Widgeter{t}, nil)
+		f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{t}, nil)
 	} else {
 		f = setupInternals2(w.a)
 		if f == nil {
-			f = NewFlowLayoutWidget(mathgl.Vec2d{16 + 2}, []Widgeter{}, nil)
+			f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{}, nil)
 		}
 	}
 	f.SetParent(w) // HACK: This needs to be automated, it's too easy to forget to do
-	w.Widgets[1] = f
+	w.Widgets[len(w.Widgets)-1] = f
 	f.Layout()
+}
+
+func (w *GoonWidget) checkInternals() (depth bool) {
+	a := w.a
+
+	v := reflect.ValueOf(a)
+
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		// TODO: Instead of skipping nil values, maybe pass the info as a bool parameter to query?
+		if v.IsNil() {
+			return false
+		}
+	}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		return true
+	default:
+		return false
+	}
 }
 
 func setupInternals2(a interface{}) (f *FlowLayoutWidget) {
@@ -1405,7 +1456,7 @@ func setupInternals2(a interface{}) (f *FlowLayoutWidget) {
 			}*/
 	}
 
-	return NewFlowLayoutWidget(mathgl.Vec2d{16 + 2}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+	return NewFlowLayoutWidget(mathgl.Vec2d{}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 }
 
 // ---
@@ -2420,14 +2471,13 @@ func main() {
 	}
 	fmt.Println(gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
 
-	// Put the window on the right edge of primary monitor
-	if false {
+	{
 		m, err := glfw.GetPrimaryMonitor()
 		CheckError(err)
 		vm, err := m.GetVideoMode()
 		CheckError(err)
 
-		window.SetPosition(vm.Width-610, (vm.Height-410)/2)
+		window.SetPosition((vm.Width-600)/2, (vm.Height-400)/2)
 	}
 	glfw.SwapInterval(1) // Vsync
 
@@ -2455,6 +2505,97 @@ func main() {
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 	keyboardPointer = &Pointer{VirtualCategory: TYPING}
+
+	inputEventQueue := []InputEvent{}
+
+	var lastMousePos mathgl.Vec2d
+	lastMousePos[0], lastMousePos[1] = window.GetCursorPosition()
+	MousePos := func(w *glfw.Window, x, y float64) {
+		//fmt.Println("MousePos:", x, y)
+
+		inputEvent := InputEvent{
+			Pointer:    mousePointer,
+			EventTypes: map[EventType]bool{SLIDER_EVENT: true, AXIS_EVENT: true},
+			InputId:    0,
+			Buttons:    nil,
+			Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
+			Axes:       []float64{x, y},
+		}
+		lastMousePos[0] = x
+		lastMousePos[1] = y
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+	}
+	window.SetCursorPositionCallback(MousePos)
+	MousePos(window, lastMousePos[0], lastMousePos[1])
+
+	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
+		offX += gl.Double(xoff * 10)
+		offY += gl.Double(yoff * 10)
+
+		inputEvent := InputEvent{
+			Pointer:    mousePointer,
+			EventTypes: map[EventType]bool{SLIDER_EVENT: true},
+			InputId:    2,
+			Buttons:    nil,
+			Sliders:    []float64{yoff, xoff},
+			Axes:       nil,
+		}
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+	})
+
+	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
+		inputEvent := InputEvent{
+			Pointer:    mousePointer,
+			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
+			InputId:    uint16(button),
+			Buttons:    []bool{action != glfw.Release},
+			Sliders:    nil,
+			Axes:       nil,
+		}
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+	})
+
+	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+		/*if key == glfw.KeyEnter && action == glfw.Press {
+			x, y := window.GetPosition()
+			window.SetPosition(x-16, y)
+		}*/
+
+		inputEvent := InputEvent{
+			Pointer:     keyboardPointer,
+			EventTypes:  map[EventType]bool{BUTTON_EVENT: true},
+			InputId:     uint16(key),
+			Buttons:     []bool{action != glfw.Release},
+			Sliders:     nil,
+			Axes:        nil,
+			ModifierKey: mods,
+		}
+		//fmt.Println(key, action, mods)
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // HACK
+	})
+
+	window.SetCharacterCallback(func(w *glfw.Window, char uint) {
+		inputEvent := InputEvent{
+			Pointer:    keyboardPointer,
+			EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
+			InputId:    uint16(char),
+			Buttons:    nil,
+			Sliders:    nil,
+			Axes:       nil,
+		}
+		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+		redraw = true // HACK
+	})
+
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	//gl.ClearColor(0.8, 0.3, 0.01, 1)
+	gl.ClearColor(0.85, 0.85, 0.85, 1)
+
+	// ---
 
 	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
 	widgets = append(widgets, &spinner)
@@ -2557,8 +2698,16 @@ func main() {
 			URL:  "http",
 			Inner: Inner{
 				Field1: "Secret!",
+				Field2: 123367,
 			},
 		}
+
+		/*Lang{
+			Name: "Go",
+			Year: 2009,
+			URL:  "http",
+			Inner: Inner{...},
+		}*/
 
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
@@ -2571,94 +2720,7 @@ func main() {
 	fpsWidget := NewFpsWidget(mathgl.Vec2d{10, 120})
 	widgets = append(widgets, fpsWidget)
 
-	inputEventQueue := []InputEvent{}
-
-	var lastMousePos mathgl.Vec2d
-	lastMousePos[0], lastMousePos[1] = window.GetCursorPosition()
-	MousePos := func(w *glfw.Window, x, y float64) {
-		//fmt.Println("MousePos:", x, y)
-
-		inputEvent := InputEvent{
-			Pointer:    mousePointer,
-			EventTypes: map[EventType]bool{SLIDER_EVENT: true, AXIS_EVENT: true},
-			InputId:    0,
-			Buttons:    nil,
-			Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
-			Axes:       []float64{x, y},
-		}
-		lastMousePos[0] = x
-		lastMousePos[1] = y
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
-	}
-	window.SetCursorPositionCallback(MousePos)
-	MousePos(window, lastMousePos[0], lastMousePos[1])
-
-	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
-		offX += gl.Double(xoff * 10)
-		offY += gl.Double(yoff * 10)
-
-		inputEvent := InputEvent{
-			Pointer:    mousePointer,
-			EventTypes: map[EventType]bool{SLIDER_EVENT: true},
-			InputId:    2,
-			Buttons:    nil,
-			Sliders:    []float64{yoff, xoff},
-			Axes:       nil,
-		}
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
-	})
-
-	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
-		inputEvent := InputEvent{
-			Pointer:    mousePointer,
-			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
-			InputId:    uint16(button),
-			Buttons:    []bool{action != glfw.Release},
-			Sliders:    nil,
-			Axes:       nil,
-		}
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
-	})
-
-	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		/*if key == glfw.KeyEnter && action == glfw.Press {
-			x, y := window.GetPosition()
-			window.SetPosition(x-16, y)
-		}*/
-
-		inputEvent := InputEvent{
-			Pointer:     keyboardPointer,
-			EventTypes:  map[EventType]bool{BUTTON_EVENT: true},
-			InputId:     uint16(key),
-			Buttons:     []bool{action != glfw.Release},
-			Sliders:     nil,
-			Axes:        nil,
-			ModifierKey: mods,
-		}
-		//fmt.Println(key, action, mods)
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // HACK
-	})
-
-	window.SetCharacterCallback(func(w *glfw.Window, char uint) {
-		inputEvent := InputEvent{
-			Pointer:    keyboardPointer,
-			EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
-			InputId:    uint16(char),
-			Buttons:    nil,
-			Sliders:    nil,
-			Axes:       nil,
-		}
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // HACK
-	})
-
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	//gl.ClearColor(0.8, 0.3, 0.01, 1)
-	gl.ClearColor(0.85, 0.85, 0.85, 1)
+	// ---
 
 	//keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
 	//widgets[len(widgets)-1].(*TextBoxWidget).Set("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")
@@ -2695,12 +2757,14 @@ func main() {
 
 			spinner.Spinner++
 			redraw = false
-			fpsWidget.Push(time.Since(frameStartTime).Seconds() * 1000)
+			fpsWidget.PushTimeToRender(time.Since(frameStartTime).Seconds() * 1000)
 			window.SwapBuffers()
 		} else {
 			time.Sleep(5 * time.Millisecond)
 		}
 
 		//runtime.Gosched()
+
+		fpsWidget.PushTimeTotal(time.Since(frameStartTime).Seconds() * 1000)
 	}
 }
