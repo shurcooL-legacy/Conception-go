@@ -69,6 +69,7 @@ var _ = GetThisGoSourceDir
 var _ = SprintAstBare
 var _ = errors.New
 var _ = GetVarName
+var _ = UnsafeReflectValue
 
 const katOnly = false
 
@@ -1353,11 +1354,15 @@ func (t *Bool) Toggle() {
 
 type GoonWidget struct {
 	*CompositeWidget
-	a        interface{}
+	a        reflect.Value
 	expanded *TriButtonWidget
 }
 
 func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
+	return newGoonWidget(pos, reflect.ValueOf(a))
+}
+
+func newGoonWidget(pos mathgl.Vec2d, a reflect.Value) *GoonWidget {
 	/*expanded := &Bool{}
 
 	action := func() {
@@ -1378,6 +1383,8 @@ func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
 	t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{16 + 2}, mc)
 
 	return &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{b, t}), a: a}*/
+
+	a = UnsafeReflectValue(a)
 
 	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, nil), a: a}
 	w.setupInternals()
@@ -1405,20 +1412,16 @@ func (w *GoonWidget) setupInternals() {
 
 	var f *FlowLayoutWidget
 	if w.expanded == nil || !w.expanded.State() {
-		var s string
+		var mc MultilineContentI
 		if !expandable {
-			s = fmt.Sprintf("(%T)(%v)", w.a, w.a)
+			mc = NewMultilineContentFuncInstant(func() string { return fmt.Sprintf("(%s)(%+v)", getTypeString(w.a.Elem()), w.a.Elem().Interface()) })
 		} else {
-			//s = fmt.Sprintf("%s{...}", reflect.TypeOf(w.a).Name())
-			s = fmt.Sprintf("%T{...}", w.a)
+			mc = NewMultilineContentString(fmt.Sprintf("%s{...}", getTypeString(w.a.Elem())))
 		}
-		t := NewTextLabelWidgetString(mathgl.Vec2d{}, s)
+		t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
 		f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{t}, nil)
 	} else {
 		f = setupInternals2(w.a)
-		if f == nil {
-			f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{}, nil)
-		}
 	}
 	f.SetParent(w) // HACK: This needs to be automated, it's too easy to forget to do
 	w.Widgets[len(w.Widgets)-1] = f
@@ -1426,9 +1429,7 @@ func (w *GoonWidget) setupInternals() {
 }
 
 func (w *GoonWidget) checkInternals() (depth bool) {
-	a := w.a
-
-	v := reflect.ValueOf(a)
+	v := w.a.Elem()
 
 	switch v.Kind() {
 	case reflect.Struct, reflect.Map, reflect.Array, reflect.Slice, reflect.Interface:
@@ -1440,11 +1441,15 @@ func (w *GoonWidget) checkInternals() (depth bool) {
 	}
 }
 
-func setupInternals2(a interface{}) (f *FlowLayoutWidget) {
-	v := reflect.ValueOf(a)
+func getTypeString(a reflect.Value) string {
+	//return a.Type().Name()
+	return fmt.Sprintf("%T", a.Interface())
+}
 
-	//widgets := []Widgeter{NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", reflect.TypeOf(a).Name()))}
-	widgets := []Widgeter{NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%T{", a))}
+func setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
+	v := a.Elem()
+
+	widgets := []Widgeter{NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", getTypeString(v)))}
 
 	switch v.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
@@ -1481,13 +1486,17 @@ func setupInternals2(a interface{}) (f *FlowLayoutWidget) {
 func setupInternals3(a reflect.Value) Widgeter {
 	tab := mathgl.Vec2d{8 * 4}
 
-	if !a.CanInterface() {
+	/*if !a.CanInterface() {
 		a = UnsafeReflectValue(a)
-	}
+	}*/
 
 	var w Widgeter
-	if vv := a; vv.CanInterface() {
-		w = NewGoonWidget(tab, vv.Interface())
+	if a.Kind() == reflect.Float64 {
+		w = NewTest2Widget(tab, a.Addr().Interface().(*float64))
+	} else if vv := a; vv.CanAddr() {
+		w = newGoonWidget(tab, vv.Addr())
+	} else if vv := a; vv.Elem().CanAddr() { // HACK
+		w = newGoonWidget(tab, vv.Elem().Addr())
 	} else {
 		//w = NewTextLabelWidgetString(tab, goon.Sdump(vv))
 		w = NewTextLabelWidgetString(tab, fmt.Sprintf("(%s)(can't intf...%s)", vv.Kind().String(), vv.String()))
@@ -1773,6 +1782,22 @@ func (this *MultilineContentFunc) NotifyChange() {
 	if NewContent != this.MultilineContent.Content() {
 		this.MultilineContent.Set(NewContent)
 	}
+}
+
+// ---
+
+type MultilineContentFuncInstant struct {
+	*MultilineContentFunc
+}
+
+func NewMultilineContentFuncInstant(contentFunc func() string) *MultilineContentFuncInstant {
+	return &MultilineContentFuncInstant{MultilineContentFunc: NewMultilineContentFunc(contentFunc, nil)}
+}
+
+// HACK
+func (this *MultilineContentFuncInstant) Content() string {
+	this.MultilineContentFunc.NotifyChange()
+	return this.MultilineContentFunc.Content()
 }
 
 // ---
@@ -2756,10 +2781,10 @@ func main() {
 
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 10}, x))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 40}, NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, widgets))
-		goon.Dump(NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3}))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 10}, &x))
+		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 40}, &y))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
