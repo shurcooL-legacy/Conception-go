@@ -58,6 +58,8 @@ import (
 	"go/token"
 
 	"reflect"
+
+	. "gist.github.com/6724654.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -1407,7 +1409,8 @@ func (w *GoonWidget) setupInternals() {
 		if !expandable {
 			s = fmt.Sprintf("(%T)(%v)", w.a, w.a)
 		} else {
-			s = fmt.Sprintf("%s{...}", reflect.TypeOf(w.a).Name())
+			//s = fmt.Sprintf("%s{...}", reflect.TypeOf(w.a).Name())
+			s = fmt.Sprintf("%T{...}", w.a)
 		}
 		t := NewTextLabelWidgetString(mathgl.Vec2d{}, s)
 		f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{t}, nil)
@@ -1428,16 +1431,10 @@ func (w *GoonWidget) checkInternals() (depth bool) {
 	v := reflect.ValueOf(a)
 
 	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
-		// TODO: Instead of skipping nil values, maybe pass the info as a bool parameter to query?
-		if v.IsNil() {
-			return false
-		}
-	}
-
-	switch v.Kind() {
-	case reflect.Struct:
+	case reflect.Struct, reflect.Map, reflect.Array, reflect.Slice, reflect.Interface:
 		return true
+	case reflect.Ptr: //reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Slice
+		return !v.IsNil()
 	default:
 		return false
 	}
@@ -1446,59 +1443,59 @@ func (w *GoonWidget) checkInternals() (depth bool) {
 func setupInternals2(a interface{}) (f *FlowLayoutWidget) {
 	v := reflect.ValueOf(a)
 
+	//widgets := []Widgeter{NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", reflect.TypeOf(a).Name()))}
+	widgets := []Widgeter{NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%T{", a))}
+
 	switch v.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
 		// TODO: Instead of skipping nil values, maybe pass the info as a bool parameter to query?
 		if v.IsNil() {
-			return
+			widgets = append(widgets, NewTextLabelWidgetString(mathgl.Vec2d{}, "}"))
+
+			return NewFlowLayoutWidget(mathgl.Vec2d{}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 		}
 	}
-
-	widgets := []Widgeter{NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", reflect.TypeOf(a).Name()))}
 
 	switch v.Kind() {
 	case reflect.Struct:
 		for i := 0; i < v.NumField(); i++ {
-			var w Widgeter
-			tab := mathgl.Vec2d{8 * 4}
-			if vv := v.Field(i); vv.CanInterface() {
-				w = NewGoonWidget(tab, vv.Interface())
-			} else {
-				//mc := NewMultilineContentString(goon.Sdump(vv))
-				w = NewTextLabelWidgetString(tab, fmt.Sprintf("(?)(can't intf...%s)", vv.String()))
-			}
-
-			spacer := NewCompositeWidget(mathgl.Vec2d{}, mathgl.Vec2d{}, []Widgeter{w})
-			widgets = append(widgets, spacer)
+			widgets = append(widgets, setupInternals3(v.Field(i)))
 		}
-		/*case reflect.Struct:
-			for i := 0; i < v.NumField(); i++ {
-				s.findAll(v.Field(i), query)
-			}
-		case reflect.Map:
-			for _, key := range v.MapKeys() {
-				s.findAll(v.MapIndex(key), query)
-			}
-		case reflect.Array, reflect.Slice:
-			for i := 0; i < v.Len(); i++ {
-				s.findAll(v.Index(i), query)
-			}
-		case reflect.Ptr:
-			if !v.IsNil() {
-				if !s.Visited[v.Pointer()] {
-					s.Visited[v.Pointer()] = true
-					s.findAll(v.Elem(), query)
-				}
-			}
-		case reflect.Interface:
-			if !v.IsNil() {
-				s.findAll(v.Elem(), query)
-			}*/
+	case reflect.Map:
+		for _, key := range v.MapKeys() {
+			widgets = append(widgets, setupInternals3(v.MapIndex(key)))
+		}
+	case reflect.Array, reflect.Slice:
+		for i := 0; i < v.Len(); i++ {
+			widgets = append(widgets, setupInternals3(v.Index(i)))
+		}
+	case reflect.Ptr, reflect.Interface:
+		widgets = append(widgets, setupInternals3(v.Elem()))
 	}
 
 	widgets = append(widgets, NewTextLabelWidgetString(mathgl.Vec2d{}, "}"))
 
 	return NewFlowLayoutWidget(mathgl.Vec2d{}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+}
+
+func setupInternals3(a reflect.Value) Widgeter {
+	tab := mathgl.Vec2d{8 * 4}
+
+	if !a.CanInterface() {
+		a = UnsafeReflectValue(a)
+	}
+
+	var w Widgeter
+	if vv := a; vv.CanInterface() {
+		w = NewGoonWidget(tab, vv.Interface())
+	} else {
+		//w = NewTextLabelWidgetString(tab, goon.Sdump(vv))
+		w = NewTextLabelWidgetString(tab, fmt.Sprintf("(%s)(can't intf...%s)", vv.Kind().String(), vv.String()))
+	}
+
+	spacer := NewCompositeWidget(mathgl.Vec2d{}, mathgl.Vec2d{}, []Widgeter{w})
+
+	return spacer
 }
 
 // ---
@@ -1796,7 +1793,7 @@ func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *
 
 func NewTextLabelWidgetString(pos mathgl.Vec2d, s string) *TextLabelWidget {
 	mc := NewMultilineContentString(s)
-	w := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
+	w := NewTextLabelWidgetExternalContent(pos, mc)
 	return w
 }
 
@@ -2716,7 +2713,7 @@ func main() {
 		}
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
-		{
+		if false {
 			w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
 			widgets[12].(*LiveCmdExpeWidget).Widgets = append(widgets[12].(*LiveCmdExpeWidget).Widgets, w)
 			w.SetParent(widgets[12].(*LiveCmdExpeWidget).FlowLayoutWidget)
@@ -2737,13 +2734,13 @@ func main() {
 		type Lang struct {
 			Name  string
 			Year  int
-			URL   string
+			URLs  [2]string
 			Inner Inner
 		}
 		x := Lang{
 			Name: "Go",
 			Year: 2009,
-			URL:  "http",
+			URLs: [2]string{"http", "https"},
 			Inner: Inner{
 				Field1: "Secret!",
 				Field2: 123367,
@@ -2760,10 +2757,9 @@ func main() {
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 10}, x))
-		if false {
-			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[17])) }
-			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{600, 10}, contentFunc, []DepNodeI{&UniversalClock}))
-		}
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 40}, NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, widgets))
+		goon.Dump(NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3}))
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
@@ -2773,9 +2769,6 @@ func main() {
 	widgets = append(widgets, fpsWidget)
 
 	// ---
-
-	//keyboardPointer.OriginMapping = []Widgeter{widgets[len(widgets)-1]}
-	//widgets[len(widgets)-1].(*TextBoxWidget).Set("blah\nnew line\n\thello tab\n.\ttab\n..\ttab\n...\ttab\n....\ttab! step by step\n\t\ttwo tabs.")
 
 	//last := window.GetClipboardString()
 
