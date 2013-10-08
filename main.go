@@ -1414,6 +1414,7 @@ func (w *GoonWidget) setupInternals() {
 	if w.expanded == nil || !w.expanded.State() {
 		var mc MultilineContentI
 		if !expandable {
+			// TODO: Strings need %#v, numbers need %+v
 			mc = NewMultilineContentFuncInstant(func() string { return fmt.Sprintf("(%s)(%+v)", getTypeString(w.a.Elem()), w.a.Elem().Interface()) })
 		} else {
 			mc = NewMultilineContentString(fmt.Sprintf("%s{...}", getTypeString(w.a.Elem())))
@@ -1493,6 +1494,8 @@ func setupInternals3(a reflect.Value) Widgeter {
 	var w Widgeter
 	if a.Kind() == reflect.Float64 {
 		w = NewTest2Widget(tab, a.Addr().Interface().(*float64))
+	} else if a.Kind() == reflect.String {
+		w = NewTextBoxWidgetExternalContent(tab, NewMultilineContentPointer(a.Addr().Interface().(*string)))
 	} else if vv := a; vv.CanAddr() {
 		w = newGoonWidget(tab, vv.Addr())
 	} else if vv := a; vv.Elem().CanAddr() { // HACK
@@ -1758,6 +1761,39 @@ func (this *MultilineContentFile) Path() string {
 
 // ---
 
+type MultilineContentPointer struct {
+	*MultilineContent
+	p *string
+}
+
+func NewMultilineContentPointer(p *string) *MultilineContentPointer {
+	this := &MultilineContentPointer{MultilineContent: NewMultilineContent(), p: p}
+	this.Set(*p)
+	UniversalClock.AddChangeListener(this)
+	return this
+}
+
+func (this *MultilineContentPointer) Set(content string) {
+	this.content = content
+	this.updateLines()
+
+	// TODO: This shouldn't be triggered from TryReadFile() update below... Nor this.Set() in NewMultilineContentPointer().
+	*this.p = this.Content()
+
+	this.NotifyAllListeners()
+}
+
+func (this *MultilineContentPointer) NotifyChange() {
+	// Check if the file has been changed externally, and if so, override this widget
+	NewContent := *this.p
+	if NewContent != this.Content() {
+		// TODO: Have this not trigger WriteFile() somehow...
+		this.Set(NewContent)
+	}
+}
+
+// ---
+
 type MultilineContentFunc struct {
 	*MultilineContent // TODO: Explore this being a pointer vs value
 	contentFunc       func() string
@@ -1794,10 +1830,18 @@ func NewMultilineContentFuncInstant(contentFunc func() string) *MultilineContent
 	return &MultilineContentFuncInstant{MultilineContentFunc: NewMultilineContentFunc(contentFunc, nil)}
 }
 
-// HACK
+// HACK: Because a func that calls Content(), Lines(), LongestLine() in some arbitrary order will get potentitally inconsistent results
 func (this *MultilineContentFuncInstant) Content() string {
 	this.MultilineContentFunc.NotifyChange()
 	return this.MultilineContentFunc.Content()
+}
+func (this *MultilineContentFuncInstant) Lines() []contentLine {
+	this.MultilineContentFunc.NotifyChange()
+	return this.MultilineContentFunc.Lines()
+}
+func (this *MultilineContentFuncInstant) LongestLine() uint32 {
+	this.MultilineContentFunc.NotifyChange()
+	return this.MultilineContentFunc.LongestLine()
 }
 
 // ---
@@ -2738,7 +2782,7 @@ func main() {
 		}
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
-		if false {
+		{
 			w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
 			widgets[12].(*LiveCmdExpeWidget).Widgets = append(widgets[12].(*LiveCmdExpeWidget).Widgets, w)
 			w.SetParent(widgets[12].(*LiveCmdExpeWidget).FlowLayoutWidget)
