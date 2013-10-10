@@ -493,7 +493,10 @@ func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
 
 func (w *ButtonWidget) SetAction(action func()) {
 	w.action = action
-	w.tooltip = NewTextLabelWidgetString(mathgl.Vec2d{}, GetSourceAsString(w.action))
+
+	if action != nil {
+		go func() { w.tooltip = NewTextLabelWidgetString(mathgl.Vec2d{}, GetSourceAsString(action)) }()
+	}
 }
 
 func (w *ButtonWidget) Render() {
@@ -517,7 +520,7 @@ func (w *ButtonWidget) Render() {
 	}
 
 	// Tooltip
-	if isHit {
+	if w.tooltip != nil && isHit {
 		mousePointerPositionLocal := w.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, 16}
 		w.tooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
@@ -556,6 +559,10 @@ func NewTriButtonWidget(pos mathgl.Vec2d) *TriButtonWidget {
 	//w.SetAction()
 
 	return w
+}
+
+func (w *TriButtonWidget) SetAction(action func()) {
+	w.action = action
 }
 
 func (w *TriButtonWidget) Render() {
@@ -2876,7 +2883,7 @@ func main() {
 			time.Sleep(5 * time.Millisecond)
 		}
 
-		//runtime.Gosched()
+		runtime.Gosched()
 
 		if redraw {
 			fpsWidget.PushTimeTotal(time.Since(frameStartTime).Seconds() * 1000)
