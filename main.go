@@ -370,7 +370,7 @@ type Test2Widget struct {
 }
 
 func NewTest2Widget(pos mathgl.Vec2d, field *float64) *Test2Widget {
-	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetContentFunc(pos, func() string { return TrimLastNewline(goon.Sdump(*field)) }, []DepNodeI{&UniversalClock}), field: field}
+	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, NewMultilineContentFuncInstant(func() string { return TrimLastNewline(goon.Sdump(*field)) })), field: field}
 }
 
 func (w *Test2Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -430,19 +430,19 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 		}
 		found := FindAll(fileAst, query)
 
-		out := ""
 		smallest := uint64(math.MaxUint64)
+		var smallestV interface{}
 		for v := range found {
 			size := uint64(v.(ast.Node).End() - v.(ast.Node).Pos())
 			if size < smallest {
-				out = fmt.Sprintf("%d-%d, ", v.(ast.Node).Pos()-1, v.(ast.Node).End()-1)
-				out += fmt.Sprintf("%p, %T\n", v, v)
-				out += SprintAst(fs, v) + "\n\n"
-				out += goon.Sdump(v)
-
+				smallestV = v
 				smallest = size
 			}
 		}
+		out := fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
+		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
+		out += SprintAst(fs, smallestV) + "\n\n"
+		out += goon.Sdump(smallestV)
 		return out
 	}
 
@@ -1049,7 +1049,7 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	gl.Rectd(0, 0, gl.Double(w.size[0]), gl.Double(w.size[1]))
 
 	gl.Color3d(0, 0, 0)
-	PrintLine(mathgl.Vec2d{0, 0}, s)
+	PrintText(mathgl.Vec2d{0, 0}, s)
 }
 
 // ---
@@ -2870,7 +2870,6 @@ func main() {
 			}
 
 			spinner.Spinner++
-			redraw = false
 			fpsWidget.PushTimeToRender(time.Since(frameStartTime).Seconds() * 1000)
 			window.SwapBuffers()
 		} else {
@@ -2879,6 +2878,9 @@ func main() {
 
 		//runtime.Gosched()
 
-		fpsWidget.PushTimeTotal(time.Since(frameStartTime).Seconds() * 1000)
+		if redraw {
+			fpsWidget.PushTimeTotal(time.Since(frameStartTime).Seconds() * 1000)
+			redraw = false
+		}
 	}
 }
