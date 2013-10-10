@@ -559,8 +559,8 @@ func NewTriButtonWidget(pos mathgl.Vec2d) *TriButtonWidget {
 }
 
 func (w *TriButtonWidget) Render() {
+	gl.Color3d(0, 0, 0)
 	if !w.state {
-		gl.Color3d(0, 0, 0)
 		gl.Begin(gl.TRIANGLES)
 		gl.Vertex2d(gl.Double(w.pos[0]), gl.Double(w.pos[1]))
 		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]), gl.Double(w.pos[1]+w.size[1]/2))
