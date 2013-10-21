@@ -2628,24 +2628,26 @@ func main() {
 	InitFont()
 	defer DeinitFont()
 
-	size := func(w *glfw.Window, width, height int) {
-		windowWidth, windowHeight := w.GetSize()
-		//fmt.Println("Framebuffer Size:", width, height, "Window Size:", windowWidth, windowHeight)
-		gl.Viewport(0, 0, gl.Sizei(width), gl.Sizei(height))
+	framebufferSizeCallback := func(w *glfw.Window, framebufferSize0, framebufferSize1 int) {
+		gl.Viewport(0, 0, gl.Sizei(framebufferSize0), gl.Sizei(framebufferSize1))
+
+		var windowSize [2]int
+		windowSize[0], windowSize[1] = w.GetSize()
 
 		// Update the projection matrix
 		gl.MatrixMode(gl.PROJECTION)
 		gl.LoadIdentity()
-		gl.Ortho(0, gl.Double(windowWidth), gl.Double(windowHeight), 0, -1, 1)
+		gl.Ortho(0, gl.Double(windowSize[0]), gl.Double(windowSize[1]), 0, -1, 1)
 		gl.MatrixMode(gl.MODELVIEW)
 
 		redraw = true
 	}
 	{
-		width, height := window.GetFramebufferSize()
-		size(window, width, height)
+		var framebufferSize [2]int
+		framebufferSize[0], framebufferSize[1] = window.GetFramebufferSize()
+		framebufferSizeCallback(window, framebufferSize[0], framebufferSize[1])
 	}
-	window.SetFramebufferSizeCallback(size)
+	window.SetFramebufferSizeCallback(framebufferSizeCallback)
 
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 	keyboardPointer = &Pointer{VirtualCategory: TYPING}
