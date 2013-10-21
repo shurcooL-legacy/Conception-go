@@ -246,10 +246,10 @@ type Widgeter interface {
 	Size() mathgl.Vec2d
 	SetSize(mathgl.Vec2d)
 	HoverPointers() map[*Pointer]bool
+	Parent() Widgeter
 	SetParent(Widgeter)
 
 	ParentToLocal(mathgl.Vec2d) mathgl.Vec2d
-	GlobalToLocal(mathgl.Vec2d) mathgl.Vec2d
 
 	AddChangeListener(l ChangeListener)
 }
@@ -299,20 +299,21 @@ func (w *Widget) SetSize(size mathgl.Vec2d) { w.size = size }
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
 }
-func (w *Widget) SetParent(p Widgeter) {
-	w.parent = p
-}
+
+func (w *Widget) Parent() Widgeter     { return w.parent }
+func (w *Widget) SetParent(p Widgeter) { w.parent = p }
 
 func (w *Widget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
 	return ParentPosition.Sub(w.pos)
 }
-func (w *Widget) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+
+func GlobalToLocal(w Widgeter, GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
 	var ParentPosition mathgl.Vec2d
-	switch w.parent {
+	switch w.Parent() {
 	case nil:
 		ParentPosition = GlobalPosition
 	default:
-		ParentPosition = w.parent.GlobalToLocal(GlobalPosition)
+		ParentPosition = GlobalToLocal(w.Parent(), GlobalPosition)
 	}
 	return w.ParentToLocal(ParentPosition)
 }
@@ -526,7 +527,7 @@ func (w *ButtonWidget) Render() {
 
 	// Tooltip
 	if w.tooltip != nil && isHit {
-		mousePointerPositionLocal := w.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, 16}
 		w.tooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
 		w.tooltip.Render()
@@ -622,7 +623,7 @@ func (w *BoxWidget) Render() {
 
 	// Tooltip
 	if isHit {
-		mousePointerPositionLocal := w.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, -4 - boxWidgetTooltip.Size()[1]}
 		boxWidgetTooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
 		boxWidgetTooltip.Render()
@@ -1080,16 +1081,6 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 
 func (w *CanvasWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
 	return w.Widget.ParentToLocal(ParentPosition).Sub(w.offset)
-}
-func (w *CanvasWidget) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
-	var ParentPosition mathgl.Vec2d
-	switch w.parent {
-	case nil:
-		ParentPosition = GlobalPosition
-	default:
-		ParentPosition = w.parent.GlobalToLocal(GlobalPosition)
-	}
-	return w.ParentToLocal(ParentPosition)
 }
 
 // ---
@@ -2093,7 +2084,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := w.GlobalToLocal(globalPosition)
+		localPosition := GlobalToLocal(w, globalPosition)
 		w.caretPosition.SetPositionFromPhysical(localPosition)
 	}
 
@@ -2554,7 +2545,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 
 		if !katOnly {
 			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 {
-				LocalPosition := widget.GlobalToLocal(mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])})
+				LocalPosition := GlobalToLocal(widget, mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])})
 
 				// Clear previously hit widgets
 				for _, widget := range inputEvent.Pointer.Mapping {
