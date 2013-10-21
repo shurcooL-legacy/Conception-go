@@ -307,15 +307,17 @@ func (w *Widget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathg
 	return ParentPosition.Sub(w.pos)
 }
 
-func GlobalToLocal(w Widgeter, GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
-	var ParentPosition mathgl.Vec2d
+func GlobalToParent(w Widgeter, GlobalPosition mathgl.Vec2d) (ParentPosition mathgl.Vec2d) {
 	switch w.Parent() {
 	case nil:
 		ParentPosition = GlobalPosition
 	default:
 		ParentPosition = GlobalToLocal(w.Parent(), GlobalPosition)
 	}
-	return w.ParentToLocal(ParentPosition)
+	return ParentPosition
+}
+func GlobalToLocal(w Widgeter, GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+	return w.ParentToLocal(GlobalToParent(w, GlobalPosition))
 }
 
 // ---
@@ -845,12 +847,12 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		w.mode == Shunpo {
-		w.target = mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		w.target = GlobalToParent(w, mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
 		w.skillActive = true
 	}
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(1) {
-		pointerPos := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		pointerPos := GlobalToParent(w, mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
 		if pointerPos.Sub(w.pos).Len() > w.size[0]*2/3 || w.target.Sub(w.pos).Len() > w.size[0]*2/3 {
 			w.target = pointerPos
 		}
