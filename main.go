@@ -1114,13 +1114,13 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 // ---
 
 type ChannelExpeWidget struct {
-	CompositeWidget
+	*CompositeWidget
 	cmd *exec.Cmd
 	ch  <-chan []byte
 }
 
 func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
-	w := &ChannelExpeWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0},
+	w := &ChannelExpeWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{0, 0},
 		[]Widgeter{
 			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
 			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, nil),
