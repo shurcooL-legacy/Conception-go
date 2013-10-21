@@ -420,7 +420,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 	source.Content.AddChangeListener(parsedFile)
 
 	action := func() string {
-		// TODO: Race condition? This may get changed outside
+		// TODO: Race condition! This may get changed outside. Need to get these parameters passed in somehow (in a general way?)...
 		index := source.caretPosition.Logical()
 		fs := parsedFile.fs
 		fileAst := parsedFile.fileAst
@@ -1505,8 +1505,8 @@ func (w *GoonWidget) checkInternals() (depth bool) {
 }
 
 func getTypeString(a reflect.Value) string {
-	//return a.Type().Name()
-	return fmt.Sprintf("%T", a.Interface())
+	// TODO: Do this properly
+	return fmt.Sprintf("%T/%s", a.Interface(), a.Type().Name())
 }
 
 func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
@@ -1573,7 +1573,7 @@ func setupInternals3(titleString string, a reflect.Value) Widgeter {
 		w = newGoonWidget(tab, titleString, vv.Elem().Addr())
 	} else {
 		//w = NewTextLabelWidgetString(tab, goon.Sdump(vv))
-		w = NewTextLabelWidgetString(tab, fmt.Sprintf("(%s)(can't intf...%s)", vv.Kind().String(), vv.String()))
+		w = NewTextLabelWidgetString(tab, fmt.Sprintf("(%s)(can't addr... %s)", vv.Kind().String(), vv.String()))
 	}
 
 	spacer := NewCompositeWidget(mathgl.Vec2d{}, mathgl.Vec2d{}, []Widgeter{w})
