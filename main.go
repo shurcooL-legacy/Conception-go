@@ -5,12 +5,13 @@ import (
 	. "gist.github.com/5286084.git"
 	"log"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	_ "github.com/ftrvxmtrx/tga"
 	"image"
-	_ "image/png"
+	//_ "image/png"
 	"os"
 
 	//"github.com/go-gl/gl"
@@ -68,7 +69,7 @@ var _ = GetDocPackageAll
 var _ = GetThisGoSourceDir
 var _ = SprintAstBare
 var _ = errors.New
-var _ = GetVarName
+var _ = GetExprAsString
 var _ = UnsafeReflectValue
 
 const katOnly = false
@@ -430,6 +431,9 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 		}
 		found := FindAll(fileAst, query)
 
+		if len(found) == 0 {
+			return ""
+		}
 		smallest := uint64(math.MaxUint64)
 		var smallestV interface{}
 		for v := range found {
@@ -1361,15 +1365,16 @@ func (t *Bool) Toggle() {
 
 type GoonWidget struct {
 	*CompositeWidget
+	title    string
 	a        reflect.Value
 	expanded *TriButtonWidget
 }
 
 func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
-	return newGoonWidget(pos, reflect.ValueOf(a))
+	return newGoonWidget(pos, GetParentArgExprAsString(1)[1:], reflect.ValueOf(a))
 }
 
-func newGoonWidget(pos mathgl.Vec2d, a reflect.Value) *GoonWidget {
+func newGoonWidget(pos mathgl.Vec2d, title string, a reflect.Value) *GoonWidget {
 	/*expanded := &Bool{}
 
 	action := func() {
@@ -1393,7 +1398,7 @@ func newGoonWidget(pos mathgl.Vec2d, a reflect.Value) *GoonWidget {
 
 	a = UnsafeReflectValue(a)
 
-	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, nil), a: a}
+	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, nil), title: title, a: a}
 	w.setupInternals()
 	return w
 }
@@ -1419,6 +1424,8 @@ func (w *GoonWidget) setupInternals() {
 
 	var f *FlowLayoutWidget
 	if w.expanded == nil || !w.expanded.State() {
+		title := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(w.title+": "))
+
 		var mc MultilineContentI
 		if !expandable {
 			// TODO: Strings need %#v, numbers need %+v
@@ -1427,9 +1434,9 @@ func (w *GoonWidget) setupInternals() {
 			mc = NewMultilineContentString(fmt.Sprintf("%s{...}", getTypeString(w.a.Elem())))
 		}
 		t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
-		f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{t}, nil)
+		f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{title, t}, nil)
 	} else {
-		f = setupInternals2(w.a)
+		f = w.setupInternals2(w.a)
 	}
 	f.SetParent(w) // HACK: This needs to be automated, it's too easy to forget to do
 	w.Widgets[len(w.Widgets)-1] = f
@@ -1454,10 +1461,14 @@ func getTypeString(a reflect.Value) string {
 	return fmt.Sprintf("%T", a.Interface())
 }
 
-func setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
+func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	v := a.Elem()
 
-	widgets := []Widgeter{NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", getTypeString(v)))}
+	title := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(w.title+": "))
+	t := NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", getTypeString(v)))
+	header := NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{title, t}, nil)
+
+	widgets := []Widgeter{header}
 
 	switch v.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
@@ -1471,19 +1482,20 @@ func setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 
 	switch v.Kind() {
 	case reflect.Struct:
+		vt := v.Type()
 		for i := 0; i < v.NumField(); i++ {
-			widgets = append(widgets, setupInternals3(v.Field(i)))
+			widgets = append(widgets, setupInternals3(vt.Field(i).Name, v.Field(i)))
 		}
 	case reflect.Map:
 		for _, key := range v.MapKeys() {
-			widgets = append(widgets, setupInternals3(v.MapIndex(key)))
+			widgets = append(widgets, setupInternals3(key.String(), v.MapIndex(key)))
 		}
 	case reflect.Array, reflect.Slice:
 		for i := 0; i < v.Len(); i++ {
-			widgets = append(widgets, setupInternals3(v.Index(i)))
+			widgets = append(widgets, setupInternals3(strconv.Itoa(i), v.Index(i)))
 		}
 	case reflect.Ptr, reflect.Interface:
-		widgets = append(widgets, setupInternals3(v.Elem()))
+		widgets = append(widgets, setupInternals3("*", v.Elem()))
 	}
 
 	widgets = append(widgets, NewTextLabelWidgetString(mathgl.Vec2d{}, "}"))
@@ -1491,7 +1503,7 @@ func setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	return NewFlowLayoutWidget(mathgl.Vec2d{}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 }
 
-func setupInternals3(a reflect.Value) Widgeter {
+func setupInternals3(titleString string, a reflect.Value) Widgeter {
 	tab := mathgl.Vec2d{8 * 4}
 
 	/*if !a.CanInterface() {
@@ -1499,14 +1511,18 @@ func setupInternals3(a reflect.Value) Widgeter {
 	}*/
 
 	var w Widgeter
-	if a.Kind() == reflect.Float64 {
-		w = NewTest2Widget(tab, a.Addr().Interface().(*float64))
+	if a.Kind() == reflect.Float64 && a.Addr().CanInterface() {
+		title := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(titleString+": "))
+		t := NewTest2Widget(mathgl.Vec2d{}, a.Addr().Interface().(*float64))
+		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
 	} else if a.Kind() == reflect.String {
-		w = NewTextBoxWidgetExternalContent(tab, NewMultilineContentPointer(a.Addr().Interface().(*string)))
+		title := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(titleString+": "))
+		t := NewTextBoxWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentPointer(a.Addr().Interface().(*string)))
+		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
 	} else if vv := a; vv.CanAddr() {
-		w = newGoonWidget(tab, vv.Addr())
-	} else if vv := a; vv.Elem().CanAddr() { // HACK
-		w = newGoonWidget(tab, vv.Elem().Addr())
+		w = newGoonWidget(tab, titleString, vv.Addr())
+	} else if vv := a; (vv.Kind() == reflect.Interface || vv.Kind() == reflect.Ptr) && vv.Elem().CanAddr() { // HACK
+		w = newGoonWidget(tab, titleString, vv.Elem().Addr())
 	} else {
 		//w = NewTextLabelWidgetString(tab, goon.Sdump(vv))
 		w = NewTextLabelWidgetString(tab, fmt.Sprintf("(%s)(can't intf...%s)", vv.Kind().String(), vv.String()))
@@ -2070,8 +2086,13 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			} else if inputEvent.ModifierKey == 0 {
 				w.caretPosition.TryMoveV(+1)
 			}
+		case glfw.KeyX:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				globalWindow.SetClipboardString(w.Content.Content())
+				w.Content.Set("")
+			}
 		case glfw.KeyC:
-			if inputEvent.ModifierKey == glfw.ModControl { // TODO: Use ModSuper when it works
+			if inputEvent.ModifierKey == glfw.ModSuper {
 				globalWindow.SetClipboardString(w.Content.Content())
 			}
 		case glfw.KeyV:
@@ -2567,6 +2588,8 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 }
 
 func main() {
+	fmt.Printf("go version %s %s/%s; ", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	runtime.LockOSThread()
 
 	glfw.SetErrorCallback(func(err glfw.ErrorCode, desc string) {
@@ -2700,6 +2723,11 @@ func main() {
 	})
 
 	window.SetCharacterCallback(func(w *glfw.Window, char uint) {
+		// HACK: Ignore characters when Super key is held down
+		if window.GetKey(glfw.KeyLeftSuper) != glfw.Release || window.GetKey(glfw.KeyRightSuper) != glfw.Release {
+			return
+		}
+
 		inputEvent := InputEvent{
 			Pointer:    keyboardPointer,
 			EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
@@ -2836,6 +2864,7 @@ func main() {
 		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 40}, &y))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
