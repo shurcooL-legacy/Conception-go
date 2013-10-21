@@ -74,7 +74,6 @@ var _ = UnsafeReflectValue
 
 const katOnly = false
 
-var offX, offY gl.Double
 var oFontBase gl.Uint
 
 var redraw bool = true
@@ -277,10 +276,12 @@ func (w *Widget) Layout() {
 }
 func (*Widget) Render() {}
 func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
-	Hit := (ParentPosition[0] >= float64(w.pos[0]) &&
-		ParentPosition[1] >= float64(w.pos[1]) &&
-		ParentPosition[0] < float64(w.pos.Add(w.size)[0]) &&
-		ParentPosition[1] < float64(w.pos.Add(w.size)[1]))
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	Hit := (LocalPosition[0] >= 0 &&
+		LocalPosition[1] >= 0 &&
+		LocalPosition[0] <= w.size[0] &&
+		LocalPosition[1] <= w.size[1])
 
 	if Hit {
 		return []Widgeter{w}
@@ -969,7 +970,7 @@ func (w *CompositeWidget) Render() {
 	}
 }
 func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
-	LocalPosition := ParentPosition.Sub(w.pos)
+	LocalPosition := w.ParentToLocal(ParentPosition)
 
 	hits := []Widgeter{}
 	for _, widget := range w.Widgets {
@@ -1033,6 +1034,62 @@ func (w *FlowLayoutWidget) Layout() {
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
+}
+
+// ---
+
+type CanvasWidget struct {
+	CompositeWidget
+	offset  mathgl.Vec2d
+	options CanvasWidgetOptions
+}
+
+type CanvasWidgetOptions struct {
+}
+
+func NewCanvasWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *CanvasWidgetOptions) *CanvasWidget {
+	if options == nil {
+		options = &CanvasWidgetOptions{}
+	}
+	w := &CanvasWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets), options: *options}
+	// TODO: This is a hack, I'm manually overriding parents of each widget that were set in NewCompositeWidget()
+	for _, widget := range w.Widgets {
+		widget.SetParent(w)
+	}
+	return w
+}
+
+func (w *CanvasWidget) Layout() {}
+
+func (w *CanvasWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translated(gl.Double(w.pos[0]+w.offset[0]), gl.Double(w.pos[1]+w.offset[1]), 0)
+
+	for _, widget := range w.Widgets {
+		widget.Render()
+	}
+}
+
+func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2 {
+		w.offset[1] += inputEvent.Sliders[0] * 10
+		w.offset[0] += inputEvent.Sliders[1] * 10
+	}
+}
+
+func (w *CanvasWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+	return w.Widget.ParentToLocal(ParentPosition).Sub(w.offset)
+}
+func (w *CanvasWidget) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+	var ParentPosition mathgl.Vec2d
+	switch w.parent {
+	case nil:
+		ParentPosition = GlobalPosition
+	default:
+		ParentPosition = w.parent.GlobalToLocal(GlobalPosition)
+	}
+	return w.ParentToLocal(ParentPosition)
 }
 
 // ---
@@ -2108,12 +2165,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		// TEST: Closing this widget...
 		case glfw.KeyW:
 			if inputEvent.ModifierKey == glfw.ModControl {
-				for i, widget := range widgets {
+				/*for i, widget := range widgets {
 					if widget == w {
 						widgets = append(widgets[:i], widgets[i+1:]...)
 						break
 					}
-				}
+				}*/
 			}
 		}
 	}
@@ -2489,13 +2546,15 @@ type InputEvent struct {
 	ModifierKey glfw.ModifierKey // HACK
 }
 
-func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
+func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []InputEvent {
 	for len(inputEventQueue) > 0 {
 		inputEvent := inputEventQueue[0]
 
+		widget.ProcessEvent(inputEvent)
+
 		if !katOnly {
-			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] {
-				Position := mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])}
+			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 {
+				LocalPosition := widget.GlobalToLocal(mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])})
 
 				// Clear previously hit widgets
 				for _, widget := range inputEvent.Pointer.Mapping {
@@ -2505,7 +2564,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 
 				// Recalculate currently hit widgets
 				for _, widget := range widgets {
-					inputEvent.Pointer.Mapping = append(inputEvent.Pointer.Mapping, widget.Hit(Position)...)
+					inputEvent.Pointer.Mapping = append(inputEvent.Pointer.Mapping, widget.Hit(LocalPosition)...)
 				}
 				for _, widget := range inputEvent.Pointer.Mapping {
 					widget.HoverPointers()[inputEvent.Pointer] = true
@@ -2513,7 +2572,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 			}
 
 			// Populate PointerMappings (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
-			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.InputId == 0 && inputEvent.EventTypes[AXIS_EVENT] &&
+			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 &&
 				!inputEvent.EventTypes[POINTER_DEACTIVATION] && !inputEvent.Pointer.State.IsActive() {
 				inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 				copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
@@ -2676,9 +2735,6 @@ func main() {
 	MousePos(window, lastMousePos[0], lastMousePos[1])
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
-		offX += gl.Double(xoff * 10)
-		offY += gl.Double(yoff * 10)
-
 		inputEvent := InputEvent{
 			Pointer:    mousePointer,
 			EventTypes: map[EventType]bool{SLIDER_EVENT: true},
@@ -2875,6 +2931,8 @@ func main() {
 	fpsWidget := NewFpsWidget(mathgl.Vec2d{10, 120})
 	widgets = append(widgets, fpsWidget)
 
+	widget := NewCanvasWidget(mathgl.Vec2d{}, widgets, nil)
+
 	// ---
 
 	//last := window.GetClipboardString()
@@ -2893,7 +2951,7 @@ func main() {
 		}*/
 
 		// Input
-		inputEventQueue = ProcessInputEventQueue(inputEventQueue)
+		inputEventQueue = ProcessInputEventQueue(widget, inputEventQueue)
 
 		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
 		UniversalClock.NotifyAllListeners()
@@ -2901,11 +2959,8 @@ func main() {
 		if redraw {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
-			gl.Translated(offX, offY, 0)
 
-			for _, widget := range widgets {
-				widget.Render()
-			}
+			widget.Render()
 
 			spinner.Spinner++
 			fpsWidget.PushTimeToRender(time.Since(frameStartTime).Seconds() * 1000)
