@@ -429,11 +429,18 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 	parsedFile := &parsedFile{source: source.Content}
 	source.Content.AddChangeListener(parsedFile)
 
-	action := func() string {
-		// TODO: Race condition! This may get changed outside. Need to get these parameters passed in somehow (in a general way?)...
-		index := source.caretPosition.Logical()
-		fs := parsedFile.fs
-		fileAst := parsedFile.fileAst
+	params := func() interface{} {
+		return []interface{}{
+			source.caretPosition.Logical(),
+			parsedFile.fs,
+			parsedFile.fileAst,
+		}
+	}
+
+	action := func(params interface{}) string {
+		index := params.([]interface{})[0].(uint32)
+		fs := params.([]interface{})[1].(*token.FileSet)
+		fileAst := params.([]interface{})[2].(*ast.File)
 
 		query := func(i interface{}) bool {
 			if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
@@ -464,7 +471,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 		return out
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{parsedFile, &source.caretPosition}, action)
+	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{parsedFile, &source.caretPosition}, params, action)
 	return w
 }
 
@@ -535,13 +542,21 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 	typeCheckedPackage := &typeCheckedPackage{source: source.Content.(*MultilineContentFile)}
 	source.Content.AddChangeListener(typeCheckedPackage)
 
-	action := func() string {
-		// TODO: Race condition! This may get changed outside. Need to get these parameters passed in somehow (in a general way?)...
-		index := source.caretPosition.Logical()
-		fs := typeCheckedPackage.fset
-		fileAst := typeCheckedPackage.files[0] // HACK: Use first file...
+	params := func() interface{} {
+		return []interface{}{
+			source.caretPosition.Logical(),
+			typeCheckedPackage.fset,
+			typeCheckedPackage.files[0], // HACK: Use first file...
+			typeCheckedPackage.info,
+		}
+	}
+
+	action := func(params interface{}) string {
+		index := params.([]interface{})[0].(uint32)
+		fs := params.([]interface{})[1].(*token.FileSet)
+		fileAst := params.([]interface{})[2].(*ast.File)
 		//tpkg := typeCheckedPackage.tpkg
-		info := typeCheckedPackage.info
+		info := params.([]interface{})[3].(*types.Info)
 
 		query := func(i interface{}) bool {
 			if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
@@ -590,7 +605,7 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 		return out
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{typeCheckedPackage, &source.caretPosition}, action)
+	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{typeCheckedPackage, &source.caretPosition}, params, action)
 	return w
 }
 
@@ -1407,7 +1422,8 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 
 type actionNode struct {
 	owner  *LiveGoroutineExpeWidget
-	action func() string
+	params func() interface{}
+	action func(interface{}) string
 }
 
 func (this *actionNode) NotifyChange() {
@@ -1415,13 +1431,13 @@ func (this *actionNode) NotifyChange() {
 	ti := this.owner.lastStartedT
 
 	//this.owner.Content.Set(this.action()); _ = ti
-	go func() {
+	go func(params interface{}) {
 		//defer close(outCh)
 		//started := time.Now()
-		ts := timestampString{this.action(), ti}
+		ts := timestampString{this.action(params), ti}
 		//fmt.Println(time.Since(started).Seconds())
 		this.owner.outCh <- ts
-	}()
+	}(this.params())
 }
 
 type LiveGoroutineExpeWidget struct {
@@ -1435,7 +1451,7 @@ type timestampString struct {
 	t uint32
 }
 
-func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, action func() string) *LiveGoroutineExpeWidget {
+func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
 	/*dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
 	src.AfterChange = append(src.AfterChange, func() {
 		// TODO: Async?
@@ -1456,7 +1472,7 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, action f
 	UniversalClock.AddChangeListener(w)
 
 	// THINK: The only reason to have a separate action node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
-	actionNode := &actionNode{owner: w, action: action}
+	actionNode := &actionNode{owner: w, params: params, action: action}
 	for _, dependee := range dependees {
 		dependee.AddChangeListener(actionNode)
 	}
@@ -2980,15 +2996,16 @@ func main() {
 			src := NewTextBoxWidget(mathgl.Vec2d{})
 			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString("go Forced Use"))
 
-			action := func() string {
-				if strings.TrimSpace(src.Content.Content()) != "" {
+			params := func() interface{} { return src.Content.Content() }
+			action := func(param interface{}) string {
+				if strings.TrimSpace(param.(string)) != "" {
 					//time.Sleep(time.Second)
 					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
 				} else {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, action)
+			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
@@ -2998,8 +3015,9 @@ func main() {
 			src := NewTextBoxWidget(mathgl.Vec2d{})
 			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString("go Forced Use"))
 
-			action := func() string {
-				if strings.TrimSpace(src.Content.Content()) != "" {
+			params := func() interface{} { return src.Content.Content() }
+			action := func(param interface{}) string {
+				if strings.TrimSpace(param.(string)) != "" {
 					//time.Sleep(time.Second)
 					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
 					//cmd := exec.Command("echo", strings.TrimSpace(src.Content.Content()))
@@ -3014,7 +3032,7 @@ func main() {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, action)
+			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
