@@ -61,6 +61,13 @@ import (
 	"reflect"
 
 	. "gist.github.com/6724654.git"
+
+	"code.google.com/p/go.tools/go/exact"
+	"code.google.com/p/go.tools/go/types"
+	"code.google.com/p/go.tools/importer"
+	importer2 "honnef.co/go/importer"
+
+	"github.com/davecheney/profile"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -71,6 +78,7 @@ var _ = SprintAstBare
 var _ = errors.New
 var _ = GetExprAsString
 var _ = UnsafeReflectValue
+var _ = profile.Start
 
 const katOnly = false
 
@@ -364,7 +372,7 @@ func (w *Test1Widget) Render() {
 	}*/
 
 	kat := widgets[len(widgets)-2].(*KatWidget)
-	PrintText(w.pos, fmt.Sprintf("%v", kat.mode.String()))
+	PrintText(w.pos, fmt.Sprintf("%d %s", kat.mode, kat.mode.String()))
 }
 
 // ---
@@ -450,12 +458,166 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 		out := fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
 		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
 		out += SprintAst(fs, smallestV) + "\n\n"
-		out += goon.Sdump(smallestV)
+		if _, huge := smallestV.(*ast.File); !huge {
+			out += goon.Sdump(smallestV) // This is dangerous to run on root AST node of large Go files
+		}
 		return out
 	}
 
 	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{parsedFile, &source.caretPosition}, action)
 	return w
+}
+
+// ---
+
+type typeCheckedPackage struct {
+	source *MultilineContentFile
+
+	fs      *token.FileSet
+	fileAst *ast.File
+
+	tpkg *types.Package
+	info *types.Info
+
+	DepNode
+}
+
+func (t *typeCheckedPackage) NotifyChange() {
+	/*fs := token.NewFileSet()
+	fileAst, err := parser.ParseFile(fs, "", t.source.Content(), 1*parser.ParseComments)
+	if err == nil {
+		t.fs = fs
+		t.fileAst = fileAst
+	} else {
+		t.fs = nil
+		t.fileAst = nil
+	}*/
+
+	fmt.Println("Doing type checking.")
+	{
+		ImportPath := "gist.github.com/7176504.git"
+		//ImportPath := "gist.github.com/5694308.git"
+
+		bpkg := BuildPackageFromImportPath(ImportPath)
+
+		fset := token.NewFileSet()
+		files, err := importer.ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
+		if err != nil {
+			t.fs = nil
+			t.fileAst = nil
+			t.tpkg = nil
+			t.info = nil
+			return
+		}
+
+		t.fs = fset
+		t.fileAst = files[0]
+
+		imp := importer2.New()
+		imp.Config.UseGcFallback = true
+
+		cfg := &types.Config{
+			//Import: types.GcImport,
+			Import: imp.Import,
+		}
+		started := time.Now()
+		info := &types.Info{
+			Types:      make(map[ast.Expr]types.Type),
+			Values:     make(map[ast.Expr]exact.Value),
+			Objects:    make(map[*ast.Ident]types.Object),
+			Implicits:  make(map[ast.Node]types.Object),
+			Selections: make(map[*ast.SelectorExpr]*types.Selection),
+			Scopes:     make(map[ast.Node]*types.Scope),
+		}
+		tpkg, err := cfg.Check(ImportPath, fset, files, info)
+		goon.DumpExpr(time.Since(started).Seconds())
+
+		if err == nil {
+			t.tpkg = tpkg
+			t.info = info
+		} else {
+			t.tpkg = nil
+			t.info = nil
+		}
+	}
+
+	t.NotifyAllListeners()
+}
+
+func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpeWidget {
+	typeCheckedPackage := &typeCheckedPackage{source: source.Content.(*MultilineContentFile)}
+	source.Content.AddChangeListener(typeCheckedPackage)
+
+	action := func() string {
+		// TODO: Race condition! This may get changed outside. Need to get these parameters passed in somehow (in a general way?)...
+		index := source.caretPosition.Logical()
+		fs := typeCheckedPackage.fs
+		fileAst := typeCheckedPackage.fileAst
+		//tpkg := typeCheckedPackage.tpkg
+		info := typeCheckedPackage.info
+
+		query := func(i interface{}) bool {
+			if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
+				return true
+			}
+			return false
+		}
+		found := FindAll(fileAst, query)
+
+		if len(found) == 0 {
+			return ""
+		}
+		out := ""
+		smallest := uint64(math.MaxUint64)
+		var smallestV interface{}
+		for v := range found {
+			size := uint64(v.(ast.Node).End() - v.(ast.Node).Pos())
+			if size < smallest {
+				smallestV = v
+				smallest = size
+			}
+
+			out += fmt.Sprintf("%T %d-%d [%d]\n", v, v.(ast.Node).Pos()-1, v.(ast.Node).End()-1, size)
+		}
+		out += "\n"
+		out += fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
+		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
+		out += SprintAst(fs, smallestV) + "\n\n"
+
+		if ident, ok := smallestV.(*ast.Ident); ok {
+			if info != nil && info.Objects[ident] != nil {
+				obj := info.Objects[ident]
+				out += TypeChainString(obj.Type())
+				if constObj, ok := obj.(*types.Const); ok {
+					out += fmt.Sprintf(" = %v", constObj.Val())
+				}
+				out += "\n\n"
+			} else {
+				out += "nil obj\n\n"
+			}
+		}
+
+		if _, huge := smallestV.(*ast.File); !huge {
+			out += goon.Sdump(smallestV) // This is dangerous to run on root AST node of large Go files
+		}
+		return out
+	}
+
+	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{typeCheckedPackage, &source.caretPosition}, action)
+	return w
+}
+
+func TypeChainString(t types.Type) string {
+	out := fmt.Sprintf("%s", t)
+	for {
+		if t == t.Underlying() {
+			break
+		} else {
+			t = t.Underlying()
+		}
+		out += fmt.Sprintf(" -> %s", t)
+	}
+	return out
 }
 
 // ---
@@ -738,21 +900,22 @@ const ShunpoRadius = 120
 
 type KatMode uint8
 
-/*const (
-	AutoAttack KatMode = iota
-	_
-	Shunpo = 17 * iota
-)*/
 const (
-	AutoAttack KatMode = iota
+	/*AutoAttack KatMode = iota
+	Shunpo*/
+
+	AutoAttack KatMode = 17 * iota
+	_
 	Shunpo
 )
 
 func (mode KatMode) String() string {
+	//fmt.Printf("%T %T\n", AutoAttack, Shunpo)
 	x := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
 	for _, y := range x.Types {
 		if y.Name == "KatMode" {
 			for _, c := range y.Consts {
+				goon.DumpExpr(c.Names, mode)
 				return c.Names[mode]
 			}
 		}
@@ -1193,7 +1356,8 @@ type LiveCmdExpeWidget struct {
 }
 
 func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
-	src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Needs Processing/woot.go")
+	src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
+	//src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5694308.git/main.go")
 	//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
 	//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 	//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
@@ -2640,6 +2804,8 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 }
 
 func main() {
+	//defer profile.Start(profile.MemProfile).Stop()
+
 	fmt.Printf("go version %s %s/%s; ", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	runtime.LockOSThread()
@@ -2869,7 +3035,8 @@ func main() {
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
 		{
-			w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget))
 			widgets[12].(*LiveCmdExpeWidget).Widgets = append(widgets[12].(*LiveCmdExpeWidget).Widgets, w)
 			w.SetParent(widgets[12].(*LiveCmdExpeWidget).FlowLayoutWidget)
 			widgets[12].(*LiveCmdExpeWidget).Layout()
