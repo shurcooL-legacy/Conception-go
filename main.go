@@ -473,8 +473,8 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 type typeCheckedPackage struct {
 	source *MultilineContentFile
 
-	fs      *token.FileSet
-	fileAst *ast.File
+	fset  *token.FileSet
+	files []*ast.File
 
 	tpkg *types.Package
 	info *types.Info
@@ -483,62 +483,49 @@ type typeCheckedPackage struct {
 }
 
 func (t *typeCheckedPackage) NotifyChange() {
-	/*fs := token.NewFileSet()
-	fileAst, err := parser.ParseFile(fs, "", t.source.Content(), 1*parser.ParseComments)
+	ImportPath := "gist.github.com/7176504.git"
+	//ImportPath := "gist.github.com/5694308.git"
+
+	bpkg, err := BuildPackageFromImportPath(ImportPath)
+	if err != nil {
+		t.fset = nil
+		t.files = nil
+		t.tpkg = nil
+		t.info = nil
+		return
+	}
+
+	fset := token.NewFileSet()
+	files, err := importer.ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
+	if err != nil {
+		t.fset = nil
+		t.files = nil
+		t.tpkg = nil
+		t.info = nil
+		return
+	}
+
+	t.fset = fset
+	t.files = files
+
+	imp := importer2.New()
+	imp.Config.UseGcFallback = true
+	cfg := &types.Config{Import: imp.Import}
+	info := &types.Info{
+		Types:      make(map[ast.Expr]types.Type),
+		Values:     make(map[ast.Expr]exact.Value),
+		Objects:    make(map[*ast.Ident]types.Object),
+		Implicits:  make(map[ast.Node]types.Object),
+		Selections: make(map[*ast.SelectorExpr]*types.Selection),
+		Scopes:     make(map[ast.Node]*types.Scope),
+	}
+	tpkg, err := cfg.Check(ImportPath, fset, files, info)
 	if err == nil {
-		t.fs = fs
-		t.fileAst = fileAst
+		t.tpkg = tpkg
+		t.info = info
 	} else {
-		t.fs = nil
-		t.fileAst = nil
-	}*/
-
-	fmt.Println("Doing type checking.")
-	{
-		ImportPath := "gist.github.com/7176504.git"
-		//ImportPath := "gist.github.com/5694308.git"
-
-		bpkg := BuildPackageFromImportPath(ImportPath)
-
-		fset := token.NewFileSet()
-		files, err := importer.ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
-		if err != nil {
-			t.fs = nil
-			t.fileAst = nil
-			t.tpkg = nil
-			t.info = nil
-			return
-		}
-
-		t.fs = fset
-		t.fileAst = files[0]
-
-		imp := importer2.New()
-		imp.Config.UseGcFallback = true
-
-		cfg := &types.Config{
-			//Import: types.GcImport,
-			Import: imp.Import,
-		}
-		started := time.Now()
-		info := &types.Info{
-			Types:      make(map[ast.Expr]types.Type),
-			Values:     make(map[ast.Expr]exact.Value),
-			Objects:    make(map[*ast.Ident]types.Object),
-			Implicits:  make(map[ast.Node]types.Object),
-			Selections: make(map[*ast.SelectorExpr]*types.Selection),
-			Scopes:     make(map[ast.Node]*types.Scope),
-		}
-		tpkg, err := cfg.Check(ImportPath, fset, files, info)
-		goon.DumpExpr(time.Since(started).Seconds())
-
-		if err == nil {
-			t.tpkg = tpkg
-			t.info = info
-		} else {
-			t.tpkg = nil
-			t.info = nil
-		}
+		t.tpkg = nil
+		t.info = nil
 	}
 
 	t.NotifyAllListeners()
@@ -551,8 +538,8 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 	action := func() string {
 		// TODO: Race condition! This may get changed outside. Need to get these parameters passed in somehow (in a general way?)...
 		index := source.caretPosition.Logical()
-		fs := typeCheckedPackage.fs
-		fileAst := typeCheckedPackage.fileAst
+		fs := typeCheckedPackage.fset
+		fileAst := typeCheckedPackage.files[0] // HACK: Use first file...
 		//tpkg := typeCheckedPackage.tpkg
 		info := typeCheckedPackage.info
 
