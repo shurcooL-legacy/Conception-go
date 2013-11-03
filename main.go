@@ -546,7 +546,7 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 		return []interface{}{
 			source.caretPosition.Logical(),
 			typeCheckedPackage.fset,
-			typeCheckedPackage.files[0], // HACK: Use first file...
+			typeCheckedPackage.files,
 			typeCheckedPackage.info,
 		}
 	}
@@ -554,9 +554,14 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 	action := func(params interface{}) string {
 		index := params.([]interface{})[0].(uint32)
 		fs := params.([]interface{})[1].(*token.FileSet)
-		fileAst := params.([]interface{})[2].(*ast.File)
+		files := params.([]interface{})[2].([]*ast.File)
 		//tpkg := typeCheckedPackage.tpkg
 		info := params.([]interface{})[3].(*types.Info)
+
+		if len(files) == 0 {
+			return ""
+		}
+		fileAst := files[0] // HACK: Use first file...
 
 		query := func(i interface{}) bool {
 			if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
