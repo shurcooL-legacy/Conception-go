@@ -3004,7 +3004,7 @@ func main() {
 			params := func() interface{} { return src.Content.Content() }
 			action := func(param interface{}) string {
 				if strings.TrimSpace(param.(string)) != "" {
-					//time.Sleep(time.Second)
+					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
 					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
 				} else {
 					return ""
@@ -3023,9 +3023,9 @@ func main() {
 			params := func() interface{} { return src.Content.Content() }
 			action := func(param interface{}) string {
 				if strings.TrimSpace(param.(string)) != "" {
-					//time.Sleep(time.Second)
+					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
 					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
-					//cmd := exec.Command("echo", strings.TrimSpace(src.Content.Content()))
+					//cmd := exec.Command("cat")
 					stdinPipe, err := cmd.StdinPipe()
 					CheckError(err)
 					stdinPipe.Write([]byte(strings.TrimSpace(src.Content.Content())))
