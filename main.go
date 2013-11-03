@@ -834,11 +834,15 @@ func (widgets *Widgeters) ContainsWidget(targetWidget Widgeter) bool {
 
 // ---
 
+func DrawBorderlessBox(pos, size mathgl.Vec2d, backgroundColor mathgl.Vec3d) {
+	gl.Color3dv((*gl.Double)(&backgroundColor[0]))
+	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+}
+
 func DrawBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
-	gl.Color3dv((*gl.Double)(&backgroundColor[0]))
-	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+	DrawBorderlessBox(pos, size, backgroundColor)
 }
 func DrawNBox(pos, size mathgl.Vec2d) {
 	DrawBox(pos, size, mathgl.Vec3d{0.3, 0.3, 0.3}, mathgl.Vec3d{1, 1, 1})
@@ -1543,21 +1547,17 @@ func (w *FpsWidget) Render() {
 	gl.Color3d(1, 0, 0)
 	gl.Vertex2d(gl.Double(0), gl.Double(-1000.0/60))
 	gl.Vertex2d(gl.Double(30), gl.Double(-1000.0/60))
-	for index, sample := range w.samples {
-		if sample.Render <= 1000.0/60*1.25 {
-			gl.Color3d(0, 0, 0)
-		} else {
-			gl.Color3d(1, 0, 0)
-		}
-
-		gl.Vertex2d(gl.Double(30-len(w.samples)+index), gl.Double(-sample.Render))
-		gl.Vertex2d(gl.Double(30-len(w.samples)+index), 0)
-
-		gl.Color3d(0.65, 0.65, 0.65)
-		gl.Vertex2d(gl.Double(30-len(w.samples)+index), gl.Double(-sample.Total))
-		gl.Vertex2d(gl.Double(30-len(w.samples)+index), gl.Double(-sample.Render))
-	}
 	gl.End()
+	for index, sample := range w.samples {
+		var color mathgl.Vec3d
+		if sample.Render <= 1000.0/60*1.25 {
+			color = mathgl.Vec3d{0, 0, 0}
+		} else {
+			color = mathgl.Vec3d{1, 0, 0}
+		}
+		DrawBorderlessBox(mathgl.Vec2d{float64(30 - len(w.samples) + index), -sample.Render}, mathgl.Vec2d{1, sample.Render}, color)
+		DrawBorderlessBox(mathgl.Vec2d{float64(30 - len(w.samples) + index), -sample.Total}, mathgl.Vec2d{1, sample.Total - sample.Render}, mathgl.Vec3d{0.65, 0.65, 0.65})
+	}
 }
 
 func (w *FpsWidget) PushTimeToRender(sample float64) {
