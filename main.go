@@ -68,6 +68,9 @@ import (
 	importer2 "honnef.co/go/importer"
 
 	"github.com/davecheney/profile"
+
+	. "gist.github.com/5953185.git"
+	"path/filepath"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -1192,6 +1195,16 @@ func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *FlowLayo
 	return w
 }
 
+// TEST
+func (w *FlowLayoutWidget) SetWidgets(widgets []Widgeter) {
+	w.Widgets = widgets
+	// TODO: This is a hack, I'm manually overriding parents of each widget that were set in NewCompositeWidget()
+	for _, widget := range w.Widgets {
+		widget.SetParent(w)
+	}
+	w.Layout() // TODO: Should this be automatic from above SetParent()?
+}
+
 func (w *FlowLayoutWidget) Layout() {
 	w.size = mathgl.Vec2d{}
 	var combinedOffset float64
@@ -1296,7 +1309,7 @@ type ChannelExpeWidget struct {
 }
 
 func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
-	w := &ChannelExpeWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{0, 0},
+	w := &ChannelExpeWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{},
 		[]Widgeter{
 			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
 			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, nil),
@@ -1568,6 +1581,277 @@ func (w *FpsWidget) PushTimeToRender(sample float64) {
 }
 func (w *FpsWidget) PushTimeTotal(sample float64) {
 	w.samples[len(w.samples)-1].Total = sample
+}
+
+// ---
+
+func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
+	for index := range widgeters {
+		if w == widgeters[index] {
+			return index
+		}
+	}
+
+	return -1
+}
+
+// ---
+
+type FolderListingWidget struct {
+	*CompositeWidget
+	flow *FlowLayoutWidget // HACK: Shortcut to CompositeWidget.Widgets[0]
+}
+
+func NewFolderListingWidget(pos mathgl.Vec2d, path string) *FolderListingWidget {
+	w := &FolderListingWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{newFolderListingPureWidget(path)}, nil)})}
+	w.flow = w.Widgets[0].(*FlowLayoutWidget)
+	w.flow.SetParent(w) // HACK?
+	return w
+}
+
+func (w *FolderListingWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyLeft:
+			c := keyboardPointer.OriginMapping[0] // HACK
+			index := WidgeterIndex(w.flow.Widgets, c)
+
+			if index > 0 {
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				// HACK: Temporarily set both this and parent as mapping here
+				c = w.flow.Widgets[index-1]
+				keyboardPointer.OriginMapping = []Widgeter{c, w}
+				if cp, ok := c.(*FolderListingPureWidget); ok {
+					cp.selectionChangedTest()
+				}
+			}
+		case glfw.KeyRight:
+			c := keyboardPointer.OriginMapping[0] // HACK
+			index := WidgeterIndex(w.flow.Widgets, c)
+
+			if index != -1 && index+1 < len(w.flow.Widgets) {
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				// HACK: Temporarily set both this and parent as mapping here
+				c = w.flow.Widgets[index+1]
+				keyboardPointer.OriginMapping = []Widgeter{c, w}
+				if cp, ok := c.(*FolderListingPureWidget); ok && cp.selected == 0 && len(cp.entries) > 0 {
+					cp.selected = 1
+					cp.selectionChangedTest()
+				}
+			}
+		}
+	}
+}
+
+// ---
+
+type FolderListingPureWidget struct {
+	Widget
+	path               string
+	entries            []os.FileInfo
+	longestEntryLength int
+	selected           uint64 // 0 is unselected, else index+1 is selected
+}
+
+func newFolderListingPureWidget(path string) *FolderListingPureWidget {
+	w := &FolderListingPureWidget{Widget: NewWidget(mathgl.Vec2d{}, mathgl.Vec2d{}), path: path}
+	w.NotifyChange() // TODO: Give it a proper source
+	return w
+}
+
+func (w *FolderListingPureWidget) NotifyChange() {
+	// TODO: Support for preserving selection
+
+	entries, err := ioutil.ReadDir(w.path)
+	if err == nil {
+		w.entries = make([]os.FileInfo, 0, len(entries))
+		w.longestEntryLength = 0
+		for _, v := range entries {
+			if !strings.HasPrefix(v.Name(), ".") {
+				w.entries = w.entries[:len(w.entries)+1]
+				w.entries[len(w.entries)-1] = v
+
+				entryLength := len(v.Name())
+				if v.IsDir() {
+					entryLength++
+				}
+				if entryLength > w.longestEntryLength {
+					w.longestEntryLength = entryLength
+				}
+			}
+		}
+	}
+
+	w.Layout()
+
+	w.NotifyAllListeners()
+}
+
+func IsFolderGitRepo(path string) string {
+	// Alternative: git rev-parse
+	// For individual files: git ls-files --error-unmatch -- 'Filename', return code == 0
+	cmd := exec.Command("git", "status")
+	cmd.Dir = path
+
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return string(out)
+	} else {
+		return ""
+	}
+}
+
+func (w *FolderListingPureWidget) selectionChangedTest() {
+	if w.selected != 0 && w.entries[w.selected-1].IsDir() {
+		path := filepath.Join(w.path, w.entries[w.selected-1].Name())
+		var newFolder Widgeter
+
+		if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
+			dpkg := GetDocPackage(bpkg, err)
+
+			out := Underline(`import "`+dpkg.ImportPath+`"`) + "\n"
+			for _, v := range dpkg.Vars {
+				out += SprintAstBare(v.Decl) + "\n"
+			}
+			out += "\n"
+			for _, f := range dpkg.Funcs {
+				out += SprintAstBare(f.Decl) + "\n"
+			}
+			out += "\n"
+			for _, c := range dpkg.Consts {
+				out += SprintAstBare(c.Decl) + "\n"
+			}
+			out += "\n"
+			for _, t := range dpkg.Types {
+				out += fmt.Sprint(t.Name) + "\n"
+				//PrintlnAstBare(t.Decl)
+			}
+
+			newFolder = NewTextLabelWidgetString(mathgl.Vec2d{}, out)
+		} else if gitRepo := IsFolderGitRepo(path); gitRepo != "" {
+			newFolder = NewTextLabelWidgetString(mathgl.Vec2d{}, gitRepo)
+		} else {
+			newFolder = newFolderListingPureWidget(path)
+		}
+
+		p := w.Parent().(*FlowLayoutWidget)
+		index := WidgeterIndex(p.Widgets, w)
+		p.SetWidgets(append(p.Widgets[:index+1], newFolder))
+	} else {
+		p := w.Parent().(*FlowLayoutWidget)
+		index := WidgeterIndex(p.Widgets, w)
+		p.SetWidgets(p.Widgets[:index+1])
+	}
+}
+
+func (w *FolderListingPureWidget) Layout() {
+	if w.longestEntryLength < 3 {
+		w.size[0] = float64(8 * 3)
+	} else {
+		w.size[0] = float64(8 * w.longestEntryLength)
+	}
+	if len(w.entries) == 0 {
+		w.size[1] = float64(16 * 1)
+	} else {
+		w.size[1] = float64(16 * len(w.entries))
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *FolderListingPureWidget) Render() {
+	DrawNBox(w.pos, w.size)
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	for i, v := range w.entries {
+		if w.selected == uint64(i+1) {
+			if hasTypingFocus {
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), mathgl.Vec2d{w.size[0], 16}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				gl.Color3d(1, 1, 1)
+			} else {
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), mathgl.Vec2d{w.size[0], 16}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				gl.Color3d(0, 0, 0)
+			}
+		} else {
+			gl.Color3d(0, 0, 0)
+		}
+
+		if v.IsDir() {
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), v.Name()+"/")
+		} else {
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), v.Name())
+		}
+	}
+}
+
+func (w *FolderListingPureWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		// HACK: Temporarily set both this and parent as mapping here
+		p := w.Parent().Parent().(*FolderListingWidget)
+		keyboardPointer.OriginMapping = []Widgeter{w, p}
+	}
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	// Check if button 0 was released.
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
+		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		localPosition := GlobalToLocal(w, globalPosition)
+		if len(w.entries) > 0 {
+			if localPosition[1] < 0 {
+				w.selected = 1
+			} else if uint64((localPosition[1]/16)+1) > uint64(len(w.entries)) {
+				w.selected = uint64(len(w.entries))
+			} else {
+				w.selected = uint64((localPosition[1] / 16) + 1)
+			}
+			w.selectionChangedTest()
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyUp:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries) > 0 {
+					w.selected = 1
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected > 1 {
+					w.selected--
+					w.selectionChangedTest()
+				}
+			}
+		case glfw.KeyDown:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries) > 0 {
+					w.selected = uint64(len(w.entries))
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected < uint64(len(w.entries)) {
+					w.selected++
+					w.selectionChangedTest()
+				}
+			}
+		}
+	}
 }
 
 // ---
@@ -3093,6 +3377,8 @@ func main() {
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 40}, &y))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
+
+		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{360, 70}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/"))
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
