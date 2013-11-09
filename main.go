@@ -736,13 +736,16 @@ type TriButtonWidget struct {
 
 func NewTriButtonWidget(pos mathgl.Vec2d) *TriButtonWidget {
 	w := &TriButtonWidget{ButtonWidget: NewButtonWidget(pos, nil)}
-	//w.SetAction()
 
 	return w
 }
 
+// Pre-conditions: Currently, nil action is not supported.
 func (w *TriButtonWidget) SetAction(action func()) {
-	w.action = action
+	w.action = func() {
+		w.state = !w.state
+		action()
+	}
 }
 
 func (w *TriButtonWidget) Render() {
@@ -1910,7 +1913,6 @@ func newGoonWidget(pos mathgl.Vec2d, title string, a reflect.Value) *GoonWidget 
 }
 
 func (w *GoonWidget) flip() {
-	w.expanded.state = !w.expanded.state
 	w.setupInternals()
 }
 func (w *GoonWidget) setupInternals() {
