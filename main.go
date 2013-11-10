@@ -71,6 +71,10 @@ import (
 
 	. "gist.github.com/5953185.git"
 	"path/filepath"
+
+	. "gist.github.com/7390843.git"
+	"net/http"
+	_ "net/http/pprof"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -82,6 +86,7 @@ var _ = errors.New
 var _ = GetExprAsString
 var _ = UnsafeReflectValue
 var _ = profile.Start
+var _ = http.ListenAndServe
 
 const katOnly = false
 
@@ -666,12 +671,12 @@ type ButtonWidget struct {
 
 func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
 	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16})}
-	w.SetAction(action)
+	w.setAction(action)
 
 	return w
 }
 
-func (w *ButtonWidget) SetAction(action func()) {
+func (w *ButtonWidget) setAction(action func()) {
 	w.action = action
 
 	if action != nil {
@@ -734,14 +739,15 @@ type TriButtonWidget struct {
 	state bool
 }
 
-func NewTriButtonWidget(pos mathgl.Vec2d) *TriButtonWidget {
+func NewTriButtonWidget(pos mathgl.Vec2d, action func()) *TriButtonWidget {
 	w := &TriButtonWidget{ButtonWidget: NewButtonWidget(pos, nil)}
+	w.setAction(action)
 
 	return w
 }
 
 // Pre-conditions: Currently, nil action is not supported.
-func (w *TriButtonWidget) SetAction(action func()) {
+func (w *TriButtonWidget) setAction(action func()) {
 	w.action = func() {
 		w.state = !w.state
 		action()
@@ -767,6 +773,46 @@ func (w *TriButtonWidget) Render() {
 
 func (w *TriButtonWidget) State() bool {
 	return w.state
+}
+
+// ---
+
+type TriButtonExternalStateWidget struct {
+	*ButtonWidget
+	state func() bool
+}
+
+func NewTriButtonExternalStateWidget(pos mathgl.Vec2d, state func() bool, action func()) *TriButtonExternalStateWidget {
+	w := &TriButtonExternalStateWidget{ButtonWidget: NewButtonWidget(pos, action), state: state}
+
+	return w
+}
+
+func (w *TriButtonExternalStateWidget) Render() {
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawGBox(w.pos, w.size)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		DrawYBox(w.pos, w.size)
+	} else {
+		DrawNBox(w.pos, w.size)
+	}
+
+	if w.state() {
+		DrawBorderlessBox(w.pos.Add(w.size.Mul(0.125)), w.size.Mul(0.75), mathgl.Vec3d{0.9, 0.3, 0.01})
+	} else {
+		DrawBorderlessBox(w.pos.Add(w.size.Mul(0.125)), w.size.Mul(0.75), mathgl.Vec3d{0.9, 0.9, 0.9})
+	}
 }
 
 // ---
@@ -1312,12 +1358,8 @@ type ChannelExpeWidget struct {
 }
 
 func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
-	w := &ChannelExpeWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{},
-		[]Widgeter{
-			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
-			NewButtonWidget(mathgl.Vec2d{0, -16 - 2}, nil),
-		})}
-	w.Widgets[1].(*ButtonWidget).SetAction(func() {
+	w := &ChannelExpeWidget{}
+	action := func() {
 		if w.cmd == nil {
 			w.cmd = exec.Command("ping", "google.com")
 			stdout, err := w.cmd.StdoutPipe()
@@ -1329,7 +1371,12 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 			w.cmd.Process.Kill() // Comments are currently not preserved
 			w.cmd = nil
 		}
-	})
+	}
+	w.CompositeWidget = NewCompositeWidget(pos, mathgl.Vec2d{},
+		[]Widgeter{
+			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
+			NewTriButtonExternalStateWidget(mathgl.Vec2d{0, -16 - 2}, func() bool { return w.cmd != nil }, action),
+		})
 
 	UniversalClock.AddChangeListener(w)
 
@@ -1520,6 +1567,37 @@ func (w *LiveGoroutineExpeWidget) NotifyChange() {
 	default:
 	}
 	//}
+}
+
+// ---
+
+type HttpServerTestWidget struct {
+	*FlowLayoutWidget
+	started        bool
+	stopServerChan chan bool
+}
+
+func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
+	w := &HttpServerTestWidget{stopServerChan: make(chan bool)}
+	action := func() {
+		if !w.started {
+			go func() {
+				CheckError(ListenAndServeStoppable("localhost:8080", nil, w.stopServerChan))
+				println("server stopped")
+			}()
+		} else {
+			w.stopServerChan <- true
+		}
+		w.started = !w.started // TODO: Factor this out to toggle-button?
+	}
+	action()
+	w.FlowLayoutWidget = NewFlowLayoutWidget(pos,
+		[]Widgeter{
+			NewTriButtonExternalStateWidget(mathgl.Vec2d{}, func() bool { return w.started }, action),
+			NewTextLabelWidgetString(mathgl.Vec2d{}, "pprof"),
+		}, nil)
+
+	return w
 }
 
 // ---
@@ -1920,8 +1998,7 @@ func (w *GoonWidget) setupInternals() {
 	oldParent := w.parent
 	if expandable {
 		if w.expanded == nil {
-			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-16 - 2})
-			w.expanded.SetAction(func() { w.flip() })
+			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-16 - 2}, func() { w.flip() })
 		}
 
 		w.CompositeWidget = NewCompositeWidget(w.pos, mathgl.Vec2d{}, []Widgeter{w.expanded, &Widget{}})
@@ -3380,7 +3457,16 @@ func main() {
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
 
-		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{360, 70}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/"))
+		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{360, 70}, "./GoLand/src/"))
+
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			x := newFolderListingPureWidget(filepath.Join("./GoLand/src/", r.URL.Path))
+			for _, v := range x.entries {
+				fmt.Fprintf(w, "<a href=%s>%s</a><br>", filepath.Join(r.URL.Path, v.Name()), v.Name())
+			}
+		})
+		widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 	} else {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
