@@ -72,7 +72,9 @@ import (
 	. "gist.github.com/5953185.git"
 	"path/filepath"
 
+	//"bytes"
 	. "gist.github.com/7390843.git"
+	"github.com/russross/blackfriday"
 	"net/http"
 	_ "net/http/pprof"
 )
@@ -1768,15 +1770,39 @@ func (w *FolderListingPureWidget) NotifyChange() {
 	w.NotifyAllListeners()
 }
 
-func IsFolderGitRepo(path string) string {
+func IsFolderGitRepo(path string) (bool, string) {
 	// Alternative: git rev-parse
 	// For individual files: git ls-files --error-unmatch -- 'Filename', return code == 0
-	cmd := exec.Command("git", "status")
+	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Dir = path
 
 	out, err := cmd.CombinedOutput()
 	if err == nil {
-		return string(out)
+		return true, string(out)
+	} else {
+		return false, ""
+	}
+}
+
+func CheckGitRepoLocal(path string) string {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = path
+
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return string(out[:40]) // HACK: What if hash isn't 40 chars?
+	} else {
+		return ""
+	}
+}
+
+func CheckGitRepoRemote(path string) string {
+	cmd := exec.Command("git", "ls-remote", "--heads", "origin", "master")
+	cmd.Dir = path
+
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return string(out[:40]) // HACK: What if hash isn't 40 chars?
 	} else {
 		return ""
 	}
@@ -1809,8 +1835,8 @@ func (w *FolderListingPureWidget) selectionChangedTest() {
 			}
 
 			newFolder = NewTextLabelWidgetString(mathgl.Vec2d{}, out)
-		} else if gitRepo := IsFolderGitRepo(path); gitRepo != "" {
-			newFolder = NewTextLabelWidgetString(mathgl.Vec2d{}, gitRepo)
+		} else if isGitRepo, status := IsFolderGitRepo(path); isGitRepo {
+			newFolder = NewTextLabelWidgetString(mathgl.Vec2d{}, status)
 		} else {
 			newFolder = newFolderListingPureWidget(path)
 		}
@@ -2673,15 +2699,16 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyX:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				globalWindow.SetClipboardString(w.Content.Content())
+				globalWindow.SetClipboardString(w.Content.Content()) // TODO: Don't use globalWindow
 				w.Content.Set("")
 			}
 		case glfw.KeyC:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				globalWindow.SetClipboardString(w.Content.Content())
+				globalWindow.SetClipboardString(w.Content.Content()) // TODO: Don't use globalWindow
 			}
 		case glfw.KeyV:
 			if inputEvent.ModifierKey == glfw.ModSuper {
+				// TODO: Don't use globalWindow
 				if clipboard, err := globalWindow.GetClipboardString(); err == nil && clipboard != "" {
 					//EraseSelectionIfAny();
 					w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + clipboard + w.Content.Content()[w.caretPosition.Logical():])
@@ -3459,11 +3486,65 @@ func main() {
 
 		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{360, 70}, "./GoLand/src/"))
 
+		http.HandleFunc("/widgets", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(goon.SdumpExpr(len(widgets))))
+			fmt.Fprintln(w)
+			fmt.Fprintf(w, "%#v\n", widgets)
+		})
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/html")
-			x := newFolderListingPureWidget(filepath.Join("./GoLand/src/", r.URL.Path))
-			for _, v := range x.entries {
-				fmt.Fprintf(w, "<a href=%s>%s</a><br>", filepath.Join(r.URL.Path, v.Name()), v.Name())
+			_, plain := r.URL.Query()["plain"]
+			if !plain {
+				w.Header().Set("Content-Type", "text/html")
+			}
+
+			var b string
+
+			path := filepath.Join("./GoLand/src/", r.URL.Path)
+			if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
+				dpkg := GetDocPackage(bpkg, err)
+
+				out := Underline(`import "`+dpkg.ImportPath+`"`) + "  \n\n```Go"
+				for _, v := range dpkg.Vars {
+					out += SprintAstBare(v.Decl) + "  \n"
+				}
+				out += "  \n"
+				for _, f := range dpkg.Funcs {
+					out += SprintAstBare(f.Decl) + "  \n"
+				}
+				out += "  \n"
+				for _, c := range dpkg.Consts {
+					out += SprintAstBare(c.Decl) + "  \n"
+				}
+				out += "  \n"
+				for _, t := range dpkg.Types {
+					out += fmt.Sprint(t.Name) + "  \n"
+					//PrintlnAstBare(t.Decl)
+				}
+
+				b += out + "```"
+			}
+			b += "  \n---\n  \n"
+			if isGitRepo, status := IsFolderGitRepo(path); isGitRepo {
+				if status == "" {
+					b += "nothing to commit, working directory clean  \n"
+				} else {
+					b += status + "  \n"
+				}
+				b += CheckGitRepoLocal(path) + "  \n"
+				b += CheckGitRepoRemote(path) + "  \n"
+			}
+			b += "  \n---\n  \n"
+			{
+				x := newFolderListingPureWidget(path)
+				for _, v := range x.entries {
+					b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
+				}
+			}
+
+			if plain {
+				w.Write([]byte(b))
+			} else {
+				w.Write(blackfriday.MarkdownCommon([]byte(b)))
 			}
 		})
 		widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
