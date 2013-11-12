@@ -72,7 +72,7 @@ import (
 	. "gist.github.com/5953185.git"
 	"path/filepath"
 
-	//"bytes"
+	"flag"
 	. "gist.github.com/7390843.git"
 	"github.com/russross/blackfriday"
 	"net/http"
@@ -92,12 +92,17 @@ var _ = http.ListenAndServe
 
 const katOnly = false
 
-var oFontBase gl.Uint
+var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
+var keepRunning = true
+var oFontBase gl.Uint
 var redraw bool = true
 var widgets []Widgeter
 var mousePointer *Pointer
 var keyboardPointer *Pointer
+
+// TODO: Remove these
+var globalWindow *glfw.Window
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -862,8 +867,6 @@ func (w *BoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	}
 }
 
-var globalWindow *glfw.Window
-
 func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
@@ -996,7 +999,7 @@ func NewKatWidget(pos mathgl.Vec2d) *KatWidget {
 
 func (w *KatWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	/*hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	/*hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	isHit := len(w.HoverPointers()) > 0
 
@@ -1102,7 +1105,7 @@ func (w *KatWidget) NotifyChange() {
 	var timePassed float64 = UniversalClock.TimePassed
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	var speed = float64(100.0)
 
@@ -1584,8 +1587,8 @@ func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
 	action := func() {
 		if !w.started {
 			go func() {
-				CheckError(ListenAndServeStoppable("localhost:8080", nil, w.stopServerChan))
-				println("server stopped")
+				err := ListenAndServeStoppable("localhost:8080", nil, w.stopServerChan)
+				CheckError(err)
 			}()
 		} else {
 			w.stopServerChan <- true
@@ -1871,7 +1874,7 @@ func (w *FolderListingPureWidget) Render() {
 	DrawNBox(w.pos, w.size)
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	for i, v := range w.entries {
 		if w.selected == uint64(i+1) {
@@ -1913,7 +1916,7 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// Check if button 0 was released.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
@@ -2586,7 +2589,7 @@ func (w *TextBoxWidget) Layout() {
 
 func (w *TextBoxWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
@@ -2642,7 +2645,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
@@ -2781,7 +2784,7 @@ func NewTextFieldWidget(pos mathgl.Vec2d) *TextFieldWidget {
 
 func (w *TextFieldWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
 	if len(w.Content) < 3 {
@@ -2841,7 +2844,7 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
@@ -2907,7 +2910,7 @@ func NewMetaTextFieldWidget(pos mathgl.Vec2d) *MetaTextFieldWidget {
 
 func (w *MetaTextFieldWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
 	if len(w.Content) < 3 {
@@ -2976,7 +2979,7 @@ func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
@@ -3204,160 +3207,171 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 func main() {
 	//defer profile.Start(profile.MemProfile).Stop()
 
-	fmt.Printf("go version %s %s/%s; ", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("go version %s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	runtime.LockOSThread()
-
-	glfw.SetErrorCallback(func(err glfw.ErrorCode, desc string) {
-		panic(fmt.Sprintf("glfw.ErrorCallback: %v: %v\n", err, desc))
-	})
-
-	if !glfw.Init() {
-		panic("glfw.Init()")
-	}
-	fmt.Printf("glfw %d.%d.%d; ", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision)
-	defer glfw.Terminate()
-
-	//glfw.WindowHint(glfw.Samples, 32) // Anti-aliasing
-	//glfw.WindowHint(glfw.Decorated, glfw.False)
-	window, err := glfw.CreateWindow(600, 400, "", nil, nil)
-	globalWindow = window
-	CheckError(err)
-	window.MakeContextCurrent()
-
-	err = gl.Init()
-	if nil != err {
-		log.Print(err)
-	}
-	fmt.Println(gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
-
-	{
-		m, err := glfw.GetPrimaryMonitor()
-		CheckError(err)
-		vm, err := m.GetVideoMode()
-		CheckError(err)
-
-		window.SetPosition((vm.Width-600)/2, (vm.Height-400)/2)
-	}
-	glfw.SwapInterval(1) // Vsync
-
-	InitFont()
-	defer DeinitFont()
-
-	framebufferSizeCallback := func(w *glfw.Window, framebufferSize0, framebufferSize1 int) {
-		gl.Viewport(0, 0, gl.Sizei(framebufferSize0), gl.Sizei(framebufferSize1))
-
-		var windowSize [2]int
-		windowSize[0], windowSize[1] = w.GetSize()
-
-		// Update the projection matrix
-		gl.MatrixMode(gl.PROJECTION)
-		gl.LoadIdentity()
-		gl.Ortho(0, gl.Double(windowSize[0]), gl.Double(windowSize[1]), 0, -1, 1)
-		gl.MatrixMode(gl.MODELVIEW)
-
-		redraw = true
-	}
-	{
-		var framebufferSize [2]int
-		framebufferSize[0], framebufferSize[1] = window.GetFramebufferSize()
-		framebufferSizeCallback(window, framebufferSize[0], framebufferSize[1])
-	}
-	window.SetFramebufferSizeCallback(framebufferSizeCallback)
-
-	mousePointer = &Pointer{VirtualCategory: POINTING}
-	keyboardPointer = &Pointer{VirtualCategory: TYPING}
+	flag.Parse()
 
 	inputEventQueue := []InputEvent{}
+	var window *glfw.Window
 
-	var lastMousePos mathgl.Vec2d
-	lastMousePos[0], lastMousePos[1] = window.GetCursorPosition()
-	MousePos := func(w *glfw.Window, x, y float64) {
-		//fmt.Println("MousePos:", x, y)
+	if !*headlessFlag {
+		runtime.LockOSThread()
 
-		inputEvent := InputEvent{
-			Pointer:    mousePointer,
-			EventTypes: map[EventType]bool{SLIDER_EVENT: true, AXIS_EVENT: true},
-			InputId:    0,
-			Buttons:    nil,
-			Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
-			Axes:       []float64{x, y},
+		glfw.SetErrorCallback(func(err glfw.ErrorCode, desc string) {
+			panic(fmt.Sprintf("glfw.ErrorCallback: %v: %v\n", err, desc))
+		})
+
+		if !glfw.Init() {
+			panic("glfw.Init()")
 		}
-		lastMousePos[0] = x
-		lastMousePos[1] = y
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+		fmt.Printf("glfw %d.%d.%d; ", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision)
+		defer glfw.Terminate()
+
+		//glfw.WindowHint(glfw.Samples, 32) // Anti-aliasing
+		//glfw.WindowHint(glfw.Decorated, glfw.False)
+		var err error
+		window, err = glfw.CreateWindow(640, 400, "", nil, nil)
+		globalWindow = window
+		CheckError(err)
+		window.MakeContextCurrent()
+
+		err = gl.Init()
+		if nil != err {
+			log.Print(err)
+		}
+		fmt.Println(gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
+
+		{
+			m, err := glfw.GetPrimaryMonitor()
+			CheckError(err)
+			vm, err := m.GetVideoMode()
+			CheckError(err)
+
+			width, height := window.GetSize()
+			window.SetPosition((vm.Width-width)/2, (vm.Height-height)/2)
+		}
+		glfw.SwapInterval(1) // Vsync
+
+		InitFont()
+		defer DeinitFont()
+
+		window.SetCloseCallback(func(w *glfw.Window) {
+			keepRunning = false
+		})
+
+		framebufferSizeCallback := func(w *glfw.Window, framebufferSize0, framebufferSize1 int) {
+			gl.Viewport(0, 0, gl.Sizei(framebufferSize0), gl.Sizei(framebufferSize1))
+
+			var windowSize [2]int
+			windowSize[0], windowSize[1] = w.GetSize()
+
+			// Update the projection matrix
+			gl.MatrixMode(gl.PROJECTION)
+			gl.LoadIdentity()
+			gl.Ortho(0, gl.Double(windowSize[0]), gl.Double(windowSize[1]), 0, -1, 1)
+			gl.MatrixMode(gl.MODELVIEW)
+
+			redraw = true
+		}
+		{
+			var framebufferSize [2]int
+			framebufferSize[0], framebufferSize[1] = window.GetFramebufferSize()
+			framebufferSizeCallback(window, framebufferSize[0], framebufferSize[1])
+		}
+		window.SetFramebufferSizeCallback(framebufferSizeCallback)
+
+		mousePointer = &Pointer{VirtualCategory: POINTING}
+		keyboardPointer = &Pointer{VirtualCategory: TYPING}
+
+		var lastMousePos mathgl.Vec2d
+		lastMousePos[0], lastMousePos[1] = window.GetCursorPosition()
+		MousePos := func(w *glfw.Window, x, y float64) {
+			//fmt.Println("MousePos:", x, y)
+
+			inputEvent := InputEvent{
+				Pointer:    mousePointer,
+				EventTypes: map[EventType]bool{SLIDER_EVENT: true, AXIS_EVENT: true},
+				InputId:    0,
+				Buttons:    nil,
+				Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
+				Axes:       []float64{x, y},
+			}
+			lastMousePos[0] = x
+			lastMousePos[1] = y
+			inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+			redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+		}
+		window.SetCursorPositionCallback(MousePos)
+		MousePos(window, lastMousePos[0], lastMousePos[1])
+
+		window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
+			inputEvent := InputEvent{
+				Pointer:    mousePointer,
+				EventTypes: map[EventType]bool{SLIDER_EVENT: true},
+				InputId:    2,
+				Buttons:    nil,
+				Sliders:    []float64{yoff, xoff},
+				Axes:       nil,
+			}
+			inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+			redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+		})
+
+		window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
+			inputEvent := InputEvent{
+				Pointer:    mousePointer,
+				EventTypes: map[EventType]bool{BUTTON_EVENT: true},
+				InputId:    uint16(button),
+				Buttons:    []bool{action != glfw.Release},
+				Sliders:    nil,
+				Axes:       nil,
+			}
+			inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+			redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+		})
+
+		window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+			/*if key == glfw.KeyEnter && action == glfw.Press {
+				x, y := window.GetPosition()
+				window.SetPosition(x-16, y)
+			}*/
+
+			inputEvent := InputEvent{
+				Pointer:     keyboardPointer,
+				EventTypes:  map[EventType]bool{BUTTON_EVENT: true},
+				InputId:     uint16(key),
+				Buttons:     []bool{action != glfw.Release},
+				Sliders:     nil,
+				Axes:        nil,
+				ModifierKey: mods,
+			}
+			//fmt.Println(key, action, mods)
+			inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+			redraw = true // HACK
+		})
+
+		window.SetCharacterCallback(func(w *glfw.Window, char uint) {
+			// HACK: Ignore characters when Super key is held down
+			if window.GetKey(glfw.KeyLeftSuper) != glfw.Release || window.GetKey(glfw.KeyRightSuper) != glfw.Release {
+				return
+			}
+
+			inputEvent := InputEvent{
+				Pointer:    keyboardPointer,
+				EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
+				InputId:    uint16(char),
+				Buttons:    nil,
+				Sliders:    nil,
+				Axes:       nil,
+			}
+			inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+			redraw = true // HACK
+		})
+
+		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+		//gl.ClearColor(0.8, 0.3, 0.01, 1)
+		gl.ClearColor(0.85, 0.85, 0.85, 1)
 	}
-	window.SetCursorPositionCallback(MousePos)
-	MousePos(window, lastMousePos[0], lastMousePos[1])
-
-	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
-		inputEvent := InputEvent{
-			Pointer:    mousePointer,
-			EventTypes: map[EventType]bool{SLIDER_EVENT: true},
-			InputId:    2,
-			Buttons:    nil,
-			Sliders:    []float64{yoff, xoff},
-			Axes:       nil,
-		}
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
-	})
-
-	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
-		inputEvent := InputEvent{
-			Pointer:    mousePointer,
-			EventTypes: map[EventType]bool{BUTTON_EVENT: true},
-			InputId:    uint16(button),
-			Buttons:    []bool{action != glfw.Release},
-			Sliders:    nil,
-			Axes:       nil,
-		}
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
-	})
-
-	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		/*if key == glfw.KeyEnter && action == glfw.Press {
-			x, y := window.GetPosition()
-			window.SetPosition(x-16, y)
-		}*/
-
-		inputEvent := InputEvent{
-			Pointer:     keyboardPointer,
-			EventTypes:  map[EventType]bool{BUTTON_EVENT: true},
-			InputId:     uint16(key),
-			Buttons:     []bool{action != glfw.Release},
-			Sliders:     nil,
-			Axes:        nil,
-			ModifierKey: mods,
-		}
-		//fmt.Println(key, action, mods)
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // HACK
-	})
-
-	window.SetCharacterCallback(func(w *glfw.Window, char uint) {
-		// HACK: Ignore characters when Super key is held down
-		if window.GetKey(glfw.KeyLeftSuper) != glfw.Release || window.GetKey(glfw.KeyRightSuper) != glfw.Release {
-			return
-		}
-
-		inputEvent := InputEvent{
-			Pointer:    keyboardPointer,
-			EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
-			InputId:    uint16(char),
-			Buttons:    nil,
-			Sliders:    nil,
-			Axes:       nil,
-		}
-		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
-		redraw = true // HACK
-	})
-
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	//gl.ClearColor(0.8, 0.3, 0.01, 1)
-	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
 	// ---
 
@@ -3486,6 +3500,10 @@ func main() {
 
 		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{360, 70}, "./GoLand/src/"))
 
+		http.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintln(w, "Closing.")
+			keepRunning = false
+		})
 		http.HandleFunc("/widgets", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(goon.SdumpExpr(len(widgets))))
 			fmt.Fprintln(w)
@@ -3560,20 +3578,18 @@ func main() {
 
 	// ---
 
-	//last := window.GetClipboardString()
-
-	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
+	for keepRunning {
 		frameStartTime := time.Now()
 
-		//glfw.WaitEvents()
-		glfw.PollEvents()
+		if !*headlessFlag {
+			//glfw.WaitEvents()
+			glfw.PollEvents()
 
-		/*now := window.GetClipboardString()
-		if now != last {
-			last = now
-			redraw = true
-			fmt.Println("GetClipboardString changed!")
-		}*/
+			// HACK: Close window check
+			if glfw.Release != window.GetKey(glfw.KeyEscape) {
+				keepRunning = false
+			}
+		}
 
 		// Input
 		inputEventQueue = ProcessInputEventQueue(widget, inputEventQueue)
@@ -3581,7 +3597,7 @@ func main() {
 		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
 		UniversalClock.NotifyAllListeners()
 
-		if redraw {
+		if redraw && !*headlessFlag {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
 
@@ -3596,7 +3612,7 @@ func main() {
 
 		runtime.Gosched()
 
-		if redraw {
+		if redraw && !*headlessFlag {
 			fpsWidget.PushTimeTotal(time.Since(frameStartTime).Seconds() * 1000)
 			redraw = false
 		}
