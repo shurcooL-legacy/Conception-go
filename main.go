@@ -1365,15 +1365,19 @@ type ChannelExpeWidget struct {
 func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	w := &ChannelExpeWidget{}
 	action := func() {
+		// Comments are currently not preserved in the tooltip
+
 		if w.cmd == nil {
 			w.cmd = exec.Command("ping", "google.com")
 			stdout, err := w.cmd.StdoutPipe()
 			CheckError(err)
 			err = w.cmd.Start()
 			CheckError(err)
+			go w.cmd.Wait() // It looks like I need to wait for the process, else it doesn't terminate properly
 			w.ch = ByteReader(stdout)
 		} else {
-			w.cmd.Process.Kill() // Comments are currently not preserved
+			//w.cmd.Process.Kill()
+			w.cmd.Process.Signal(os.Interrupt)
 			w.cmd = nil
 		}
 	}
@@ -1429,13 +1433,14 @@ func (w *ChannelExpeWidget) NotifyChange() {
 
 type LiveCmdExpeWidget struct {
 	*FlowLayoutWidget
-	cmd      *exec.Cmd
-	stdoutCh <-chan []byte
-	stderrCh <-chan []byte
+	cmd        *exec.Cmd
+	stdoutChan <-chan []byte
+	stderrChan <-chan []byte
 }
 
 func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
+	//src := NewTextFileWidget(mathgl.Vec2d{}, "./GoLand/src/simple.go")
 	//src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5694308.git/main.go")
 	//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
 	//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
@@ -1446,28 +1451,35 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	UniversalClock.AddChangeListener(w)
 
 	src.AfterChange = append(src.AfterChange, func() {
-		if w.cmd != nil {
-			w.cmd.Process.Kill()
+		if w.cmd != nil && w.cmd.ProcessState == nil {
+			//w.cmd.Process.Kill()
+			w.cmd.Process.Signal(os.Interrupt)
+			//w.cmd.Process.Signal(syscall.SIGTERM)
+			fmt.Println("sigint'ed process", w.cmd.Process.Pid)
 			w.cmd = nil
 		}
 
 		dst.Content.Set("")
 
-		w.cmd = exec.Command("go", "run", src.Path())
-		{
-			stdout, err := w.cmd.StdoutPipe()
-			CheckError(err)
-			w.stdoutCh = ByteReader(stdout)
-		}
-		{
-			stderr, err := w.cmd.StderrPipe()
-			CheckError(err)
-			w.stderrCh = ByteReader(stderr)
-		}
-		{
-			err := w.cmd.Start()
-			CheckError(err)
-		}
+		// TODO: Need to go build and run the result binary, so that I can figure out its pid and kill that...
+		w.cmd = exec.Command("go", "build", src.Path())
+
+		stdout, err := w.cmd.StdoutPipe()
+		CheckError(err)
+
+		stderr, err := w.cmd.StderrPipe()
+		CheckError(err)
+
+		err = w.cmd.Start()
+		CheckError(err)
+		fmt.Println("started new process", w.cmd.Process.Pid)
+		w.stdoutChan = ByteReader(stdout)
+		w.stderrChan = ByteReader(stderr)
+
+		go func(cmd *exec.Cmd) {
+			_ = cmd.Wait()
+			fmt.Println("waited til end of", cmd.Process.Pid)
+		}(w.cmd)
 	})
 
 	return w
@@ -1475,7 +1487,7 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 
 func (w *LiveCmdExpeWidget) NotifyChange() {
 	select {
-	case b, ok := <-w.stdoutCh:
+	case b, ok := <-w.stdoutChan:
 		if ok {
 			box := w.FlowLayoutWidget.CompositeWidget.Widgets[1].(*TextBoxWidget)
 			box.Content.Set(box.Content.Content() + string(b))
@@ -1485,7 +1497,7 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 	}
 
 	select {
-	case b, ok := <-w.stderrCh:
+	case b, ok := <-w.stderrChan:
 		if ok {
 			box := w.FlowLayoutWidget.CompositeWidget.Widgets[1].(*TextBoxWidget)
 			box.Content.Set(box.Content.Content() + string(b))
@@ -3111,7 +3123,9 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 		widget.ProcessEvent(inputEvent)
 
 		if !katOnly {
-			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 {
+			if inputEvent.Pointer.VirtualCategory == POINTING &&
+				(inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2) {
+
 				LocalPosition := GlobalToLocal(widget, mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])})
 
 				// Clear previously hit widgets
@@ -3456,7 +3470,7 @@ func main() {
 			widgets[12].(*LiveCmdExpeWidget).Layout()
 		}
 
-		// NumGoroutine
+		// NumGoroutines
 		{
 			contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
 			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
@@ -3566,10 +3580,19 @@ func main() {
 			}
 		})
 		widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
-	} else {
+	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
+	} else {
+		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 0}))
+
+		// NumGoroutines
+		{
+			contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
+			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
+			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
+		}
 	}
 	fpsWidget := NewFpsWidget(mathgl.Vec2d{10, 120})
 	widgets = append(widgets, fpsWidget)
