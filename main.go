@@ -3368,7 +3368,7 @@ func main() {
 		//glfw.WindowHint(glfw.Samples, 32) // Anti-aliasing
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
 		var err error
-		window, err = glfw.CreateWindow(640, 400, "", nil, nil)
+		window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
 		globalWindow = window
 		CheckError(err)
 		window.MakeContextCurrent()
