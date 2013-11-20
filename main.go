@@ -2155,7 +2155,7 @@ func (w *GoonWidget) setupInternals() {
 
 	var f *FlowLayoutWidget
 	if w.expanded == nil || !w.expanded.State() {
-		title := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(w.title+": "))
+		title := NewTextLabelWidgetString(mathgl.Vec2d{}, w.title+": ")
 
 		var mc MultilineContentI
 		if !expandable {
@@ -2195,7 +2195,7 @@ func getTypeString(a reflect.Value) string {
 func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	v := a.Elem()
 
-	title := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(w.title+": "))
+	title := NewTextLabelWidgetString(mathgl.Vec2d{}, w.title+": ")
 	t := NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", getTypeString(v)))
 	header := NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{title, t}, nil)
 
@@ -2243,11 +2243,11 @@ func setupInternals3(titleString string, a reflect.Value) Widgeter {
 
 	var w Widgeter
 	if a.Kind() == reflect.Float64 && a.Addr().CanInterface() {
-		title := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(titleString+": "))
+		title := NewTextLabelWidgetString(mathgl.Vec2d{}, titleString+": ")
 		t := NewTest2Widget(mathgl.Vec2d{}, a.Addr().Interface().(*float64))
 		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
 	} else if a.Kind() == reflect.String {
-		title := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString(titleString+": "))
+		title := NewTextLabelWidgetString(mathgl.Vec2d{}, titleString+": ")
 		t := NewTextBoxWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentPointer(a.Addr().Interface().(*string)))
 		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
 	} else if vv := a; vv.CanAddr() {
@@ -3560,7 +3560,7 @@ func main() {
 		// GoForcedUseWidget2
 		{
 			src := NewTextBoxWidget(mathgl.Vec2d{})
-			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString("go Forced Use")) // TODO: Use gofmt to refactor all instances, as GoForcedUseWidget above.
+			label := NewTextLabelWidgetString(mathgl.Vec2d{}, "go Forced Use")
 
 			params := func() interface{} { return src.Content.Content() }
 			action := func(param interface{}) string {
