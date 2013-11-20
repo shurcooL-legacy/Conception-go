@@ -677,7 +677,6 @@ type ButtonWidget struct {
 	Widget
 	action  func()
 	tooltip Widgeter
-	DepNode
 }
 
 func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
@@ -1442,11 +1441,51 @@ func (w *ChannelExpeWidget) NotifyChange() {
 
 // ---
 
+type commandNode struct {
+	w        *LiveCmdExpeWidget
+	nameArgs []string
+	dst      *TextBoxWidget
+}
+
+func (this *commandNode) NotifyChange() {
+	if this.w.cmd != nil && this.w.cmd.ProcessState == nil {
+		//w.cmd.Process.Kill()
+		this.w.cmd.Process.Signal(os.Interrupt)
+		//w.cmd.Process.Signal(syscall.SIGTERM)
+		//fmt.Println("sigint'ed process", this.w.cmd.Process.Pid)
+		this.w.cmd = nil
+	}
+
+	this.dst.Content.Set("")
+
+	// TODO: Need to go build and run the result binary, so that I can figure out its pid and kill that...
+	this.w.cmd = exec.Command(this.nameArgs[0], this.nameArgs[1:]...)
+
+	stdout, err := this.w.cmd.StdoutPipe()
+	CheckError(err)
+
+	stderr, err := this.w.cmd.StderrPipe()
+	CheckError(err)
+
+	err = this.w.cmd.Start()
+	CheckError(err)
+	//fmt.Println("started new process", this.w.cmd.Process.Pid)
+	this.w.stdoutChan = ByteReader(stdout)
+	this.w.stderrChan = ByteReader(stderr)
+
+	go func(cmd *exec.Cmd) {
+		_ = cmd.Wait()
+		//fmt.Println("waited til end of", cmd.Process.Pid)
+		this.w.finishedChan <- cmd.ProcessState
+	}(this.w.cmd)
+}
+
 type LiveCmdExpeWidget struct {
 	*FlowLayoutWidget
-	cmd        *exec.Cmd
-	stdoutChan <-chan []byte
-	stderrChan <-chan []byte
+	cmd          *exec.Cmd
+	stdoutChan   <-chan []byte
+	stderrChan   <-chan []byte
+	finishedChan chan *os.ProcessState
 }
 
 func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
@@ -1457,41 +1496,16 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
 	//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 	//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
 	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
-	w := &LiveCmdExpeWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, dst}, nil)}
+	w := &LiveCmdExpeWidget{
+		FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, dst}, nil),
+		finishedChan:     make(chan *os.ProcessState),
+	}
 
 	UniversalClock.AddChangeListener(w)
 
-	src.AfterChange = append(src.AfterChange, func() {
-		if w.cmd != nil && w.cmd.ProcessState == nil {
-			//w.cmd.Process.Kill()
-			w.cmd.Process.Signal(os.Interrupt)
-			//w.cmd.Process.Signal(syscall.SIGTERM)
-			fmt.Println("sigint'ed process", w.cmd.Process.Pid)
-			w.cmd = nil
-		}
-
-		dst.Content.Set("")
-
-		// TODO: Need to go build and run the result binary, so that I can figure out its pid and kill that...
-		w.cmd = exec.Command("go", "build", src.Path())
-
-		stdout, err := w.cmd.StdoutPipe()
-		CheckError(err)
-
-		stderr, err := w.cmd.StderrPipe()
-		CheckError(err)
-
-		err = w.cmd.Start()
-		CheckError(err)
-		fmt.Println("started new process", w.cmd.Process.Pid)
-		w.stdoutChan = ByteReader(stdout)
-		w.stderrChan = ByteReader(stderr)
-
-		go func(cmd *exec.Cmd) {
-			_ = cmd.Wait()
-			fmt.Println("waited til end of", cmd.Process.Pid)
-		}(w.cmd)
-	})
+	// THINK: The only reason to have a separate command node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
+	commandNode := &commandNode{w: w, nameArgs: []string{"go", "build", src.Path()}, dst: dst}
+	src.AddChangeListener(commandNode)
 
 	return w
 }
@@ -1516,6 +1530,15 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 		}
 	default:
 	}
+
+	select {
+	case processState := <-w.finishedChan:
+		if processState.Success() {
+			// TODO: Is ChangeListener stuff a good fit for these not-really-change events?
+			w.NotifyAllListeners()
+		}
+	default:
+	}
 }
 
 // ---
@@ -1532,23 +1555,23 @@ func (this *actionNode) NotifyChange() {
 
 	//this.owner.Content.Set(this.action()); _ = ti
 	go func(params interface{}) {
-		//defer close(outCh)
+		//defer close(outChan)
 		//started := time.Now()
 		ts := timestampString{this.action(params), ti}
 		//fmt.Println(time.Since(started).Seconds())
-		this.owner.outCh <- ts
+		this.owner.outChan <- ts
 	}(this.params())
-}
-
-type LiveGoroutineExpeWidget struct {
-	*TextBoxWidget
-	outCh                       chan timestampString
-	lastStartedT, lastFinishedT uint32
 }
 
 type timestampString struct {
 	s string
 	t uint32
+}
+
+type LiveGoroutineExpeWidget struct {
+	*TextBoxWidget
+	outChan                     chan timestampString
+	lastStartedT, lastFinishedT uint32
 }
 
 func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
@@ -1567,7 +1590,7 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, params f
 		}
 	}, []DepNodeI{src})*/
 
-	w := &LiveGoroutineExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), outCh: make(chan timestampString)}
+	w := &LiveGoroutineExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), outChan: make(chan timestampString)}
 
 	UniversalClock.AddChangeListener(w)
 
@@ -1581,9 +1604,8 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, params f
 }
 
 func (w *LiveGoroutineExpeWidget) NotifyChange() {
-	//if w.outCh != nil {
 	select {
-	case s, ok := <-w.outCh:
+	case s, ok := <-w.outChan:
 		if ok {
 			if s.t > w.lastFinishedT {
 				w.lastFinishedT = s.t
@@ -1594,7 +1616,6 @@ func (w *LiveGoroutineExpeWidget) NotifyChange() {
 		}
 	default:
 	}
-	//}
 }
 
 // ---
@@ -2674,8 +2695,6 @@ type TextBoxWidget struct {
 	Widget
 	Content       MultilineContentI
 	caretPosition CaretPosition
-
-	AfterChange []func()
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -2701,10 +2720,6 @@ func (w *TextBoxWidget) NotifyChange() {
 	w.Layout()
 
 	w.NotifyAllListeners()
-
-	for _, f := range w.AfterChange {
-		f()
-	}
 
 	// TODO: Figure out if this should be here... is it a big deal if it gets called here AND elsewhere?
 	redraw = true
@@ -3531,7 +3546,9 @@ func main() {
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{100, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
-		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200}))
+		liveCmdExpeWidget := NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200})
+		liveCmdExpeWidget.AddChangeListener(&spinner)
+		widgets = append(widgets, liveCmdExpeWidget)
 		if false {
 			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
 			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, -1525}, contentFunc, []DepNodeI{&UniversalClock}))
