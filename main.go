@@ -1456,9 +1456,8 @@ func (this *commandNode) NotifyChange() {
 		this.w.cmd = nil
 	}
 
-	this.dst.Content.Set("")
+	this.w.Content.Set("")
 
-	// TODO: Need to go build and run the result binary, so that I can figure out its pid and kill that...
 	this.w.cmd = exec.Command(this.nameArgs[0], this.nameArgs[1:]...)
 
 	stdout, err := this.w.cmd.StdoutPipe()
@@ -1481,31 +1480,23 @@ func (this *commandNode) NotifyChange() {
 }
 
 type LiveCmdExpeWidget struct {
-	*FlowLayoutWidget
+	*TextBoxWidget
 	cmd          *exec.Cmd
 	stdoutChan   <-chan []byte
 	stderrChan   <-chan []byte
 	finishedChan chan *os.ProcessState
 }
 
-func NewLiveCmdExpeWidget(pos mathgl.Vec2d) *LiveCmdExpeWidget {
-	src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
-	//src := NewTextFileWidget(mathgl.Vec2d{}, "./GoLand/src/simple.go")
-	//src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5694308.git/main.go")
-	//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
-	//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
-	//dst := NewTextBoxWidgetExternalContent(mathgl.Vec2d{240, 200}, src.Content)
-	dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
-	w := &LiveCmdExpeWidget{
-		FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{src, dst}, nil),
-		finishedChan:     make(chan *os.ProcessState),
-	}
+func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, nameArgs []string) *LiveCmdExpeWidget {
+	w := &LiveCmdExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan *os.ProcessState)}
 
 	UniversalClock.AddChangeListener(w)
 
 	// THINK: The only reason to have a separate command node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
-	commandNode := &commandNode{w: w, nameArgs: []string{"go", "build", src.Path()}, dst: dst}
-	src.AddChangeListener(commandNode)
+	commandNode := &commandNode{w: w, nameArgs: nameArgs}
+	for _, dependee := range dependees {
+		dependee.AddChangeListener(commandNode)
+	}
 
 	return w
 }
@@ -1514,8 +1505,7 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 	select {
 	case b, ok := <-w.stdoutChan:
 		if ok {
-			box := w.FlowLayoutWidget.CompositeWidget.Widgets[1].(*TextBoxWidget)
-			box.Content.Set(box.Content.Content() + string(b))
+			w.Content.Set(w.Content.Content() + string(b))
 			redraw = true
 		}
 	default:
@@ -1524,8 +1514,7 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 	select {
 	case b, ok := <-w.stderrChan:
 		if ok {
-			box := w.FlowLayoutWidget.CompositeWidget.Widgets[1].(*TextBoxWidget)
-			box.Content.Set(box.Content.Content() + string(b))
+			w.Content.Set(w.Content.Content() + string(b))
 			redraw = true
 		}
 	default:
@@ -3546,9 +3535,20 @@ func main() {
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{100, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
-		liveCmdExpeWidget := NewLiveCmdExpeWidget(mathgl.Vec2d{50, 200})
-		liveCmdExpeWidget.AddChangeListener(&spinner)
-		widgets = append(widgets, liveCmdExpeWidget)
+		{
+			src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
+			//src := NewTextFileWidget(mathgl.Vec2d{}, "./GoLand/src/simple.go")
+			//src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5694308.git/main.go")
+			//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
+			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
+
+			build := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, []string{"go", "build", src.Path()})
+			build.AddChangeListener(&spinner)
+
+			run := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{build}, []string{"./main"}) // TODO: Proper path
+
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build, run}, nil))
+		}
 		if false {
 			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
 			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, -1525}, contentFunc, []DepNodeI{&UniversalClock}))
@@ -3604,11 +3604,11 @@ func main() {
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
 		{
-			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
-			w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[12].(*LiveCmdExpeWidget).Widgets[0].(*TextFileWidget))
-			widgets[12].(*LiveCmdExpeWidget).Widgets = append(widgets[12].(*LiveCmdExpeWidget).Widgets, w)
-			w.SetParent(widgets[12].(*LiveCmdExpeWidget).FlowLayoutWidget)
-			widgets[12].(*LiveCmdExpeWidget).Layout()
+			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
+			widgets[12].(*FlowLayoutWidget).Widgets = append(widgets[12].(*FlowLayoutWidget).Widgets, w)
+			w.SetParent(widgets[12]) // Needed for pointer coordinates to be accurate
+			widgets[12].(*FlowLayoutWidget).Layout()
 		}
 
 		// NumGoroutines
@@ -3742,7 +3742,7 @@ func main() {
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 	} else if true {
-		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 0}))
+		//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 0}))
 
 		// NumGoroutines
 		{
