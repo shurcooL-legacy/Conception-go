@@ -1467,7 +1467,10 @@ func (this *commandNode) NotifyChange() {
 	CheckError(err)
 
 	err = this.w.cmd.Start()
-	CheckError(err)
+	if err != nil {
+		this.w.cmd = nil
+		return
+	}
 	//fmt.Println("started new process", this.w.cmd.Process.Pid)
 	this.w.stdoutChan = ByteReader(stdout)
 	this.w.stderrChan = ByteReader(stderr)
@@ -1481,10 +1484,11 @@ func (this *commandNode) NotifyChange() {
 
 type LiveCmdExpeWidget struct {
 	*TextBoxWidget
-	cmd          *exec.Cmd
-	stdoutChan   <-chan []byte
-	stderrChan   <-chan []byte
-	finishedChan chan *os.ProcessState
+	cmd             *exec.Cmd
+	stdoutChan      <-chan []byte
+	stderrChan      <-chan []byte
+	finishedChan    chan *os.ProcessState
+	FinishedDepNode DepNode
 }
 
 func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, nameArgs []string) *LiveCmdExpeWidget {
@@ -1521,11 +1525,13 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 	}
 
 	select {
-	case processState := <-w.finishedChan:
-		if processState.Success() {
-			// TODO: Is ChangeListener stuff a good fit for these not-really-change events?
-			w.NotifyAllListeners()
-		}
+	/*case processState := <-w.finishedChan:
+	if processState.Success() {
+		// TODO: Is ChangeListener stuff a good fit for these not-really-change events?
+		w.SuccessDepNode.NotifyAllListeners()
+	}*/
+	case <-w.finishedChan:
+		w.FinishedDepNode.NotifyAllListeners()
 	default:
 	}
 }
@@ -3542,10 +3548,10 @@ func main() {
 			//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
 			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 
-			build := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, []string{"go", "build", src.Path()})
+			build := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, []string{"go", "build", "-o", "./Con2RunBin", src.Path()})
 			build.AddChangeListener(&spinner)
 
-			run := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{build}, []string{"./main"}) // TODO: Proper path
+			run := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{&build.FinishedDepNode}, []string{"./Con2RunBin"}) // TODO: Proper path
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build, run}, nil))
 		}
