@@ -77,6 +77,9 @@ import (
 	"github.com/russross/blackfriday"
 	"net/http"
 	_ "net/http/pprof"
+
+	. "gist.github.com/7480523.git"
+	//. "gist.github.com/7519227.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -674,11 +677,19 @@ type ButtonWidget struct {
 	Widget
 	action  func()
 	tooltip Widgeter
+	DepNode
 }
 
 func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
 	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16})}
 	w.setAction(action)
+
+	return w
+}
+
+func NewButtonTriggerWidget(pos mathgl.Vec2d) *ButtonWidget {
+	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16})}
+	w.setAction(func() { w.NotifyAllListeners() })
 
 	return w
 }
@@ -1637,6 +1648,11 @@ func (w *SpinnerWidget) Render() {
 	gl.End()
 }
 
+func (w *SpinnerWidget) NotifyChange() {
+	//w.Spinner++
+	w.Spinner += 45
+}
+
 // ---
 
 type fpsSample struct{ Render, Total float64 }
@@ -1783,44 +1799,6 @@ func (w *FolderListingPureWidget) NotifyChange() {
 	w.Layout()
 
 	w.NotifyAllListeners()
-}
-
-func IsFolderGitRepo(path string) (bool, string) {
-	// Alternative: git rev-parse
-	// For individual files: git ls-files --error-unmatch -- 'Filename', return code == 0
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = path
-
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return true, string(out)
-	} else {
-		return false, ""
-	}
-}
-
-func CheckGitRepoLocal(path string) string {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = path
-
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return string(out[:40]) // HACK: What if hash isn't 40 chars?
-	} else {
-		return ""
-	}
-}
-
-func CheckGitRepoRemote(path string) string {
-	cmd := exec.Command("git", "ls-remote", "--heads", "origin", "master")
-	cmd.Dir = path
-
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return string(out[:40]) // HACK: What if hash isn't 40 chars?
-	} else {
-		return ""
-	}
 }
 
 func (w *FolderListingPureWidget) selectionChangedTest() {
@@ -1975,6 +1953,133 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 		}
 	}
 }
+
+// ---
+
+/*func IsGitRepoWidgeter(w *Something) Widgeter {
+	if w.IsGitRepo {
+		return NewTextLabelWidgetString(mathgl.Vec2d{}, "@")
+	} else {
+		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
+	}
+}
+
+func StatusWidgeter(w *Something) Widgeter {
+	if !w.IsGitRepo {
+		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
+	}
+	if w.Status != "" {
+		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, "*", w.Status)
+	} else {
+		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
+	}
+}
+
+func RemoteWidgeter(w *Something) Widgeter {
+	if !w.IsGitRepo {
+		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
+	}
+	if w.Remote != w.Local {
+		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, "+", w.Remote)
+	} else {
+		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, " ", w.Remote)
+	}
+}
+
+func LocalWidgeter(w *Something) Widgeter {
+	if !w.IsGitRepo {
+		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
+	}
+	if w.Remote != w.Local {
+		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, "+", w.Local)
+	} else {
+		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, " ", w.Local)
+	}
+}
+
+func IsCommandWidgeter(w *Something) Widgeter {
+	if w.IsGitRepo {
+		return NewTextLabelWidgetString(mathgl.Vec2d{}, "/")
+	} else {
+		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
+	}
+}
+
+func rec(pkgs *[]Something, gopathEntry, importPath string) {
+	pkg := SomethingFromPath(gopathEntry, importPath)
+	if pkg != nil {
+		//*pkgs = append(*pkgs, NewGoPackageWidget(mathgl.Vec2d{}, pkg))
+		*pkgs = append(*pkgs, *pkg)
+		(*pkgs)[len(*pkgs)-1].Update()
+	}
+
+	path := filepath.Join(gopathEntry, "src", importPath)
+	entries, err := ioutil.ReadDir(path)
+	if err == nil {
+		for _, v := range entries {
+			if v.IsDir() && !strings.HasPrefix(v.Name(), ".") {
+				rec(pkgs, gopathEntry, filepath.Join(importPath, v.Name()))
+			}
+		}
+	}
+}
+
+// In main()
+{
+	//pkgs := []Widgeter(nil)
+	pkgs := []Something(nil)
+
+	//pkgs = append(pkgs, NewGoPackageWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand", "honnef.co/go/importer"))
+	//pkgs = append(pkgs, NewGoPackageWidget(mathgl.Vec2d{}, SomethingFromPath("/Users/Dmitri/Dropbox/Work/2013/GoLand", "honnef.co/go/importer")))
+	var skipGopath = map[string]bool{"/Users/Dmitri/Local/GoTrLand": true, "/Users/Dmitri/Dropbox/Work/2013/GoLanding": true}
+	gopathEntries := filepath.SplitList(os.Getenv("GOPATH"))
+	for _, gopathEntry := range gopathEntries {
+		if skipGopath[gopathEntry] {
+			continue
+		}
+		rec(&pkgs, gopathEntry, ".")
+	}
+
+	//widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{}, pkgs, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}))
+	widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{}, &pkgs))
+}
+
+type GoPackageWidget struct {
+	*FlowLayoutWidget
+	//pkg *Something
+}
+
+func NewGoPackageWidget(pos mathgl.Vec2d, pkg *Something) *GoPackageWidget {
+	contentFunc := func() Widgeter {
+		pkg.Update()
+
+		isGitRepo := IsGitRepoWidgeter(pkg)
+		status := StatusWidgeter(pkg)
+		remote := RemoteWidgeter(pkg)
+		local := LocalWidgeter(pkg)
+		isCommand := IsCommandWidgeter(pkg)
+		bpkg := NewTextLabelWidgetString(mathgl.Vec2d{}, pkg.Bpkg.ImportPath)
+
+		inner := NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{isGitRepo, status, remote, local, isCommand, bpkg}, nil)
+
+		return inner
+		//return pkg.String() //+ "\n" + goon.SdumpExpr(pkg.Local) + goon.SdumpExpr(pkg.Remote)
+	}
+	//mc := NewMultilineContentFunc(contentFunc, []DepNodeI{})
+	// TODO: mc := NewMultilineContentStruct(&GoPackageWidget{}, []DepNodeI{})
+	//mc.NotifyChange()
+	//l := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
+
+	l := contentFunc()
+
+	b := NewButtonWidget(mathgl.Vec2d{}, nil)
+
+	w := &GoPackageWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{b, l}, nil)}
+
+	w.Widgets[0].(*ButtonWidget).SetAction(func() { x := contentFunc(); x.SetParent(w); w.Widgets[1] = x; w.Layout() })
+
+	return w
+}*/
 
 // ---
 
@@ -2498,6 +2603,7 @@ func (this *MultilineContentFuncInstant) LongestLine() uint32 {
 type TextLabelWidget struct {
 	Widget
 	Content MultilineContentI
+	tooltip Widgeter
 }
 
 func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *TextLabelWidget {
@@ -2512,6 +2618,13 @@ func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *
 func NewTextLabelWidgetString(pos mathgl.Vec2d, s string) *TextLabelWidget {
 	mc := NewMultilineContentString(s)
 	w := NewTextLabelWidgetExternalContent(pos, mc)
+	return w
+}
+
+func NewTextLabelWidgetStringTooltip(pos mathgl.Vec2d, s, tooltip string) *TextLabelWidget {
+	mc := NewMultilineContentString(s)
+	w := NewTextLabelWidgetExternalContent(pos, mc)
+	w.tooltip = NewTextLabelWidgetString(mathgl.Vec2d{}, tooltip)
 	return w
 }
 
@@ -2542,6 +2655,16 @@ func (w *TextLabelWidget) Render() {
 	gl.Color3d(0, 0, 0)
 	for lineNumber, contentLine := range w.Content.Lines() {
 		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+	}
+
+	isHit := len(w.HoverPointers()) > 0
+	// Tooltip
+	if w.tooltip != nil && isHit {
+		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		w.tooltip.Layout()
+		tooltipOffset := mathgl.Vec2d{0, -16 - w.tooltip.Size()[1]}
+		w.tooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
+		w.tooltip.Render()
 	}
 }
 
@@ -3123,6 +3246,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 		widget.ProcessEvent(inputEvent)
 
 		if !katOnly {
+			// TODO: Calculate whether a pointing pointer moved relative to canvas in a better way... what if canvas is moved via keyboard, etc.
 			if inputEvent.Pointer.VirtualCategory == POINTING &&
 				(inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2) {
 
@@ -3417,7 +3541,7 @@ func main() {
 		// GoForcedUseWidget
 		{
 			src := NewTextBoxWidget(mathgl.Vec2d{})
-			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString("go Forced Use"))
+			label := NewTextLabelWidgetString(mathgl.Vec2d{}, "go Forced Use")
 
 			params := func() interface{} { return src.Content.Content() }
 			action := func(param interface{}) string {
@@ -3436,7 +3560,7 @@ func main() {
 		// GoForcedUseWidget2
 		{
 			src := NewTextBoxWidget(mathgl.Vec2d{})
-			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString("go Forced Use"))
+			label := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentString("go Forced Use")) // TODO: Use gofmt to refactor all instances, as GoForcedUseWidget above.
 
 			params := func() interface{} { return src.Content.Content() }
 			action := func(param interface{}) string {
@@ -3580,11 +3704,27 @@ func main() {
 			}
 		})
 		widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
+
+		// Shuryear Clock
+		{
+			contentFunc := func() string {
+				shuryearNow := 1970 + float64(time.Now().UnixNano())/(3600*24*3652422*100000)
+				return fmt.Sprintf("%.8f", shuryearNow)
+			}
+			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
+			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{535, 1}, mc)) // TODO: Stick to top right corner?
+		}
+
+		{
+			buttonTrigger := NewButtonTriggerWidget(mathgl.Vec2d{50, 30})
+			buttonTrigger.AddChangeListener(&spinner)
+			widgets = append(widgets, buttonTrigger)
+		}
 	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
-	} else {
+	} else if true {
 		widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 0}))
 
 		// NumGoroutines
@@ -3626,7 +3766,7 @@ func main() {
 
 			widget.Render()
 
-			spinner.Spinner++
+			//spinner.NotifyChange()
 			fpsWidget.PushTimeToRender(time.Since(frameStartTime).Seconds() * 1000)
 			window.SwapBuffers()
 		} else {
