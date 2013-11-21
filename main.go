@@ -3599,6 +3599,21 @@ func main() {
 			widgets = append(widgets, w)
 		}
 
+		// git diff
+		{
+			source := widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget)
+			dir, file := filepath.Split(source.Path())
+			if isGitRepo, _ := IsFolderGitRepo(dir); isGitRepo {
+				template := NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
+				template.Dir = dir
+				w := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{source}, template) // TODO: Figure out []DepNodeI{source} vs. []DepNodeI{source.Content}?
+
+				widgets[12].(*FlowLayoutWidget).Widgets = append(widgets[12].(*FlowLayoutWidget).Widgets, w)
+				w.SetParent(widgets[12]) // Needed for pointer coordinates to be accurate
+				widgets[12].(*FlowLayoutWidget).Layout()
+			}
+		}
+
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
 		{
 			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
