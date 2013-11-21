@@ -80,6 +80,8 @@ import (
 
 	. "gist.github.com/7480523.git"
 	//. "gist.github.com/7519227.git"
+
+	. "gist.github.com/7576154.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -622,8 +624,9 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 			}
 		}
 
+		// This is can be huge if ran on root AST node of large Go files, so don't
 		if _, huge := smallestV.(*ast.File); !huge {
-			out += goon.Sdump(smallestV) // This is dangerous to run on root AST node of large Go files
+			out += goon.Sdump(smallestV)
 		}
 		return out
 	}
@@ -1443,7 +1446,7 @@ func (w *ChannelExpeWidget) NotifyChange() {
 
 type commandNode struct {
 	w        *LiveCmdExpeWidget
-	nameArgs []string
+	template CmdTemplate
 	dst      *TextBoxWidget
 }
 
@@ -1458,7 +1461,7 @@ func (this *commandNode) NotifyChange() {
 
 	this.w.Content.Set("")
 
-	this.w.cmd = exec.Command(this.nameArgs[0], this.nameArgs[1:]...)
+	this.w.cmd = this.template.NewCommand()
 
 	stdout, err := this.w.cmd.StdoutPipe()
 	CheckError(err)
@@ -1491,13 +1494,13 @@ type LiveCmdExpeWidget struct {
 	FinishedDepNode DepNode
 }
 
-func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, nameArgs []string) *LiveCmdExpeWidget {
+func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, template CmdTemplate) *LiveCmdExpeWidget {
 	w := &LiveCmdExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan *os.ProcessState)}
 
 	UniversalClock.AddChangeListener(w)
 
 	// THINK: The only reason to have a separate command node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
-	commandNode := &commandNode{w: w, nameArgs: nameArgs}
+	commandNode := &commandNode{w: w, template: template}
 	for _, dependee := range dependees {
 		dependee.AddChangeListener(commandNode)
 	}
@@ -3548,10 +3551,10 @@ func main() {
 			//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
 			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 
-			build := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, []string{"go", "build", "-o", "./Con2RunBin", src.Path()})
+			build := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", src.Path()))
 			build.AddChangeListener(&spinner)
 
-			run := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{&build.FinishedDepNode}, []string{"./Con2RunBin"}) // TODO: Proper path
+			run := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build, run}, nil))
 		}
