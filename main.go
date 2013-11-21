@@ -65,6 +65,7 @@ import (
 	"code.google.com/p/go.tools/go/exact"
 	"code.google.com/p/go.tools/go/types"
 	"code.google.com/p/go.tools/importer"
+	. "gist.github.com/7576804.git"
 	importer2 "honnef.co/go/importer"
 
 	"github.com/davecheney/profile"
@@ -633,19 +634,6 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 
 	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{typeCheckedPackage, &source.caretPosition}, params, action)
 	return w
-}
-
-func TypeChainString(t types.Type) string {
-	out := fmt.Sprintf("%s", t)
-	for {
-		if t == t.Underlying() {
-			break
-		} else {
-			t = t.Underlying()
-		}
-		out += fmt.Sprintf(" -> %s", t)
-	}
-	return out
 }
 
 // ---
