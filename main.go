@@ -435,6 +435,11 @@ type parsedFile struct {
 func (t *parsedFile) NotifyChange() {
 	fs := token.NewFileSet()
 	fileAst, err := parser.ParseFile(fs, "", t.source.Content(), 1*parser.ParseComments)
+
+	{
+		fileAst.Decls[0].(*ast.GenDecl).Specs = append(fileAst.Decls[0].(*ast.GenDecl).Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"yay/new/import"`}})
+	}
+
 	if err == nil {
 		t.fs = fs
 		t.fileAst = fileAst
@@ -486,9 +491,11 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 		out := fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
 		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
 		out += SprintAst(fs, smallestV) + "\n\n"
-		if _, huge := smallestV.(*ast.File); !huge {
-			out += goon.Sdump(smallestV) // This is dangerous to run on root AST node of large Go files
-		}
+
+		// This is can be huge if ran on root AST node of large Go files, so don't
+		//if _, huge := smallestV.(*ast.File); !huge {
+		out += goon.Sdump(smallestV)
+		//}
 		return out
 	}
 
@@ -1360,22 +1367,21 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 type ChannelExpeWidget struct {
 	*CompositeWidget
 	cmd *exec.Cmd
-	ch  <-chan []byte
+	ch  ChanWriter
 }
 
 func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
-	w := &ChannelExpeWidget{}
+	w := &ChannelExpeWidget{ch: make(ChanWriter)}
 	action := func() {
 		// Comments are currently not preserved in the tooltip
 
 		if w.cmd == nil {
 			w.cmd = exec.Command("ping", "google.com")
-			stdout, err := w.cmd.StdoutPipe()
-			CheckError(err)
-			err = w.cmd.Start()
+			w.cmd.Stdout = w.ch
+			w.cmd.Stderr = w.ch
+			err := w.cmd.Start()
 			CheckError(err)
 			go w.cmd.Wait() // It looks like I need to wait for the process, else it doesn't terminate properly
-			w.ch = ByteReader(stdout)
 		} else {
 			//w.cmd.Process.Kill()
 			w.cmd.Process.Signal(os.Interrupt)
@@ -1450,21 +1456,17 @@ func (this *commandNode) NotifyChange() {
 	this.w.Content.Set("")
 
 	this.w.cmd = this.template.NewCommand()
+	this.w.stdoutChan = make(ChanWriter)
+	this.w.stderrChan = make(ChanWriter)
+	this.w.cmd.Stdout = this.w.stdoutChan
+	this.w.cmd.Stderr = this.w.stderrChan
 
-	stdout, err := this.w.cmd.StdoutPipe()
-	CheckError(err)
-
-	stderr, err := this.w.cmd.StderrPipe()
-	CheckError(err)
-
-	err = this.w.cmd.Start()
+	err := this.w.cmd.Start()
 	if err != nil {
 		this.w.cmd = nil
 		return
 	}
 	//fmt.Println("started new process", this.w.cmd.Process.Pid)
-	this.w.stdoutChan = ByteReader(stdout)
-	this.w.stderrChan = ByteReader(stderr)
 
 	go func(cmd *exec.Cmd) {
 		_ = cmd.Wait()
@@ -1476,8 +1478,8 @@ func (this *commandNode) NotifyChange() {
 type LiveCmdExpeWidget struct {
 	*TextBoxWidget
 	cmd             *exec.Cmd
-	stdoutChan      <-chan []byte
-	stderrChan      <-chan []byte
+	stdoutChan      ChanWriter
+	stderrChan      ChanWriter
 	finishedChan    chan *os.ProcessState
 	FinishedDepNode DepNode
 }
@@ -3582,10 +3584,7 @@ func main() {
 					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
 					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
 					//cmd := exec.Command("cat")
-					stdinPipe, err := cmd.StdinPipe()
-					CheckError(err)
-					stdinPipe.Write([]byte(strings.TrimSpace(src.Content.Content())))
-					stdinPipe.Close()
+					cmd.Stdin = strings.NewReader(strings.TrimSpace(src.Content.Content()))
 					out, err := cmd.CombinedOutput()
 					CheckError(err)
 					return string(out)
@@ -3616,8 +3615,8 @@ func main() {
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
 		{
-			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
-			w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
+			w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			//w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
 			widgets[12].(*FlowLayoutWidget).Widgets = append(widgets[12].(*FlowLayoutWidget).Widgets, w)
 			w.SetParent(widgets[12]) // Needed for pointer coordinates to be accurate
 			widgets[12].(*FlowLayoutWidget).Layout()
@@ -3677,53 +3676,100 @@ func main() {
 			fmt.Fprintf(w, "%#v\n", widgets)
 		})
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+
+			// HACK: Handle .go files specially, just assume they're in "./GoLand"
+			if strings.HasSuffix(r.URL.Path, ".go") {
+				w.Header().Set("Content-Type", "text/plain")
+				w.Write(MustReadFileB(filepath.Join("./GoLand/src/", r.URL.Path)))
+				return
+			}
+
 			_, plain := r.URL.Query()["plain"]
-			if !plain {
+			switch plain {
+			case true:
+				w.Header().Set("Content-Type", "text/plain")
+			case false:
 				w.Header().Set("Content-Type", "text/html")
 			}
 
 			var b string
 
-			path := filepath.Join("./GoLand/src/", r.URL.Path)
-			if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
-				dpkg := GetDocPackage(bpkg, err)
+			importPath := r.URL.Path[1:]
+			if something := SomethingFromImportPath(importPath); something != nil {
+				something.Update()
 
-				out := Underline(`import "`+dpkg.ImportPath+`"`) + "  \n\n```Go"
+				dpkg := GetDocPackageAll(something.Bpkg, nil)
+
+				b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
 				for _, v := range dpkg.Vars {
-					out += SprintAstBare(v.Decl) + "  \n"
+					b += SprintAstBare(v.Decl) + "\n"
 				}
-				out += "  \n"
-				for _, f := range dpkg.Funcs {
-					out += SprintAstBare(f.Decl) + "  \n"
-				}
-				out += "  \n"
-				for _, c := range dpkg.Consts {
-					out += SprintAstBare(c.Decl) + "  \n"
-				}
-				out += "  \n"
 				for _, t := range dpkg.Types {
-					out += fmt.Sprint(t.Name) + "  \n"
+					for _, v := range t.Vars {
+						b += SprintAstBare(v.Decl) + "\n"
+					}
+				}
+				b += "\n"
+				for _, f := range dpkg.Funcs {
+					b += SprintAstBare(f.Decl) + "\n"
+				}
+				for _, t := range dpkg.Types {
+					for _, f := range t.Funcs {
+						b += SprintAstBare(f.Decl) + "\n"
+					}
+					for _, m := range t.Methods {
+						b += SprintAstBare(m.Decl) + "\n"
+					}
+				}
+				b += "\n"
+				for _, c := range dpkg.Consts {
+					b += strings.Join(c.Names, "\n") + "\n"
+				}
+				for _, t := range dpkg.Types {
+					for _, c := range t.Consts {
+						b += strings.Join(c.Names, "\n") + "\n"
+					}
+				}
+				b += "\n"
+				for _, t := range dpkg.Types {
+					b += t.Name + "\n"
 					//PrintlnAstBare(t.Decl)
 				}
+				b += "\n```\n"
 
-				b += out + "```"
-			}
-			b += "  \n---\n  \n"
-			if isGitRepo, status := IsFolderGitRepo(path); isGitRepo {
-				if status == "" {
-					b += "nothing to commit, working directory clean  \n"
-				} else {
-					b += status + "  \n"
+				b += "\n---\n\n"
+
+				b += "```\n" + something.String() + "\n```\n"
+
+				b += "\n---\n\n"
+
+				if something.IsGitRepo {
+					if something.Status == "" {
+						b += "nothing to commit, working directory clean  \n"
+					} else {
+						b += something.Status + "  \n"
+					}
+					b += something.Local + "  \n"
+					b += something.Remote + "  \n"
+
+					// git diff
+					if something.Status != "" {
+						cmd := exec.Command("git", "diff", "--no-ext-diff")
+						cmd.Dir = something.Path
+						if outputBytes, err := cmd.CombinedOutput(); err == nil {
+							b += "\n```diff\n" + string(outputBytes) + "\n```\n"
+						}
+					}
 				}
-				b += CheckGitRepoLocal(path) + "  \n"
-				b += CheckGitRepoRemote(path) + "  \n"
-			}
-			b += "  \n---\n  \n"
-			{
-				x := newFolderListingPureWidget(path)
+
+				b += "\n---\n\n"
+
+				x := newFolderListingPureWidget(something.Path)
 				for _, v := range x.entries {
 					b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
 				}
+			} else {
+				fmt.Fprintf(w, "Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
 			}
 
 			if plain {
