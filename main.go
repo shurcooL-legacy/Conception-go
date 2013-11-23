@@ -83,6 +83,9 @@ import (
 	//. "gist.github.com/7519227.git"
 
 	. "gist.github.com/7576154.git"
+
+	"bytes"
+	. "gist.github.com/5645828.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -3701,35 +3704,9 @@ func main() {
 				dpkg := GetDocPackageAll(something.Bpkg, nil)
 
 				b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
-				for _, v := range dpkg.Vars {
-					b += SprintAstBare(v.Decl) + "\n"
-				}
-				for _, t := range dpkg.Types {
-					for _, v := range t.Vars {
-						b += SprintAstBare(v.Decl) + "\n"
-					}
-				}
-				b += "\n"
-				for _, f := range dpkg.Funcs {
-					b += SprintAstBare(f.Decl) + "\n"
-				}
-				for _, t := range dpkg.Types {
-					for _, f := range t.Funcs {
-						b += SprintAstBare(f.Decl) + "\n"
-					}
-					for _, m := range t.Methods {
-						b += SprintAstBare(m.Decl) + "\n"
-					}
-				}
-				b += "\n"
-				for _, c := range dpkg.Consts {
-					b += strings.Join(c.Names, "\n") + "\n"
-				}
-				for _, t := range dpkg.Types {
-					for _, c := range t.Consts {
-						b += strings.Join(c.Names, "\n") + "\n"
-					}
-				}
+				var buf bytes.Buffer
+				FprintPackageFullSummary(&buf, dpkg)
+				b += buf.String()
 				b += "\n"
 				for _, t := range dpkg.Types {
 					b += t.Name + "\n"
