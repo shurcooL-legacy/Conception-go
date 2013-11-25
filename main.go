@@ -87,6 +87,9 @@ import (
 
 	"bytes"
 	. "gist.github.com/5645828.git"
+
+	"bufio"
+	"code.google.com/p/go.net/websocket"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -113,7 +116,7 @@ var keyboardPointer *Pointer
 
 // TODO: Remove these
 var globalWindow *glfw.Window
-var np = mathgl.Vec2d{}
+var np = mathgl.Vec2d{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -2539,7 +2542,7 @@ type MultilineContentPointer struct {
 func NewMultilineContentPointer(p *string) *MultilineContentPointer {
 	this := &MultilineContentPointer{MultilineContent: NewMultilineContent(), p: p}
 	this.Set(*p)
-	UniversalClock.AddChangeListener(this)
+	UniversalClock.AddChangeListener(this) // TODO: Perhaps switch to a push notifications type setup, instead of constantly polling for change...
 	return this
 }
 
@@ -2547,18 +2550,57 @@ func (this *MultilineContentPointer) Set(content string) {
 	this.content = content
 	this.updateLines()
 
-	// TODO: This shouldn't be triggered from TryReadFile() update below... Nor this.Set() in NewMultilineContentPointer().
+	// TODO: This shouldn't be triggered from NotifyChange() update below... Nor by `this.Set()` in NewMultilineContentPointer().
 	*this.p = this.Content()
 
 	this.NotifyAllListeners()
 }
 
 func (this *MultilineContentPointer) NotifyChange() {
-	// Check if the file has been changed externally, and if so, override this widget
+	// Check if the pointer value has been changed externally, and if so, override this widget
 	NewContent := *this.p
 	if NewContent != this.Content() {
-		// TODO: Have this not trigger WriteFile() somehow...
+		// TODO: Have this not trigger `*this.p = this.Content()` somehow...
 		this.Set(NewContent)
+	}
+}
+
+// ---
+
+type MultilineContentWS struct {
+	*MultilineContent // TODO: Explore this being a pointer vs value
+	WsReadChan        chan string
+	WsWriteChan       chan string
+}
+
+func NewMultilineContentWS() *MultilineContentWS {
+	this := &MultilineContentWS{MultilineContent: NewMultilineContent(), WsReadChan: make(chan string), WsWriteChan: make(chan string)}
+	UniversalClock.AddChangeListener(this)
+	return this
+}
+
+func (this *MultilineContentWS) Set(content string) {
+	this.content = content
+	this.updateLines()
+
+	this.WsWriteChan <- this.Content()
+
+	this.NotifyAllListeners()
+}
+
+func (this *MultilineContentWS) NotifyChange() {
+	select {
+	case NewContent, ok := <-this.WsReadChan:
+		if ok {
+			if NewContent != this.Content() {
+				// HACK: Copying Set() except without write to websocket
+				this.content = NewContent
+				this.updateLines()
+
+				this.NotifyAllListeners()
+			}
+		}
+	default:
 	}
 }
 
@@ -3840,6 +3882,60 @@ func main() {
 				w.Write(blackfriday.MarkdownCommon([]byte(b)))
 			}
 		})
+		contentWs := NewMultilineContentWS()
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800, 30}, contentWs))
+		http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
+			io.WriteString(w, `<html>
+	<body>
+		<script type="text/javascript">
+			var prev_value = "";
+			function liveUpdateTest(e) {
+				try {
+					if (e.value != prev_value) {
+						sock.send(e.value + "\n");		// HACK: Should make sure that sock.onopen has happened before calling send... Best done by setting 'inputField.onInput=liveUpdateTest' in onopen
+						prev_value = e.value;
+					}
+				} catch (exc) {
+					document.getElementById("myLiveOut").textContent = "sock.send Error: " + exc;
+				}
+			}
+
+			var sock = new WebSocket("ws://" + "localhost:8080" + "/websocket.ws");
+			//sock.addEventListener('open', function(e2) { sock.send( ... ) });
+			sock.onopen = function(evt) { document.getElementById("myLiveOut").textContent = "Connected."; document.getElementById("inputField").select(); liveUpdateTest(document.getElementById("inputField")); console.log("Open: ", evt); };
+			sock.onclose = function(evt) { document.getElementById("myLiveOut").textContent = "Disconnected."; console.log("Close: ", evt); };
+			sock.onmessage = function(evt) { prev_value = evt.data; document.getElementById("inputField").value = evt.data; /*console.log("Message: ", evt.data);*/ };
+			//sock.onerror = function(evt) { document.getElementById("myLiveOut").textContent += " Error: " + evt; console.log("Error: ", evt); };
+		</script>
+
+		<input id="inputField" onInput="liveUpdateTest(this);" placeholder="type something..." autofocus></input>
+		<br><br>
+		<div id="myLiveOut">Connecting...</div>
+	</body>
+</html>`)
+		})
+		http.Handle("/websocket.ws", websocket.Handler(func(c *websocket.Conn) {
+			br := bufio.NewReader(c)
+			go func(WsWriteChan chan string) {
+				for {
+					if s, ok := <-WsWriteChan; ok {
+						io.WriteString(c, s)
+					} else {
+						return
+					}
+				}
+			}(contentWs.WsWriteChan)
+			for {
+				line, err := br.ReadString('\n')
+				if err == nil {
+					contentWs.WsReadChan <- line[:len(line)-1] // Trim newline
+				} else {
+					//contentWs.WsReadChan <- line
+					//close(contentWs.WsReadChan)
+					return
+				}
+			}
+		}))
 		widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 
 		// Shuryear Clock
