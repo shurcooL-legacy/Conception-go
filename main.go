@@ -45,6 +45,7 @@ import (
 
 	"errors"
 
+	"io"
 	"io/ioutil"
 
 	. "gist.github.com/5892738.git"
@@ -1443,7 +1444,7 @@ func (w *ChannelExpeWidget) NotifyChange() {
 
 type commandNode struct {
 	w        *LiveCmdExpeWidget
-	template CmdTemplate
+	template CmdTemplater
 	dst      *TextBoxWidget
 }
 
@@ -1487,7 +1488,7 @@ type LiveCmdExpeWidget struct {
 	FinishedDepNode DepNode
 }
 
-func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, template CmdTemplate) *LiveCmdExpeWidget {
+func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, template CmdTemplater) *LiveCmdExpeWidget {
 	w := &LiveCmdExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan *os.ProcessState)}
 
 	UniversalClock.AddChangeListener(w)
@@ -2432,6 +2433,8 @@ type MultilineContentI interface {
 	AddChangeListener(l ChangeListener)
 }
 
+func ContentReader(c MultilineContentI) io.Reader { return strings.NewReader(c.Content()) }
+
 // ---
 
 type contentLine struct {
@@ -2861,6 +2864,10 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					}
 				}
 			}
+		case glfw.KeyR:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.NotifyAllListeners()
+			}
 		// TEST: Closing this widget...
 		case glfw.KeyW:
 			if inputEvent.ModifierKey == glfw.ModControl {
@@ -2909,6 +2916,81 @@ func NewTextBoxWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string, de
 	mc := NewMultilineContentFunc(contentFunc, dependees)
 	w := NewTextBoxWidgetExternalContent(pos, mc)
 	return w
+}
+
+func NewTextLabelWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string, dependees []DepNodeI) *TextLabelWidget {
+	mc := NewMultilineContentFunc(contentFunc, dependees)
+	w := NewTextLabelWidgetExternalContent(pos, mc)
+	return w
+}
+
+// ---
+
+type TextBoxValidationWidget struct {
+	*TextBoxWidget
+	validFunc func(MultilineContentI) bool
+	DepNode   // Forward NotifyChanges from TextBoxWidget to us
+}
+
+func NewTextBoxValidationWidget(pos mathgl.Vec2d, validFunc func(MultilineContentI) bool) *TextBoxValidationWidget {
+	w := &TextBoxValidationWidget{TextBoxWidget: NewTextBoxWidget(pos), validFunc: validFunc}
+	w.TextBoxWidget.AddChangeListener(w) // Forward NotifyChanges from TextBoxWidget to us
+	return w
+}
+
+func (w *TextBoxValidationWidget) Render() {
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w.TextBoxWidget == keyboardPointer.OriginMapping[0]
+
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	var background mathgl.Vec3d
+	if w.validFunc(w.Content) {
+		background = mathgl.Vec3d{0.9, 1, 0.9}
+	} else {
+		background = mathgl.Vec3d{1, 0.9, 0.9}
+	}
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawBox(w.pos, w.size, mathgl.Vec3d{0.898, 0.765, 0.396}, background)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		DrawBox(w.pos, w.size, mathgl.Vec3d{0.898, 0.765, 0.396}, background)
+	} else if hasTypingFocus {
+		DrawBox(w.pos, w.size, mathgl.Vec3d{0.898, 0.765, 0.396}, background)
+	} else {
+		DrawBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, background)
+	}
+
+	gl.Color3d(0, 0, 0)
+	for lineNumber, contentLine := range w.Content.Lines() {
+		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+	}
+
+	if hasTypingFocus {
+		expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
+
+		// Draw caret
+		gl.PushMatrix()
+		defer gl.PopMatrix()
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		gl.Color3d(0, 0, 0)
+		gl.Recti(gl.Int(expandedCaretPosition*8-1), gl.Int(caretLine*16), gl.Int(expandedCaretPosition*8+1), gl.Int(caretLine*16)+16)
+	}
+}
+
+func (w *TextBoxValidationWidget) NotifyChange() {
+	if w.validFunc(w.Content) {
+		w.NotifyAllListeners()
+	}
 }
 
 // ---
@@ -3029,6 +3111,8 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 		w.CaretPosition++
 	}
 }
+
+// ---
 
 type MetaCharacter struct {
 	Character byte
@@ -3764,13 +3848,39 @@ func main() {
 				return fmt.Sprintf("%.8f", shuryearNow)
 			}
 			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
-			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{535, 1}, mc)) // TODO: Stick to top right corner?
+			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{1431, 1}, mc)) // TODO: Stick to top right corner?
 		}
 
 		{
 			buttonTrigger := NewButtonTriggerWidget(mathgl.Vec2d{50, 30})
 			buttonTrigger.AddChangeListener(&spinner)
 			widgets = append(widgets, buttonTrigger)
+		}
+
+		// `gofmt -r rule` experiment
+		{
+			src := NewTextBoxWidget(mathgl.Vec2d{})
+
+			validFunc := func(c MultilineContentI) bool {
+				_, err := parser.ParseExpr(c.Content())
+				return err == nil
+			}
+			from := NewTextBoxValidationWidget(mathgl.Vec2d{}, validFunc)
+			to := NewTextBoxValidationWidget(mathgl.Vec2d{}, validFunc)
+
+			template := new(CmdTemplate)
+			*template = NewCmdTemplate("gofmt", "-r", "")
+			template.Stdin = func() io.Reader { return ContentReader(src.Content) }
+
+			templateString := func() string {
+				template.NameArgs[2] = fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()) // HACK: I'm doing modification in a place that's meant to be a pure function for display, not side-effects...
+				return strings.Join(template.NameArgs, " ")
+			}
+			cmd := NewTextLabelWidgetContentFunc(mathgl.Vec2d{}, templateString, []DepNodeI{&from.DepNode, &to.DepNode})
+
+			out := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src, cmd}, template)
+
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{1800, 10}, []Widgeter{src, from, to, out}, nil))
 		}
 	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
