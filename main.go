@@ -2574,7 +2574,7 @@ type MultilineContentWS struct {
 }
 
 func NewMultilineContentWS() *MultilineContentWS {
-	this := &MultilineContentWS{MultilineContent: NewMultilineContent(), WsReadChan: make(chan string), WsWriteChan: make(chan string)}
+	this := &MultilineContentWS{MultilineContent: NewMultilineContent(), WsReadChan: make(chan string)}
 	UniversalClock.AddChangeListener(this)
 	return this
 }
@@ -2583,7 +2583,9 @@ func (this *MultilineContentWS) Set(content string) {
 	this.content = content
 	this.updateLines()
 
-	this.WsWriteChan <- this.Content()
+	if this.WsWriteChan != nil {
+		this.WsWriteChan <- this.Content()
+	}
 
 	this.NotifyAllListeners()
 }
@@ -3892,7 +3894,7 @@ func main() {
 			function liveUpdateTest(e) {
 				try {
 					if (e.value != prev_value) {
-						sock.send(e.value + "\n");		// HACK: Should make sure that sock.onopen has happened before calling send... Best done by setting 'inputField.onInput=liveUpdateTest' in onopen
+						sock.send(e.value + "\0");		// HACK: Should make sure that sock.onopen has happened before calling send... Best done by setting 'inputField.onInput=liveUpdateTest' in onopen
 						prev_value = e.value;
 					}
 				} catch (exc) {
@@ -3908,15 +3910,15 @@ func main() {
 			//sock.onerror = function(evt) { document.getElementById("myLiveOut").textContent += " Error: " + evt; console.log("Error: ", evt); };
 		</script>
 
-		<input id="inputField" onInput="liveUpdateTest(this);" placeholder="type something..." autofocus></input>
+		<textarea id="inputField" onInput="liveUpdateTest(this);" placeholder="type something..." autofocus></textarea>
 		<br><br>
 		<div id="myLiveOut">Connecting...</div>
 	</body>
 </html>`)
 		})
 		http.Handle("/websocket.ws", websocket.Handler(func(c *websocket.Conn) {
-			br := bufio.NewReader(c)
-			go func(WsWriteChan chan string) {
+			contentWs.WsWriteChan = make(chan string)
+			go func(WsWriteChan chan string, c *websocket.Conn) {
 				for {
 					if s, ok := <-WsWriteChan; ok {
 						io.WriteString(c, s)
@@ -3924,11 +3926,14 @@ func main() {
 						return
 					}
 				}
-			}(contentWs.WsWriteChan)
+			}(contentWs.WsWriteChan, c)
+			contentWs.WsWriteChan <- contentWs.Content() // Send initial value
+
+			br := bufio.NewReader(c)
 			for {
-				line, err := br.ReadString('\n')
+				line, err := br.ReadString('\x00')
 				if err == nil {
-					contentWs.WsReadChan <- line[:len(line)-1] // Trim newline
+					contentWs.WsReadChan <- line[:len(line)-1] // Trim delimiter
 				} else {
 					//contentWs.WsReadChan <- line
 					//close(contentWs.WsReadChan)
