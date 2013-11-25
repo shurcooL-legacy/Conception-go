@@ -2506,7 +2506,7 @@ func (this *MultilineContentFile) Set(content string) {
 	this.content = content
 	this.updateLines()
 
-	// TODO: This shouldn't be triggered from TryReadFile() update below... Nor this.Set() in NewMultilineContentFile().
+	// TODO: This shouldn't be triggered from TryReadFile() update below... Nor by `this.Set()` in NewMultilineContentFile().
 	{
 		err := ioutil.WriteFile(this.path, []byte(this.Content()), 0666)
 		CheckError(err)
@@ -3880,7 +3880,8 @@ func main() {
 
 			out := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src, cmd}, template)
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{1800, 10}, []Widgeter{src, from, to, out}, nil))
+			np := mathgl.Vec2d{}
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{src, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
 		}
 	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
