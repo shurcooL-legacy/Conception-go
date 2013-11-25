@@ -113,6 +113,7 @@ var keyboardPointer *Pointer
 
 // TODO: Remove these
 var globalWindow *glfw.Window
+var np = mathgl.Vec2d{}
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -699,7 +700,7 @@ func (w *ButtonWidget) setAction(action func()) {
 	w.action = action
 
 	if action != nil {
-		go func() { w.tooltip = NewTextLabelWidgetString(mathgl.Vec2d{}, GetSourceAsString(action)) }()
+		go func() { w.tooltip = NewTextLabelWidgetString(np, GetSourceAsString(action)) }()
 	}
 }
 
@@ -841,7 +842,7 @@ type BoxWidget struct {
 	Name string
 }
 
-var boxWidgetTooltip = NewTextLabelWidgetString(mathgl.Vec2d{}, GetSourceAsString((*BoxWidget).ProcessEvent))
+var boxWidgetTooltip = NewTextLabelWidgetString(np, GetSourceAsString((*BoxWidget).ProcessEvent))
 
 func (w *BoxWidget) Render() {
 	// HACK: Brute-force check the mouse pointer if it contains this widget
@@ -1051,7 +1052,7 @@ func (w *KatWidget) Render() {
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Rotated(gl.Double(w.rotation), 0, 0, 1)
 
-		DrawCircleBorderCustom(mathgl.Vec2d{}, mathgl.Vec2d{16, 16}, mathgl.Vec3d{1, 0, 0}, 2, 12, 1, 11)
+		DrawCircleBorderCustom(np, mathgl.Vec2d{16, 16}, mathgl.Vec3d{1, 0, 0}, 2, 12, 1, 11)
 
 		// Draw the gun
 		{
@@ -1193,7 +1194,7 @@ func NewCompositeWidget(pos, size mathgl.Vec2d, Widgets []Widgeter) *CompositeWi
 }
 
 func (w *CompositeWidget) Layout() {
-	w.size = mathgl.Vec2d{}
+	w.size = np
 	for _, widget := range w.Widgets {
 		bottomRight := widget.Pos().Add(widget.Size())
 		for d := 0; d < len(w.size); d++ {
@@ -1272,10 +1273,10 @@ func (w *FlowLayoutWidget) SetWidgets(widgets []Widgeter) {
 }
 
 func (w *FlowLayoutWidget) Layout() {
-	w.size = mathgl.Vec2d{}
+	w.size = np
 	var combinedOffset float64
 	for _, widget := range w.CompositeWidget.Widgets {
-		pos := mathgl.Vec2d{}
+		pos := np
 		pos[w.options.FlowLayoutType] = combinedOffset
 		widget.SetPos(pos)
 		combinedOffset += widget.Size()[w.options.FlowLayoutType] + 2
@@ -1392,7 +1393,7 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 			w.cmd = nil
 		}
 	}
-	w.CompositeWidget = NewCompositeWidget(pos, mathgl.Vec2d{},
+	w.CompositeWidget = NewCompositeWidget(pos, np,
 		[]Widgeter{
 			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
 			NewTriButtonExternalStateWidget(mathgl.Vec2d{0, -16 - 2}, func() bool { return w.cmd != nil }, action),
@@ -1634,8 +1635,8 @@ func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
 	action()
 	w.FlowLayoutWidget = NewFlowLayoutWidget(pos,
 		[]Widgeter{
-			NewTriButtonExternalStateWidget(mathgl.Vec2d{}, func() bool { return w.started }, action),
-			NewTextLabelWidgetString(mathgl.Vec2d{}, "pprof"),
+			NewTriButtonExternalStateWidget(np, func() bool { return w.started }, action),
+			NewTextLabelWidgetString(np, "pprof"),
 		}, nil)
 
 	return w
@@ -1676,7 +1677,7 @@ type FpsWidget struct {
 }
 
 func NewFpsWidget(pos mathgl.Vec2d) *FpsWidget {
-	return &FpsWidget{Widget: NewWidget(pos, mathgl.Vec2d{})}
+	return &FpsWidget{Widget: NewWidget(pos, np)}
 }
 
 func (w *FpsWidget) Render() {
@@ -1730,7 +1731,7 @@ type FolderListingWidget struct {
 }
 
 func NewFolderListingWidget(pos mathgl.Vec2d, path string) *FolderListingWidget {
-	w := &FolderListingWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{newFolderListingPureWidget(path)}, nil)})}
+	w := &FolderListingWidget{CompositeWidget: NewCompositeWidget(pos, np, []Widgeter{NewFlowLayoutWidget(np, []Widgeter{newFolderListingPureWidget(path)}, nil)})}
 	w.flow = w.Widgets[0].(*FlowLayoutWidget)
 	w.flow.SetParent(w) // HACK?
 	return w
@@ -1781,7 +1782,7 @@ type FolderListingPureWidget struct {
 }
 
 func newFolderListingPureWidget(path string) *FolderListingPureWidget {
-	w := &FolderListingPureWidget{Widget: NewWidget(mathgl.Vec2d{}, mathgl.Vec2d{}), path: path}
+	w := &FolderListingPureWidget{Widget: NewWidget(np, np), path: path}
 	w.NotifyChange() // TODO: Give it a proper source
 	return w
 }
@@ -1840,9 +1841,9 @@ func (w *FolderListingPureWidget) selectionChangedTest() {
 				//PrintlnAstBare(t.Decl)
 			}
 
-			newFolder = NewTextLabelWidgetString(mathgl.Vec2d{}, out)
+			newFolder = NewTextLabelWidgetString(np, out)
 		} else if isGitRepo, status := IsFolderGitRepo(path); isGitRepo {
-			newFolder = NewTextLabelWidgetString(mathgl.Vec2d{}, status)
+			newFolder = NewTextLabelWidgetString(np, status)
 		} else {
 			newFolder = newFolderListingPureWidget(path)
 		}
@@ -2144,7 +2145,7 @@ func newGoonWidget(pos mathgl.Vec2d, title string, a reflect.Value) *GoonWidget 
 
 	a = UnsafeReflectValue(a)
 
-	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, nil), title: title, a: a}
+	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, np, nil), title: title, a: a}
 	w.setupInternals()
 	return w
 }
@@ -2160,15 +2161,15 @@ func (w *GoonWidget) setupInternals() {
 			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-16 - 2}, func() { w.flip() })
 		}
 
-		w.CompositeWidget = NewCompositeWidget(w.pos, mathgl.Vec2d{}, []Widgeter{w.expanded, &Widget{}})
+		w.CompositeWidget = NewCompositeWidget(w.pos, np, []Widgeter{w.expanded, &Widget{}})
 	} else {
-		w.CompositeWidget = NewCompositeWidget(w.pos, mathgl.Vec2d{}, []Widgeter{&Widget{}})
+		w.CompositeWidget = NewCompositeWidget(w.pos, np, []Widgeter{&Widget{}})
 	}
 	w.SetParent(oldParent)
 
 	var f *FlowLayoutWidget
 	if w.expanded == nil || !w.expanded.State() {
-		title := NewTextLabelWidgetString(mathgl.Vec2d{}, w.title+": ")
+		title := NewTextLabelWidgetString(np, w.title+": ")
 
 		var mc MultilineContentI
 		if !expandable {
@@ -2177,8 +2178,8 @@ func (w *GoonWidget) setupInternals() {
 		} else {
 			mc = NewMultilineContentString(fmt.Sprintf("%s{...}", getTypeString(w.a.Elem())))
 		}
-		t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
-		f = NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{title, t}, nil)
+		t := NewTextLabelWidgetExternalContent(np, mc)
+		f = NewFlowLayoutWidget(np, []Widgeter{title, t}, nil)
 	} else {
 		f = w.setupInternals2(w.a)
 	}
@@ -2208,9 +2209,9 @@ func getTypeString(a reflect.Value) string {
 func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	v := a.Elem()
 
-	title := NewTextLabelWidgetString(mathgl.Vec2d{}, w.title+": ")
-	t := NewTextLabelWidgetString(mathgl.Vec2d{}, fmt.Sprintf("%s{", getTypeString(v)))
-	header := NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{title, t}, nil)
+	title := NewTextLabelWidgetString(np, w.title+": ")
+	t := NewTextLabelWidgetString(np, fmt.Sprintf("%s{", getTypeString(v)))
+	header := NewFlowLayoutWidget(np, []Widgeter{title, t}, nil)
 
 	widgets := []Widgeter{header}
 
@@ -2218,9 +2219,9 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
 		// TODO: Instead of skipping nil values, maybe pass the info as a bool parameter to query?
 		if v.IsNil() {
-			widgets = append(widgets, NewTextLabelWidgetString(mathgl.Vec2d{}, "}"))
+			widgets = append(widgets, NewTextLabelWidgetString(np, "}"))
 
-			return NewFlowLayoutWidget(mathgl.Vec2d{}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			return NewFlowLayoutWidget(np, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 		}
 	}
 
@@ -2242,9 +2243,9 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 		widgets = append(widgets, setupInternals3("*", v.Elem()))
 	}
 
-	widgets = append(widgets, NewTextLabelWidgetString(mathgl.Vec2d{}, "}"))
+	widgets = append(widgets, NewTextLabelWidgetString(np, "}"))
 
-	return NewFlowLayoutWidget(mathgl.Vec2d{}, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+	return NewFlowLayoutWidget(np, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 }
 
 func setupInternals3(titleString string, a reflect.Value) Widgeter {
@@ -2256,12 +2257,12 @@ func setupInternals3(titleString string, a reflect.Value) Widgeter {
 
 	var w Widgeter
 	if a.Kind() == reflect.Float64 && a.Addr().CanInterface() {
-		title := NewTextLabelWidgetString(mathgl.Vec2d{}, titleString+": ")
-		t := NewTest2Widget(mathgl.Vec2d{}, a.Addr().Interface().(*float64))
+		title := NewTextLabelWidgetString(np, titleString+": ")
+		t := NewTest2Widget(np, a.Addr().Interface().(*float64))
 		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
 	} else if a.Kind() == reflect.String {
-		title := NewTextLabelWidgetString(mathgl.Vec2d{}, titleString+": ")
-		t := NewTextBoxWidgetExternalContent(mathgl.Vec2d{}, NewMultilineContentPointer(a.Addr().Interface().(*string)))
+		title := NewTextLabelWidgetString(np, titleString+": ")
+		t := NewTextBoxWidgetExternalContent(np, NewMultilineContentPointer(a.Addr().Interface().(*string)))
 		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
 	} else if vv := a; vv.CanAddr() {
 		w = newGoonWidget(tab, titleString, vv.Addr())
@@ -2272,7 +2273,7 @@ func setupInternals3(titleString string, a reflect.Value) Widgeter {
 		w = NewTextLabelWidgetString(tab, fmt.Sprintf("(%s)(can't addr... %s)", vv.Kind().String(), vv.String()))
 	}
 
-	spacer := NewCompositeWidget(mathgl.Vec2d{}, mathgl.Vec2d{}, []Widgeter{w})
+	spacer := NewCompositeWidget(np, np, []Widgeter{w})
 
 	return spacer
 }
@@ -2639,7 +2640,7 @@ func NewTextLabelWidgetString(pos mathgl.Vec2d, s string) *TextLabelWidget {
 func NewTextLabelWidgetStringTooltip(pos mathgl.Vec2d, s, tooltip string) *TextLabelWidget {
 	mc := NewMultilineContentString(s)
 	w := NewTextLabelWidgetExternalContent(pos, mc)
-	w.tooltip = NewTextLabelWidgetString(mathgl.Vec2d{}, tooltip)
+	w.tooltip = NewTextLabelWidgetString(np, tooltip)
 	return w
 }
 
@@ -3622,16 +3623,16 @@ func main() {
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{100, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
 		{
-			src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
+			src := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
 			//src := NewTextFileWidget(mathgl.Vec2d{}, "./GoLand/src/simple.go")
 			//src := NewTextFileWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5694308.git/main.go")
 			//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
 			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 
-			build := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", src.Path()))
+			build := NewLiveCmdExpeWidget(np, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", src.Path()))
 			build.AddChangeListener(&spinner)
 
-			run := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
+			run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build, run}, nil))
 		}
@@ -3643,8 +3644,8 @@ func main() {
 
 		// GoForcedUseWidget
 		{
-			src := NewTextBoxWidget(mathgl.Vec2d{})
-			label := NewTextLabelWidgetString(mathgl.Vec2d{}, "go Forced Use")
+			src := NewTextBoxWidget(np)
+			label := NewTextLabelWidgetString(np, "go Forced Use")
 
 			params := func() interface{} { return src.Content.Content() }
 			action := func(param interface{}) string {
@@ -3655,15 +3656,15 @@ func main() {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, params, action)
+			dst := NewLiveGoroutineExpeWidget(np, []DepNodeI{src}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
 		}
 		// GoForcedUseWidget2
 		{
-			src := NewTextBoxWidget(mathgl.Vec2d{})
-			label := NewTextLabelWidgetString(mathgl.Vec2d{}, "go Forced Use")
+			src := NewTextBoxWidget(np)
+			label := NewTextLabelWidgetString(np, "go Forced Use")
 
 			params := func() interface{} { return src.Content.Content() }
 			action := func(param interface{}) string {
@@ -3679,7 +3680,7 @@ func main() {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(mathgl.Vec2d{}, []DepNodeI{src}, params, action)
+			dst := NewLiveGoroutineExpeWidget(np, []DepNodeI{src}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
@@ -3692,7 +3693,7 @@ func main() {
 			if isGitRepo, _ := IsFolderGitRepo(dir); isGitRepo {
 				template := NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
 				template.Dir = dir
-				w := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{source}, template) // TODO: Figure out []DepNodeI{source} vs. []DepNodeI{source.Content}?
+				w := NewLiveCmdExpeWidget(np, []DepNodeI{source}, template) // TODO: Figure out []DepNodeI{source} vs. []DepNodeI{source.Content}?
 
 				widgets[12].(*FlowLayoutWidget).Widgets = append(widgets[12].(*FlowLayoutWidget).Widgets, w)
 				w.SetParent(widgets[12]) // Needed for pointer coordinates to be accurate
@@ -3859,14 +3860,14 @@ func main() {
 
 		// `gofmt -r rule` experiment
 		{
-			src := NewTextBoxWidget(mathgl.Vec2d{})
+			src := NewTextBoxWidget(np)
 
 			validFunc := func(c MultilineContentI) bool {
 				_, err := parser.ParseExpr(c.Content())
 				return err == nil
 			}
-			from := NewTextBoxValidationWidget(mathgl.Vec2d{}, validFunc)
-			to := NewTextBoxValidationWidget(mathgl.Vec2d{}, validFunc)
+			from := NewTextBoxValidationWidget(np, validFunc)
+			to := NewTextBoxValidationWidget(np, validFunc)
 
 			template := new(CmdTemplate)
 			*template = NewCmdTemplate("gofmt", "-r", "")
@@ -3876,11 +3877,10 @@ func main() {
 				template.NameArgs[2] = fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()) // HACK: I'm doing modification in a place that's meant to be a pure function for display, not side-effects...
 				return strings.Join(template.NameArgs, " ")
 			}
-			cmd := NewTextLabelWidgetContentFunc(mathgl.Vec2d{}, templateString, []DepNodeI{&from.DepNode, &to.DepNode})
+			cmd := NewTextLabelWidgetContentFunc(np, templateString, []DepNodeI{&from.DepNode, &to.DepNode})
 
-			out := NewLiveCmdExpeWidget(mathgl.Vec2d{}, []DepNodeI{src, cmd}, template)
+			out := NewLiveCmdExpeWidget(np, []DepNodeI{src, cmd}, template)
 
-			np := mathgl.Vec2d{}
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{src, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
 		}
 	} else if false {
@@ -3900,7 +3900,7 @@ func main() {
 	fpsWidget := NewFpsWidget(mathgl.Vec2d{10, 120})
 	widgets = append(widgets, fpsWidget)
 
-	widget := NewCanvasWidget(mathgl.Vec2d{}, widgets, nil)
+	widget := NewCanvasWidget(np, widgets, nil)
 
 	// ---
 
