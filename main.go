@@ -3850,13 +3850,16 @@ func main() {
 				b += "\n---\n\n"
 
 				if something.IsGitRepo {
+					b += "```\n"
 					if something.Status == "" {
-						b += "nothing to commit, working directory clean  \n"
+						b += "nothing to commit, working directory clean\n\n"
 					} else {
-						b += something.Status + "  \n"
+						b += something.Status + "\n"
 					}
-					b += something.Local + "  \n"
-					b += something.Remote + "  \n"
+					b += "Branch: " + something.LocalBranch + "\n"
+					b += "Local:  " + something.Local + "\n"
+					b += "Remote: " + something.Remote + "\n"
+					b += "```\n"
 
 					// git diff
 					if something.Status != "" {
