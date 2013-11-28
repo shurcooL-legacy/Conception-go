@@ -90,6 +90,10 @@ import (
 
 	"bufio"
 	"code.google.com/p/go.net/websocket"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
+
+	"code.google.com/p/go.tools/astutil"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -108,7 +112,7 @@ const katOnly = false
 var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
 var keepRunning = true
-var oFontBase gl.Uint
+var oFontBase, oFontBackground gl.Uint
 var redraw bool = true
 var widgets []Widgeter
 var mousePointer *Pointer
@@ -120,10 +124,12 @@ var np = mathgl.Vec2d{} // np stands for "No Position" and it's basically the (0
 
 func CheckGLError() {
 	errorCode := gl.GetError()
-	if 0 != errorCode {
-		log.Panic("GL Error: ", errorCode)
+	if errorCode != 0 {
+		log.Panicln("GL Error:", errorCode)
 	}
 }
+
+// ---
 
 func PrintText(pos mathgl.Vec2d, s string) {
 	lines := GetLines(s)
@@ -155,14 +161,98 @@ func PrintSegment(pos mathgl.Vec2d, s string) {
 	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
-	gl.Translated(gl.Double(pos[0]), gl.Double(pos[1]), 0)
-	gl.Translated(-4+0.25, -1, 0)
+	gl.Translated(gl.Double(pos[0])-4+0.25, gl.Double(pos[1])-1, 0)
 	gl.ListBase(oFontBase)
 	gl.CallLists(gl.Sizei(len(s)), gl.UNSIGNED_BYTE, gl.Pointer(&[]byte(s)[0]))
 	gl.PopMatrix()
 
-	CheckGLError()
+	//CheckGLError()
 }
+
+// ---
+
+type OpenGlStream struct {
+	pos        mathgl.Vec2d
+	lineStartX float64
+	advance    uint32
+
+	BackgroundColor *mathgl.Vec3d
+}
+
+func NewOpenGlStream(pos mathgl.Vec2d) *OpenGlStream {
+	return &OpenGlStream{pos: pos, lineStartX: pos[0]}
+}
+
+func (o *OpenGlStream) PrintText(s string) {
+	for {
+		end := strings.Index(s, "\n")
+
+		length := len(s)
+		if end != -1 {
+			length = end
+		}
+		o.PrintLine(s[:length])
+
+		if end == -1 {
+			break
+		} else {
+			//o.NewLine()
+			o.PrintSegment(" ") // Newline
+			o.pos[1] += 16
+			o.advance = 0
+			s = s[end+1:]
+		}
+	}
+}
+
+// Input shouldn't have newlines
+func (o *OpenGlStream) PrintLine(s string) {
+	segments := strings.Split(s, "\t")
+	for index, segment := range segments {
+		o.PrintSegment(segment)
+		o.advance += uint32(len(segment))
+		if index+1 < len(segments) {
+			o.PrintSegment(strings.Repeat(" ", 4-int(o.advance%4))) // Tab
+			o.advance += 4 - (o.advance % 4)
+		}
+	}
+}
+
+// Shouldn't have tabs nor newlines
+func (o *OpenGlStream) PrintSegment(s string) {
+	if s == "" {
+		return
+	}
+
+	o.pos[0] = o.lineStartX + float64(8*o.advance)
+
+	if o.BackgroundColor != nil {
+		gl.PushAttrib(gl.CURRENT_BIT)
+		gl.Color3dv((*gl.Double)(&o.BackgroundColor[0]))
+		gl.PushMatrix()
+		gl.Translated(gl.Double(o.pos[0]), gl.Double(o.pos[1]), 0)
+		for _ = range s {
+			gl.CallList(oFontBackground)
+		}
+		gl.PopMatrix()
+		gl.PopAttrib()
+	}
+
+	gl.Enable(gl.BLEND)
+	gl.Enable(gl.TEXTURE_2D)
+	defer gl.Disable(gl.BLEND)
+	defer gl.Disable(gl.TEXTURE_2D)
+
+	gl.PushMatrix()
+	gl.Translated(gl.Double(o.pos[0])-4+0.25, gl.Double(o.pos[1])-1, 0)
+	gl.ListBase(oFontBase)
+	gl.CallLists(gl.Sizei(len(s)), gl.UNSIGNED_BYTE, gl.Pointer(&[]byte(s)[0]))
+	gl.PopMatrix()
+
+	//CheckGLError()
+}
+
+// ---
 
 func InitFont() {
 	const fontWidth = 8
@@ -170,6 +260,7 @@ func InitFont() {
 	LoadTexture("./data/Font2048.tga")
 
 	oFontBase = gl.GenLists(256)
+	oFontBackground = gl.GenLists(1)
 
 	for iLoop1 := 0; iLoop1 < 256; iLoop1++ {
 		fCharX := gl.Double(iLoop1%16) / 16.0
@@ -199,11 +290,22 @@ func InitFont() {
 		gl.EndList()
 	}
 
+	gl.NewList(oFontBackground, gl.COMPILE)
+	gl.Begin(gl.QUADS)
+	gl.Vertex2i(0, 16)
+	gl.Vertex2i(8, 16)
+	gl.Vertex2i(8, 0)
+	gl.Vertex2i(0, 0)
+	gl.End()
+	gl.Translated(fontWidth, 0.0, 0.0)
+	gl.EndList()
+
 	CheckGLError()
 }
 
 func DeinitFont() {
 	gl.DeleteLists(oFontBase, 256)
+	gl.DeleteLists(oFontBackground, 1)
 }
 
 func LoadTexture(path string) {
@@ -445,7 +547,8 @@ func (t *parsedFile) NotifyChange() {
 	fileAst, err := parser.ParseFile(fs, "", t.source.Content(), 1*parser.ParseComments)
 
 	{
-		fileAst.Decls[0].(*ast.GenDecl).Specs = append(fileAst.Decls[0].(*ast.GenDecl).Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"yay/new/import"`}})
+		//fileAst.Decls[0].(*ast.GenDecl).Specs = append(fileAst.Decls[0].(*ast.GenDecl).Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"yay/new/import"`}})
+		astutil.AddImport(fileAst, "yay/new/import")
 	}
 
 	if err == nil {
@@ -2425,6 +2528,12 @@ type ChangeListener interface {
 	NotifyChange()
 }
 
+type ChangeListenerFunc func()
+
+func (f ChangeListenerFunc) NotifyChange() {
+	f()
+}
+
 // ---
 
 type MultilineContentI interface {
@@ -2437,7 +2546,7 @@ type MultilineContentI interface {
 	AddChangeListener(l ChangeListener)
 }
 
-func ContentReader(c MultilineContentI) io.Reader { return strings.NewReader(c.Content()) }
+func NewContentReader(c MultilineContentI) io.Reader { return strings.NewReader(c.Content()) }
 
 // ---
 
@@ -2734,6 +2843,9 @@ type TextBoxWidget struct {
 	Widget
 	Content       MultilineContentI
 	caretPosition CaretPosition
+
+	DiffsTest []diffmatchpatch.Diff
+	Side      int8
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -2801,9 +2913,25 @@ func (w *TextBoxWidget) Render() {
 		DrawNBox(w.pos, w.size)
 	}
 
-	gl.Color3d(0, 0, 0)
-	for lineNumber, contentLine := range w.Content.Lines() {
-		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+	if w.DiffsTest == nil {
+		gl.Color3d(0, 0, 0)
+		for lineNumber, contentLine := range w.Content.Lines() {
+			PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+		}
+	} else {
+		gl.Color3d(0, 0, 0)
+		glt := NewOpenGlStream(w.pos)
+		//glt.PrintText(w.Content.Content())
+		for _, diff := range w.DiffsTest {
+			if diff.Type == w.Side {
+				glt.BackgroundColor = &mathgl.Vec3d{1, 0.8, 0.8}
+			} else if diff.Type == 0 {
+				glt.BackgroundColor = nil
+			} else {
+				continue
+			}
+			glt.PrintText(diff.Text)
+		}
 	}
 
 	if hasTypingFocus {
@@ -3873,6 +4001,7 @@ func main() {
 
 				b += "\n---\n\n"
 
+				b += "`" + something.Path + "`  \n"
 				x := newFolderListingPureWidget(something.Path)
 				for _, v := range x.entries {
 					b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
@@ -3964,7 +4093,8 @@ func main() {
 
 		// `gofmt -r rule` experiment
 		{
-			src := NewTextBoxWidget(np)
+			in := NewTextBoxWidget(np)
+			in.Content.Set("package main\nvar    x  = 5")
 
 			validFunc := func(c MultilineContentI) bool {
 				_, err := parser.ParseExpr(c.Content())
@@ -3974,18 +4104,28 @@ func main() {
 			to := NewTextBoxValidationWidget(np, validFunc)
 
 			template := new(CmdTemplate)
-			*template = NewCmdTemplate("gofmt", "-r", "")
-			template.Stdin = func() io.Reader { return ContentReader(src.Content) }
+			*template = NewCmdTemplate("gofmt") //, "-r", "")
+			template.Stdin = func() io.Reader { return NewContentReader(in.Content) }
 
 			templateString := func() string {
-				template.NameArgs[2] = fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()) // HACK: I'm doing modification in a place that's meant to be a pure function for display, not side-effects...
+				//template.NameArgs[2] = fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()) // HACK: I'm doing modification in a place that's meant to be a pure function for display, not side-effects...
 				return strings.Join(template.NameArgs, " ")
 			}
 			cmd := NewTextLabelWidgetContentFunc(np, templateString, []DepNodeI{&from.DepNode, &to.DepNode})
 
-			out := NewLiveCmdExpeWidget(np, []DepNodeI{src, cmd}, template)
+			out := NewLiveCmdExpeWidget(np, []DepNodeI{in, cmd}, template)
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{src, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
+			out.AddChangeListener(ChangeListenerFunc(func() {
+				dmp := diffmatchpatch.New()
+				diffs := dmp.DiffMain(in.Content.Content(), out.Content.Content(), false)
+				in.DiffsTest = diffs
+				in.Side = -1
+				out.DiffsTest = diffs
+				out.Side = +1
+				//contentWs.Set(goon.Sdump(dmp.DiffMain(in.Content.Content(), out.Content.Content(), false)))
+			}))
+
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
 		}
 	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
