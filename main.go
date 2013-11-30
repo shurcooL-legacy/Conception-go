@@ -604,9 +604,9 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 		out += SprintAst(fs, smallestV) + "\n\n"
 
 		// This is can be huge if ran on root AST node of large Go files, so don't
-		//if _, huge := smallestV.(*ast.File); !huge {
-		out += goon.Sdump(smallestV)
-		//}
+		if _, huge := smallestV.(*ast.File); !huge {
+			out += goon.Sdump(smallestV)
+		}
 		return out
 	}
 
@@ -2366,7 +2366,7 @@ func setupInternals3(titleString string, a reflect.Value) Widgeter {
 		title := NewTextLabelWidgetString(np, titleString+": ")
 		t := NewTest2Widget(np, a.Addr().Interface().(*float64))
 		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
-	} else if a.Kind() == reflect.String {
+	} else if a.Kind() == reflect.String && a.Addr().CanInterface() {
 		title := NewTextLabelWidgetString(np, titleString+": ")
 		t := NewTextBoxWidgetExternalContent(np, NewMultilineContentPointer(a.Addr().Interface().(*string)))
 		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
@@ -3875,8 +3875,8 @@ func main() {
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
 		{
-			w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
-			//w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
+			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
 			widgets[12].(*FlowLayoutWidget).Widgets = append(widgets[12].(*FlowLayoutWidget).Widgets, w)
 			w.SetParent(widgets[12]) // Needed for pointer coordinates to be accurate
 			widgets[12].(*FlowLayoutWidget).Layout()
@@ -4017,7 +4017,7 @@ func main() {
 			}
 		})
 		contentWs := NewMultilineContentWS()
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800, 30}, contentWs))
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800 - 50, 30}, contentWs))
 		http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `<html>
 	<body>
@@ -4094,7 +4094,6 @@ func main() {
 		// `gofmt -r rule` experiment
 		{
 			in := NewTextBoxWidget(np)
-			in.Content.Set("package main\nvar    x  = 5")
 
 			validFunc := func(c MultilineContentI) bool {
 				_, err := parser.ParseExpr(c.Content())
@@ -4104,28 +4103,29 @@ func main() {
 			to := NewTextBoxValidationWidget(np, validFunc)
 
 			template := new(CmdTemplate)
-			*template = NewCmdTemplate("gofmt") //, "-r", "")
+			*template = NewCmdTemplate("gofmt", "-r", "")
 			template.Stdin = func() io.Reader { return NewContentReader(in.Content) }
 
 			templateString := func() string {
-				//template.NameArgs[2] = fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()) // HACK: I'm doing modification in a place that's meant to be a pure function for display, not side-effects...
+				template.NameArgs[2] = fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()) // HACK: I'm doing modification in a place that's meant to be a pure function for display, not side-effects...
 				return strings.Join(template.NameArgs, " ")
 			}
 			cmd := NewTextLabelWidgetContentFunc(np, templateString, []DepNodeI{&from.DepNode, &to.DepNode})
 
 			out := NewLiveCmdExpeWidget(np, []DepNodeI{in, cmd}, template)
 
-			out.AddChangeListener(ChangeListenerFunc(func() {
+			//out.AddChangeListener(ChangeListenerFunc(func() {
+			refresh := NewButtonWidget(np, func() {
 				dmp := diffmatchpatch.New()
-				diffs := dmp.DiffMain(in.Content.Content(), out.Content.Content(), false)
+				diffs := dmp.DiffMain(in.Content.Content(), out.Content.Content(), true)
 				in.DiffsTest = diffs
 				in.Side = -1
 				out.DiffsTest = diffs
 				out.Side = +1
-				//contentWs.Set(goon.Sdump(dmp.DiffMain(in.Content.Content(), out.Content.Content(), false)))
-			}))
+				//contentWs.Set(goon.Sdump(dmp.DiffMain(in.Content.Content(), out.Content.Content(), true)))
+			})
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out, refresh}, nil))
 		}
 	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
