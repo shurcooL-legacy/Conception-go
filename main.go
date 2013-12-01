@@ -2309,7 +2309,8 @@ func (w *GoonWidget) checkInternals() (depth bool) {
 
 func getTypeString(a reflect.Value) string {
 	// TODO: Do this properly
-	return fmt.Sprintf("%T/%s", a.Interface(), a.Type().Name())
+	//return fmt.Sprintf("%T/%s/%s", a.Interface(), a.Type().Name(), a.Type().String())
+	return a.Type().String() // Let's see how this works out...
 }
 
 func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
@@ -3778,7 +3779,40 @@ func main() {
 
 	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
 	widgets = append(widgets, &spinner)
-	if true {
+	if false { // Deleted test widget instances
+		type Inner struct {
+			Field1 string
+			Field2 int
+		}
+		type Lang struct {
+			Name  string
+			Year  int
+			URLs  [2]string
+			Inner Inner
+		}
+		x := Lang{
+			Name: "Go",
+			Year: 2009,
+			URLs: [2]string{"http", "https"},
+			Inner: Inner{
+				Field1: "Secret!",
+				Field2: 123367,
+			},
+		}
+
+		/*Lang{
+			Name: "Go",
+			Year: 2009,
+			URL:  "http",
+			Inner: Inner{...},
+		}*/
+
+		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
+		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{50, 10}, &x))
+		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 10}, &y))
+	} else if true {
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
 		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0},
 			[]Widgeter{
@@ -3790,10 +3824,10 @@ func main() {
 		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
 		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
-		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{100, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
-		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{100, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
-		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
+		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{90, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
+		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
+		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 15}))
 		{
 			src := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
 			//src := NewTextFileWidget(mathgl.Vec2d{}, "./GoLand/src/simple.go")
@@ -3889,42 +3923,10 @@ func main() {
 			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 		}
 
-		type Inner struct {
-			Field1 string
-			Field2 int
-		}
-		type Lang struct {
-			Name  string
-			Year  int
-			URLs  [2]string
-			Inner Inner
-		}
-		x := Lang{
-			Name: "Go",
-			Year: 2009,
-			URLs: [2]string{"http", "https"},
-			Inner: Inner{
-				Field1: "Secret!",
-				Field2: 123367,
-			},
-		}
-
-		/*Lang{
-			Name: "Go",
-			Year: 2009,
-			URL:  "http",
-			Inner: Inner{...},
-		}*/
-
-		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
-		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 10}, &x))
-		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 40}, &y))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
 
-		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{360, 70}, "./GoLand/src/"))
+		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{350, 30}, "./GoLand/src/"))
 
 		http.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "Closing.")
