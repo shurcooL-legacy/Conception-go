@@ -2946,8 +2946,10 @@ func (w *TextBoxWidget) Render() {
 		glt := NewOpenGlStream(w.pos)
 		//glt.PrintText(w.Content.Content())
 		for _, diff := range w.DiffsTest {
-			if diff.Type == w.Side {
+			if diff.Type == w.Side && diff.Type == -1 {
 				glt.BackgroundColor = &mathgl.Vec3d{1, 0.8, 0.8}
+			} else if diff.Type == w.Side && diff.Type == +1 {
+				glt.BackgroundColor = &mathgl.Vec3d{0.8, 1, 0.8}
 			} else if diff.Type == 0 {
 				glt.BackgroundColor = nil
 			} else {
