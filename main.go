@@ -4178,17 +4178,13 @@ func main() {
 				// Create a gist
 				cmd := exec.Command("curl", "-d", "{\"public\":true,\"files\":{\"main.go\":{\"content\":\"package gist\\n\\nimport ()\\n\"}}}", "https://api.github.com/gists", "--config", "-")
 				cmd.Stdin = strings.NewReader("-u \"" + username + ":" + password + "\"")
-				out, err := cmd.Output() // We want only the output, ignore progress meter
+				out, err := cmd.Output() // We want only the output, ignore progress meter (hence don't use CombinedOutput())
 				if err != nil {
 					return goon.SdumpExpr("Error creating gist.", err, string(out))
-				} else {
-					goon.DumpExpr("Success creating gist.", err, string(out))
 				}
 				GistId, err := ParseGistId(out)
 				if err != nil {
 					return goon.SdumpExpr("Error parsing GistId.", err)
-				} else {
-					goon.DumpExpr("Success parsing GistId.", err, GistId)
 				}
 
 				// Clone the gist repo
@@ -4202,8 +4198,6 @@ func main() {
 				out, err = cmd.CombinedOutput()
 				if err != nil {
 					return goon.SdumpExpr("Error cloning the gist repo.", err, string(out))
-				} else {
-					goon.DumpExpr("Success cloning the gist repo.", err, string(out))
 				}
 
 				// Open it in a new LiveProgramFileWidget
