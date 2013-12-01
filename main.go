@@ -94,6 +94,8 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 
 	"code.google.com/p/go.tools/astutil"
+
+	. "gist.github.com/7728088.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -458,6 +460,13 @@ func GlobalToParent(w Widgeter, GlobalPosition mathgl.Vec2d) (ParentPosition mat
 func GlobalToLocal(w Widgeter, GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
 	return w.ParentToLocal(GlobalToParent(w, GlobalPosition))
 }
+
+// ---
+
+/*func NewSpacerWidget(size mathgl.Vec2d) *Widget {
+	w := NewWidget(np, size)
+	return &w
+}*/
 
 // ---
 
@@ -2211,6 +2220,12 @@ type Bool struct {
 func (t *Bool) Get() bool {
 	return t.bool
 }
+func (t *Bool) Set(value bool) {
+	if t.bool != value {
+		t.bool = value
+		t.NotifyAllListeners()
+	}
+}
 func (t *Bool) Toggle() {
 	t.bool = !t.bool
 	t.NotifyAllListeners()
@@ -2844,6 +2859,7 @@ type TextBoxWidget struct {
 	Widget
 	Content       MultilineContentI
 	caretPosition CaretPosition
+	Private       Bool
 
 	DiffsTest []diffmatchpatch.Diff
 	Side      int8
@@ -2916,8 +2932,14 @@ func (w *TextBoxWidget) Render() {
 
 	if w.DiffsTest == nil {
 		gl.Color3d(0, 0, 0)
-		for lineNumber, contentLine := range w.Content.Lines() {
-			PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+		if !w.Private.Get() {
+			for lineNumber, contentLine := range w.Content.Lines() {
+				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+			}
+		} else {
+			for lineNumber, contentLine := range w.Content.Lines() {
+				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
+			}
 		}
 	} else {
 		gl.Color3d(0, 0, 0)
@@ -3019,12 +3041,16 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.caretPosition.TryMoveV(+1)
 			}
 		case glfw.KeyX:
-			if inputEvent.ModifierKey == glfw.ModSuper {
+			if !w.Private.Get() &&
+				inputEvent.ModifierKey == glfw.ModSuper {
+
 				globalWindow.SetClipboardString(w.Content.Content()) // TODO: Don't use globalWindow
 				w.Content.Set("")
 			}
 		case glfw.KeyC:
-			if inputEvent.ModifierKey == glfw.ModSuper {
+			if !w.Private.Get() &&
+				inputEvent.ModifierKey == glfw.ModSuper {
+
 				globalWindow.SetClipboardString(w.Content.Content()) // TODO: Don't use globalWindow
 			}
 		case glfw.KeyV:
@@ -3854,8 +3880,8 @@ func main() {
 			label := NewTextLabelWidgetString(np, "go Forced Use")
 
 			params := func() interface{} { return src.Content.Content() }
-			action := func(param interface{}) string {
-				if strings.TrimSpace(param.(string)) != "" {
+			action := func(params interface{}) string {
+				if strings.TrimSpace(params.(string)) != "" {
 					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
 					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
 				} else {
@@ -3873,8 +3899,8 @@ func main() {
 			label := NewTextLabelWidgetString(np, "go Forced Use")
 
 			params := func() interface{} { return src.Content.Content() }
-			action := func(param interface{}) string {
-				if strings.TrimSpace(param.(string)) != "" {
+			action := func(params interface{}) string {
+				if strings.TrimSpace(params.(string)) != "" {
 					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
 					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
 					//cmd := exec.Command("cat")
@@ -3925,6 +3951,7 @@ func main() {
 
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 130}, &mousePointer))
 
 		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{350, 30}, "./GoLand/src/"))
 
@@ -4128,6 +4155,67 @@ func main() {
 			})
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out, refresh}, nil))
+		}
+
+		// +Gist Button
+		{
+			username := NewTextBoxWidget(np)
+			password := NewTextBoxWidget(np)
+			password.Private.Set(true)
+
+			gistButtonTrigger := NewButtonTriggerWidget(np)
+
+			params := func() interface{} { return []string{username.Content.Content(), password.Content.Content()} }
+			action := func(params interface{}) string {
+				username := params.([]string)[0]
+				password := params.([]string)[1]
+
+				// TODO: This should be checked at higher level
+				if username == "" || password == "" {
+					return ""
+				}
+
+				// Create a gist
+				cmd := exec.Command("curl", "-d", "{\"public\":true,\"files\":{\"main.go\":{\"content\":\"package gist\\n\\nimport ()\\n\"}}}", "https://api.github.com/gists", "--config", "-")
+				cmd.Stdin = strings.NewReader("-u \"" + username + ":" + password + "\"")
+				out, err := cmd.Output() // We want only the output, ignore progress meter
+				if err != nil {
+					return goon.SdumpExpr("Error creating gist.", err, string(out))
+				} else {
+					goon.DumpExpr("Success creating gist.", err, string(out))
+				}
+				GistId, err := ParseGistId(out)
+				if err != nil {
+					return goon.SdumpExpr("Error parsing GistId.", err)
+				} else {
+					goon.DumpExpr("Success parsing GistId.", err, GistId)
+				}
+
+				// Clone the gist repo
+				// HACK: Need to generalize this; perhaps use `go get` after go1.2?
+				Command := "cd \"./GoLand\""
+				Command += "\nmkdir -p \"./src/gist.github.com\""
+				Command += "\ncd \"./src/gist.github.com\""
+				Command += "\ngit clone https://gist.github.com/" + GistId + ".git \"./" + GistId + ".git\""
+				//Command += "\ncurl -d 'path=gist.github.com/" + GistId + ".git' http://godoc.org/-/refresh";
+				cmd = exec.Command("bash", "-c", Command)
+				out, err = cmd.CombinedOutput()
+				if err != nil {
+					return goon.SdumpExpr("Error cloning the gist repo.", err, string(out))
+				} else {
+					goon.DumpExpr("Success cloning the gist repo.", err, string(out))
+				}
+
+				// Open it in a new LiveProgramFileWidget
+				//const auto FullPath = "./GoLand/src/gist.github.com/" + GistId + ".git/main.go";
+				//AddWidgetForPath(FullPath, *MainCanvas, *m_TypingModule, m_CurrentProject);
+
+				// Return import statement as the output
+				return ". \"gist.github.com/" + GistId + ".git\""
+			}
+			output := NewLiveGoroutineExpeWidget(np, []DepNodeI{gistButtonTrigger}, params, action)
+
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{500, 10}, []Widgeter{username, password, NewTextLabelWidgetString(np, "+Gist"), gistButtonTrigger, output}, nil))
 		}
 	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
