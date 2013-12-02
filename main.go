@@ -869,7 +869,7 @@ func (this *GoCompileErrorsTest) NotifyChange() {
 		if err != nil {
 			return nil
 		}
-		lineNumber-- // Convert line number (e.g. 1) to line index (e.g. 0)
+		lineNumber -= 1 // Convert line number (e.g. 1) to line index (e.g. 0)
 
 		in = in[x+1:]
 		message := TrimFirstSpace(in)
@@ -877,7 +877,7 @@ func (this *GoCompileErrorsTest) NotifyChange() {
 		return GoCompilerError{FileUri: fileUri, ErrorMessage: GoErrorMessage{LineNumber: lineNumber, Message: message}}
 	}
 
-	outChan := GoReduceLinesFromReader(NewContentReader(this.Source), 8, reduceFunc)
+	outChan := GoReduceLinesFromReader(NewContentReader(this.Source), 4, reduceFunc)
 
 	this.Out = nil
 	for out := range outChan {
@@ -3941,6 +3941,27 @@ func main() {
 	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
 	widgets = append(widgets, &spinner)
 	if false { // Deleted test widget instances
+		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
+		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0},
+			[]Widgeter{
+				&BoxWidget{NewWidget(mathgl.Vec2d{0, 0}, mathgl.Vec2d{16, 16}), "Left of Duo"},
+				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
+			}))
+		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mathgl.Vec2d{50, 180}, mathgl.Vec2d{0, 0}), window})
+		widgets = append(widgets, NewTextFieldWidget(mathgl.Vec2d{50, 50}))
+		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
+		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
+		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
+		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{90, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
+		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
+
+		if false {
+			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
+			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, -1525}, contentFunc, []DepNodeI{&UniversalClock}))
+		}
+		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{240, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
+
 		type Inner struct {
 			Field1 string
 			Field2 int
@@ -3970,24 +3991,10 @@ func main() {
 
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{50, 10}, &x))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{380, 10}, &x))
 		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{410, 10}, &y))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 10}, &y))
 	} else if true {
-		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
-		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0},
-			[]Widgeter{
-				&BoxWidget{NewWidget(mathgl.Vec2d{0, 0}, mathgl.Vec2d{16, 16}), "Left of Duo"},
-				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
-			}))
-		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mathgl.Vec2d{50, 180}, mathgl.Vec2d{0, 0}), window})
-		widgets = append(widgets, NewTextFieldWidget(mathgl.Vec2d{50, 50}))
-		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
-		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
-		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
-		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{90, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
-		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 15}))
 		{
 			src := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
@@ -4007,18 +4014,10 @@ func main() {
 				goCompileErrorsTest.AddChangeListener(&goCompileErrorsManagerTest)
 			}
 
-			run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
+			//run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build, run}, nil))
-
-			// DEBUG
-			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 700}, &goCompileErrorsManagerTest.All))
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build /*, run*/}, nil))
 		}
-		if false {
-			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
-			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, -1525}, contentFunc, []DepNodeI{&UniversalClock}))
-		}
-		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{250, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
 
 		// GoForcedUseWidget
 		{
@@ -4066,26 +4065,26 @@ func main() {
 
 		// git diff
 		{
-			source := widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget)
+			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget)
 			dir, file := filepath.Split(source.Path())
 			if isGitRepo, _ := IsFolderGitRepo(dir); isGitRepo {
 				template := NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
 				template.Dir = dir
 				w := NewLiveCmdExpeWidget(np, []DepNodeI{source}, template) // TODO: Figure out []DepNodeI{source} vs. []DepNodeI{source.Content}?
 
-				widgets[12].(*FlowLayoutWidget).Widgets = append(widgets[12].(*FlowLayoutWidget).Widgets, w)
-				w.SetParent(widgets[12]) // Needed for pointer coordinates to be accurate
-				widgets[12].(*FlowLayoutWidget).Layout()
+				widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
+				w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
+				widgets[2].(*FlowLayoutWidget).Layout()
 			}
 		}
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
 		{
-			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
-			w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[12].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
-			widgets[12].(*FlowLayoutWidget).Widgets = append(widgets[12].(*FlowLayoutWidget).Widgets, w)
-			w.SetParent(widgets[12]) // Needed for pointer coordinates to be accurate
-			widgets[12].(*FlowLayoutWidget).Layout()
+			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
+			widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
+			w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
+			widgets[2].(*FlowLayoutWidget).Layout()
 		}
 
 		// NumGoroutines
