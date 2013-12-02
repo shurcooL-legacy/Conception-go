@@ -96,6 +96,10 @@ import (
 	"code.google.com/p/go.tools/astutil"
 
 	. "gist.github.com/7728088.git"
+
+	. "gist.github.com/7729255.git"
+
+	. "gist.github.com/7651991.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -119,6 +123,8 @@ var redraw bool = true
 var widgets []Widgeter
 var mousePointer *Pointer
 var keyboardPointer *Pointer
+
+var goCompileErrorsManagerTest GoCompileErrorsManagerTest
 
 // TODO: Remove these
 var globalWindow *glfw.Window
@@ -353,6 +359,18 @@ func LoadTexture(path string) {
 
 // ---
 
+type ChangeListener interface {
+	NotifyChange()
+}
+
+type ChangeListenerFunc func()
+
+func (f ChangeListenerFunc) NotifyChange() {
+	f()
+}
+
+// ---
+
 type DepNodeI interface {
 	AddChangeListener(l ChangeListener)
 }
@@ -372,6 +390,36 @@ func (this *DepNode) NotifyAllListeners() {
 	for _, changeListener := range this.changeListeners {
 		changeListener.NotifyChange()
 	}
+}
+
+// ---
+
+type DepNode2I interface {
+	MarkAsNeedToUpdate()
+	AddChangeListener(d DepNode2I)
+	NotifyAllListeners()
+}
+
+type DepNode2 struct {
+	needToUpdate    bool
+	changeListeners []DepNode2I
+}
+
+func (this *DepNode2) AddChangeListener(d DepNode2I) {
+	this.changeListeners = append(this.changeListeners, d)
+
+	d.MarkAsNeedToUpdate()
+}
+
+func (this *DepNode2) NotifyAllListeners() {
+	for _, changeListener := range this.changeListeners {
+		changeListener.MarkAsNeedToUpdate()
+	}
+}
+
+func (this *DepNode2) MarkAsNeedToUpdate() {
+	this.needToUpdate = true
+	// TODO: Add to some queue so we can iterate over stuff that needs updating
 }
 
 // ---
@@ -761,6 +809,82 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 
 	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{typeCheckedPackage, &source.caretPosition}, params, action)
 	return w
+}
+
+// ---
+
+type GoCompileErrorsManagerTest struct {
+	Sources []*GoCompileErrorsTest // TODO: Migrate to using DepNode2
+
+	All map[string][]GoErrorMessage // TODO: Use some Uri type/interface instead of string, for clarity
+}
+
+func (this *GoCompileErrorsManagerTest) NotifyChange() {
+	this.All = make(map[string][]GoErrorMessage)
+
+	for _, source := range this.Sources {
+		for _, goCompilerError := range source.Out {
+			this.All[goCompilerError.FileUri] = append(this.All[goCompilerError.FileUri], goCompilerError.ErrorMessage)
+		}
+	}
+}
+
+// ---
+
+type GoCompileErrorsTest struct {
+	Source  MultilineContentI
+	DepNode // TODO: Migrate to using DepNode2
+
+	Out []GoCompilerError
+}
+
+type GoErrorMessage struct {
+	LineNumber int
+	Message    string
+}
+
+type GoCompilerError struct {
+	FileUri      string
+	ErrorMessage GoErrorMessage
+}
+
+func (this *GoCompileErrorsTest) NotifyChange() {
+	reduceFunc := func(in string) interface{} {
+		x := strings.Index(in, ":") // Find first colon
+		if x == -1 {
+			return nil
+		}
+		fileUri, err := filepath.Abs(in[:x])
+		if err != nil {
+			return nil
+		}
+		// TODO: Check if file exists? Maybe?
+
+		in = in[x+1:]
+		x = strings.Index(in, ":") // Find second colon
+		if x == -1 {
+			return nil
+		}
+		lineNumber, err := strconv.Atoi(in[:x])
+		if err != nil {
+			return nil
+		}
+		lineNumber-- // Convert line number (e.g. 1) to line index (e.g. 0)
+
+		in = in[x+1:]
+		message := TrimFirstSpace(in)
+
+		return GoCompilerError{FileUri: fileUri, ErrorMessage: GoErrorMessage{LineNumber: lineNumber, Message: message}}
+	}
+
+	outChan := GoReduceLinesFromReader(NewContentReader(this.Source), 8, reduceFunc)
+
+	this.Out = nil
+	for out := range outChan {
+		this.Out = append(this.Out, out.(GoCompilerError))
+	}
+
+	this.NotifyAllListeners() // TODO: I keep forgetting this... Need a better way
 }
 
 // ---
@@ -2540,18 +2664,6 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 
 // ---
 
-type ChangeListener interface {
-	NotifyChange()
-}
-
-type ChangeListenerFunc func()
-
-func (f ChangeListenerFunc) NotifyChange() {
-	f()
-}
-
-// ---
-
 type MultilineContentI interface {
 	Content() string
 	Lines() []contentLine
@@ -2806,6 +2918,11 @@ func NewTextLabelWidgetString(pos mathgl.Vec2d, s string) *TextLabelWidget {
 	return w
 }
 
+func NewTextLabelWidgetGoon(pos mathgl.Vec2d, any interface{}) *TextLabelWidget {
+	mc := NewMultilineContentFuncInstant(func() string { return TrimLastNewline(goon.Sdump(any)) })
+	return NewTextLabelWidgetExternalContent(pos, mc)
+}
+
 func NewTextLabelWidgetStringTooltip(pos mathgl.Vec2d, s, tooltip string) *TextLabelWidget {
 	mc := NewMultilineContentString(s)
 	w := NewTextLabelWidgetExternalContent(pos, mc)
@@ -2956,6 +3073,17 @@ func (w *TextBoxWidget) Render() {
 				continue
 			}
 			glt.PrintText(diff.Text)
+		}
+	}
+
+	// Go Errors Test
+	if contentFile, ok := w.Content.(*MultilineContentFile); ok && strings.HasSuffix(contentFile.Path(), ".go") {
+		gl.Color3d(0, 0, 0)
+		for _, goErrorMessage := range goCompileErrorsManagerTest.All[contentFile.Path()] { // TODO: Path() isn't guaranteed to be absolute, so either change that, or use something else here
+			expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
+			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{8 * float64(expandedLineLength+1), 16 * float64(goErrorMessage.LineNumber)}))
+			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
+			glt.PrintLine(goErrorMessage.Message)
 		}
 	}
 
@@ -3138,6 +3266,11 @@ func NewTextBoxValidationWidget(pos mathgl.Vec2d, validFunc func(MultilineConten
 	w := &TextBoxValidationWidget{TextBoxWidget: NewTextBoxWidget(pos), validFunc: validFunc}
 	w.TextBoxWidget.AddChangeListener(w) // Forward NotifyChanges from TextBoxWidget to us
 	return w
+}
+
+// TODO: Remove after done testing...
+func (w *TextBoxValidationWidget) IsValidTEST() bool {
+	return w.validFunc(w.Content)
 }
 
 func (w *TextBoxValidationWidget) Render() {
@@ -3866,9 +3999,20 @@ func main() {
 			build := NewLiveCmdExpeWidget(np, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", src.Path()))
 			build.AddChangeListener(&spinner)
 
+			// Go Compile Errors hardcoded TEST
+			{
+				goCompileErrorsTest := GoCompileErrorsTest{Source: build.Content}
+				build.AddChangeListener(&goCompileErrorsTest)
+				goCompileErrorsManagerTest.Sources = append(goCompileErrorsManagerTest.Sources, &goCompileErrorsTest) // TODO: This should call the next line, etc.
+				goCompileErrorsTest.AddChangeListener(&goCompileErrorsManagerTest)
+			}
+
 			run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build, run}, nil))
+
+			// DEBUG
+			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 700}, &goCompileErrorsManagerTest.All))
 		}
 		if false {
 			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
@@ -4133,6 +4277,7 @@ func main() {
 			from := NewTextBoxValidationWidget(np, validFunc)
 			to := NewTextBoxValidationWidget(np, validFunc)
 
+			/* debug
 			template := new(CmdTemplate)
 			*template = NewCmdTemplate("gofmt", "-r", "")
 			template.Stdin = func() io.Reader { return NewContentReader(in.Content) }
@@ -4144,9 +4289,26 @@ func main() {
 			cmd := NewTextLabelWidgetContentFunc(np, templateString, []DepNodeI{&from.DepNode, &to.DepNode})
 
 			out := NewLiveCmdExpeWidget(np, []DepNodeI{in, cmd}, template)
+			*/
+
+			nameArgs := StringsFunc(func() []string {
+				out := []string{"gofmt"}
+				if from.IsValidTEST() && to.IsValidTEST() {
+					out = append(out, "-r", fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()))
+				}
+				return out
+			})
+			template := NewCmdTemplateDynamic(nameArgs)
+			template.Stdin = func() io.Reader { return NewContentReader(in.Content) }
+
+			debugOutput := func() string {
+				cmd := template.NewCommand()
+				return fmt.Sprintf("%#v", cmd.Args)
+			}
+			out := NewTextLabelWidgetContentFunc(np, debugOutput, []DepNodeI{&UniversalClock})
 
 			//out.AddChangeListener(ChangeListenerFunc(func() {
-			refresh := NewButtonWidget(np, func() {
+			/*refresh := NewButtonWidget(np, func() {
 				dmp := diffmatchpatch.New()
 				diffs := dmp.DiffMain(in.Content.Content(), out.Content.Content(), true)
 				in.DiffsTest = diffs
@@ -4154,9 +4316,10 @@ func main() {
 				out.DiffsTest = diffs
 				out.Side = +1
 				//contentWs.Set(goon.Sdump(dmp.DiffMain(in.Content.Content(), out.Content.Content(), true)))
-			})
+				out.Content.Set(out.Content.Content() + goon.SdumpExpr(template.NewCommand().Args))
+			})*/
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out, refresh}, nil))
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
 		}
 
 		// +Gist Button
