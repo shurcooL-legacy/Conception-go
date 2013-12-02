@@ -125,6 +125,7 @@ var mousePointer *Pointer
 var keyboardPointer *Pointer
 
 var goCompileErrorsManagerTest GoCompileErrorsManagerTest
+var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 
 // TODO: Remove these
 var globalWindow *glfw.Window
@@ -189,6 +190,11 @@ type OpenGlStream struct {
 
 func NewOpenGlStream(pos mathgl.Vec2d) *OpenGlStream {
 	return &OpenGlStream{pos: pos, lineStartX: pos[0]}
+}
+
+func (o *OpenGlStream) SetPos(pos mathgl.Vec2d) {
+	o.pos = pos
+	o.lineStartX = pos[0]
 }
 
 func (o *OpenGlStream) PrintText(s string) {
@@ -396,16 +402,17 @@ func (this *DepNode) NotifyAllListeners() {
 
 type DepNode2I interface {
 	MarkAsNeedToUpdate()
-	AddChangeListener(d DepNode2I)
-	NotifyAllListeners()
+	//AddChangeListener(d DepNode2I)
+	//NotifyAllListeners()
 }
 
 type DepNode2 struct {
 	needToUpdate    bool
+	sources         []DepNode2I
 	changeListeners []DepNode2I
 }
 
-func (this *DepNode2) AddChangeListener(d DepNode2I) {
+/*func (this *DepNode2) AddChangeListener(d DepNode2I) {
 	this.changeListeners = append(this.changeListeners, d)
 
 	d.MarkAsNeedToUpdate()
@@ -415,7 +422,7 @@ func (this *DepNode2) NotifyAllListeners() {
 	for _, changeListener := range this.changeListeners {
 		changeListener.MarkAsNeedToUpdate()
 	}
-}
+}*/
 
 func (this *DepNode2) MarkAsNeedToUpdate() {
 	this.needToUpdate = true
@@ -2059,7 +2066,7 @@ func (w *FolderListingPureWidget) selectionChangedTest() {
 		path := filepath.Join(w.path, w.entries[w.selected-1].Name())
 		var newFolder Widgeter
 
-		if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
+		/*if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
 			dpkg := GetDocPackage(bpkg, err)
 
 			out := Underline(`import "`+dpkg.ImportPath+`"`) + "\n"
@@ -2083,7 +2090,7 @@ func (w *FolderListingPureWidget) selectionChangedTest() {
 			newFolder = NewTextLabelWidgetString(np, out)
 		} else if isGitRepo, status := IsFolderGitRepo(path); isGitRepo {
 			newFolder = NewTextLabelWidgetString(np, status)
-		} else {
+		} else */{
 			newFolder = newFolderListingPureWidget(path)
 		}
 
@@ -3077,13 +3084,16 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	// Go Errors Test
-	if contentFile, ok := w.Content.(*MultilineContentFile); ok && strings.HasSuffix(contentFile.Path(), ".go") {
-		gl.Color3d(0, 0, 0)
-		for _, goErrorMessage := range goCompileErrorsManagerTest.All[contentFile.Path()] { // TODO: Path() isn't guaranteed to be absolute, so either change that, or use something else here
-			expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
-			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{8 * float64(expandedLineLength+1), 16 * float64(goErrorMessage.LineNumber)}))
+	if goCompileErrorsEnabledTest.state() {
+		if contentFile, ok := w.Content.(*MultilineContentFile); ok && strings.HasSuffix(contentFile.Path(), ".go") {
+			gl.Color3d(0, 0, 0)
+			glt := NewOpenGlStream(np)
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
-			glt.PrintLine(goErrorMessage.Message)
+			for _, goErrorMessage := range goCompileErrorsManagerTest.All[contentFile.Path()] { // TODO: Path() isn't guaranteed to be absolute, so either change that, or use something else here
+				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
+				glt.SetPos(w.pos.Add(mathgl.Vec2d{8 * float64(expandedLineLength+1), 16 * float64(goErrorMessage.LineNumber)}))
+				glt.PrintLine(goErrorMessage.Message)
+			}
 		}
 	}
 
@@ -3672,9 +3682,10 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 
 		if !katOnly {
 			// TODO: Calculate whether a pointing pointer moved relative to canvas in a better way... what if canvas is moved via keyboard, etc.
-			if inputEvent.Pointer.VirtualCategory == POINTING &&
-				(inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2) {
+			pointingPointerMovedRelativeToCanvas := inputEvent.Pointer.VirtualCategory == POINTING &&
+				(inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2)
 
+			if pointingPointerMovedRelativeToCanvas {
 				LocalPosition := GlobalToLocal(widget, mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])})
 
 				// Clear previously hit widgets
@@ -3693,8 +3704,9 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 			}
 
 			// Populate PointerMappings (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
-			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 &&
+			if pointingPointerMovedRelativeToCanvas &&
 				!inputEvent.EventTypes[POINTER_DEACTIVATION] && !inputEvent.Pointer.State.IsActive() {
+
 				inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 				copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
 			}
@@ -3711,6 +3723,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 
 			// Populate PointerMappings (but only upon pointer deactivation event)
 			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[POINTER_DEACTIVATION] {
+
 				inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 				copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
 			}
@@ -4017,6 +4030,16 @@ func main() {
 			//run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build /*, run*/}, nil))
+		}
+
+		// DEBUG: Testing out new DepNode2 system
+		{
+			// TODO: Use DepNode2 so that if this is false, then goCompileErrorsManagerTest.All (and goCompileErrorsTest also) shouldn't get updated
+			goCompileErrorsEnabled := true
+			goCompileErrorsEnabledTest = NewTriButtonExternalStateWidget(mathgl.Vec2d{500, 700}, func() bool { return goCompileErrorsEnabled }, func() { goCompileErrorsEnabled = !goCompileErrorsEnabled })
+			widgets = append(widgets, goCompileErrorsEnabledTest)
+
+			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 716 + 2}, &goCompileErrorsManagerTest.All))
 		}
 
 		// GoForcedUseWidget
