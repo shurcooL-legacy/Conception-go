@@ -195,6 +195,7 @@ func NewOpenGlStream(pos mathgl.Vec2d) *OpenGlStream {
 func (o *OpenGlStream) SetPos(pos mathgl.Vec2d) {
 	o.pos = pos
 	o.lineStartX = pos[0]
+	o.advance = 0
 }
 
 func (o *OpenGlStream) PrintText(s string) {
