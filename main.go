@@ -403,14 +403,42 @@ func (this *DepNode) NotifyAllListeners() {
 
 type DepNode2I interface {
 	MarkAsNeedToUpdate()
+	Update()
+	AddSink(DepNode2I)
+	MakeUpdated()
 	//AddChangeListener(d DepNode2I)
 	//NotifyAllListeners()
 }
 
 type DepNode2 struct {
-	needToUpdate    bool
-	sources         []DepNode2I
-	changeListeners []DepNode2I
+	NeedToUpdate bool
+	Self         DepNode2I
+	Sources      []DepNode2I
+	Sinks        []DepNode2I
+}
+
+func (this *DepNode2) InitDepNode2(self DepNode2I, sources []DepNode2I) {
+	this.NeedToUpdate = true
+	this.Self = self
+	this.Sources = sources
+	for _, source := range sources {
+		source.AddSink(self)
+	}
+}
+
+func (this *DepNode2) AddSink(sink DepNode2I) {
+	this.Sinks = append(this.Sinks, sink)
+}
+
+func (this *DepNode2) MakeUpdated() {
+	if !this.NeedToUpdate || this.Self == nil {
+		return
+	}
+	for _, source := range this.Sources {
+		source.MakeUpdated()
+	}
+	this.Self.Update()
+	this.NeedToUpdate = false
 }
 
 /*func (this *DepNode2) AddChangeListener(d DepNode2I) {
@@ -426,8 +454,11 @@ func (this *DepNode2) NotifyAllListeners() {
 }*/
 
 func (this *DepNode2) MarkAsNeedToUpdate() {
-	this.needToUpdate = true
+	this.NeedToUpdate = true
 	// TODO: Add to some queue so we can iterate over stuff that needs updating
+	for _, sink := range this.Sinks {
+		sink.MarkAsNeedToUpdate()
+	}
 }
 
 // ---
@@ -822,16 +853,17 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 // ---
 
 type GoCompileErrorsManagerTest struct {
-	Sources []*GoCompileErrorsTest // TODO: Migrate to using DepNode2
+	//Sources []*GoCompileErrorsTest // TODO: Migrate to using DepNode2
+	DepNode2
 
 	All map[string][]GoErrorMessage // TODO: Use some Uri type/interface instead of string, for clarity
 }
 
-func (this *GoCompileErrorsManagerTest) NotifyChange() {
+func (this *GoCompileErrorsManagerTest) Update() {
 	this.All = make(map[string][]GoErrorMessage)
 
 	for _, source := range this.Sources {
-		for _, goCompilerError := range source.Out {
+		for _, goCompilerError := range source.(*GoCompileErrorsTest).Out {
 			this.All[goCompilerError.FileUri] = append(this.All[goCompilerError.FileUri], goCompilerError.ErrorMessage)
 		}
 	}
@@ -840,8 +872,9 @@ func (this *GoCompileErrorsManagerTest) NotifyChange() {
 // ---
 
 type GoCompileErrorsTest struct {
-	Source  MultilineContentI
-	DepNode // TODO: Migrate to using DepNode2
+	Source MultilineContentI
+	//DepNode // TODO: Migrate to using DepNode2
+	DepNode2
 
 	Out []GoCompilerError
 }
@@ -857,6 +890,13 @@ type GoCompilerError struct {
 }
 
 func (this *GoCompileErrorsTest) NotifyChange() {
+	this.Update()
+	for _, sink := range this.DepNode2.Sinks {
+		sink.MarkAsNeedToUpdate()
+	}
+}
+
+func (this *GoCompileErrorsTest) Update() {
 	reduceFunc := func(in string) interface{} {
 		x := strings.Index(in, ":") // Find first colon
 		if x == -1 {
@@ -886,13 +926,14 @@ func (this *GoCompileErrorsTest) NotifyChange() {
 	}
 
 	outChan := GoReduceLinesFromReader(NewContentReader(this.Source), 4, reduceFunc)
+	//outChan := GoReduceLinesFromReader(NewContentReader(this.DepNode2.Sources[0].(MultilineContentI)), 4, reduceFunc)
 
 	this.Out = nil
 	for out := range outChan {
 		this.Out = append(this.Out, out.(GoCompilerError))
 	}
 
-	this.NotifyAllListeners() // TODO: I keep forgetting this... Need a better way
+	//this.NotifyAllListeners() // TODO: I keep forgetting this... Need a better way
 }
 
 // ---
@@ -4017,15 +4058,18 @@ func main() {
 			//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
 			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 
-			build := NewLiveCmdExpeWidget(np, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", src.Path()))
+			build := NewLiveCmdExpeWidget(np, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", "gist.github.com/7176504.git" /*src.Path()*/)) // TODO: Do this right
 			build.AddChangeListener(&spinner)
 
 			// Go Compile Errors hardcoded TEST
 			{
-				goCompileErrorsTest := GoCompileErrorsTest{Source: build.Content}
+				goCompileErrorsTest := GoCompileErrorsTest{}
+				goCompileErrorsTest.Source = build.Content
+				//goCompileErrorsTest.DepNode2.InitDepNode2(&goCompileErrorsTest, []DepNode2I{build.Content})
 				build.AddChangeListener(&goCompileErrorsTest)
-				goCompileErrorsManagerTest.Sources = append(goCompileErrorsManagerTest.Sources, &goCompileErrorsTest) // TODO: This should call the next line, etc.
-				goCompileErrorsTest.AddChangeListener(&goCompileErrorsManagerTest)
+				//goCompileErrorsManagerTest.Sources = append(goCompileErrorsManagerTest.Sources, &goCompileErrorsTest) // TODO: This should call the next line, etc.
+				//goCompileErrorsTest.AddChangeListener(&goCompileErrorsManagerTest)
+				goCompileErrorsManagerTest.DepNode2.InitDepNode2(&goCompileErrorsManagerTest, []DepNode2I{&goCompileErrorsTest})
 			}
 
 			//run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
@@ -4040,7 +4084,8 @@ func main() {
 			goCompileErrorsEnabledTest = NewTriButtonExternalStateWidget(mathgl.Vec2d{500, 700}, func() bool { return goCompileErrorsEnabled }, func() { goCompileErrorsEnabled = !goCompileErrorsEnabled })
 			widgets = append(widgets, goCompileErrorsEnabledTest)
 
-			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 716 + 2}, &goCompileErrorsManagerTest.All))
+			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 716 + 2}, &goCompileErrorsManagerTest.DepNode2.NeedToUpdate))
+			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 732 + 4}, &goCompileErrorsManagerTest.All))
 		}
 
 		// GoForcedUseWidget
@@ -4438,6 +4483,12 @@ func main() {
 
 		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
 		UniversalClock.NotifyAllListeners()
+
+		// DepNode2 dependency resolution
+		// TODO: General solution
+		if goCompileErrorsEnabledTest.state() {
+			goCompileErrorsManagerTest.MakeUpdated()
+		}
 
 		if redraw && !*headlessFlag {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
