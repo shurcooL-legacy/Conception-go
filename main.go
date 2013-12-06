@@ -100,6 +100,8 @@ import (
 	. "gist.github.com/7729255.git"
 
 	. "gist.github.com/7651991.git"
+
+	. "gist.github.com/7802150.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -396,68 +398,6 @@ func (this *DepNode) NotifyAllListeners() {
 	// TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
 	for _, changeListener := range this.changeListeners {
 		changeListener.NotifyChange()
-	}
-}
-
-// ---
-
-type DepNode2I interface {
-	MarkAsNeedToUpdate()
-	Update()
-	AddSink(DepNode2I)
-	MakeUpdated()
-	//AddChangeListener(d DepNode2I)
-	//NotifyAllListeners()
-}
-
-type DepNode2 struct {
-	NeedToUpdate bool
-	Self         DepNode2I
-	Sources      []DepNode2I
-	Sinks        []DepNode2I
-}
-
-func (this *DepNode2) InitDepNode2(self DepNode2I, sources []DepNode2I) {
-	this.NeedToUpdate = true
-	this.Self = self
-	this.Sources = sources
-	for _, source := range sources {
-		source.AddSink(self)
-	}
-}
-
-func (this *DepNode2) AddSink(sink DepNode2I) {
-	this.Sinks = append(this.Sinks, sink)
-}
-
-func (this *DepNode2) MakeUpdated() {
-	if !this.NeedToUpdate || this.Self == nil {
-		return
-	}
-	for _, source := range this.Sources {
-		source.MakeUpdated()
-	}
-	this.Self.Update()
-	this.NeedToUpdate = false
-}
-
-/*func (this *DepNode2) AddChangeListener(d DepNode2I) {
-	this.changeListeners = append(this.changeListeners, d)
-
-	d.MarkAsNeedToUpdate()
-}
-
-func (this *DepNode2) NotifyAllListeners() {
-	for _, changeListener := range this.changeListeners {
-		changeListener.MarkAsNeedToUpdate()
-	}
-}*/
-
-func (this *DepNode2) MarkAsNeedToUpdate() {
-	this.NeedToUpdate = true
-	// TODO: Add to some queue so we can iterate over stuff that needs updating
-	for _, sink := range this.Sinks {
-		sink.MarkAsNeedToUpdate()
 	}
 }
 
@@ -862,7 +802,7 @@ type GoCompileErrorsManagerTest struct {
 func (this *GoCompileErrorsManagerTest) Update() {
 	this.All = make(map[string][]GoErrorMessage)
 
-	for _, source := range this.Sources {
+	for _, source := range this.GetSources() {
 		for _, goCompilerError := range source.(*GoCompileErrorsTest).Out {
 			this.All[goCompilerError.FileUri] = append(this.All[goCompilerError.FileUri], goCompilerError.ErrorMessage)
 		}
@@ -890,10 +830,7 @@ type GoCompilerError struct {
 }
 
 func (this *GoCompileErrorsTest) NotifyChange() {
-	this.Update()
-	for _, sink := range this.DepNode2.Sinks {
-		sink.MarkAsNeedToUpdate()
-	}
+	ForceUpdate(this)
 }
 
 func (this *GoCompileErrorsTest) Update() {
@@ -4069,7 +4006,7 @@ func main() {
 				build.AddChangeListener(&goCompileErrorsTest)
 				//goCompileErrorsManagerTest.Sources = append(goCompileErrorsManagerTest.Sources, &goCompileErrorsTest) // TODO: This should call the next line, etc.
 				//goCompileErrorsTest.AddChangeListener(&goCompileErrorsManagerTest)
-				goCompileErrorsManagerTest.DepNode2.InitDepNode2(&goCompileErrorsManagerTest, []DepNode2I{&goCompileErrorsTest})
+				goCompileErrorsManagerTest.DepNode2.InitDepNode2(&goCompileErrorsTest)
 			}
 
 			//run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
@@ -4084,7 +4021,7 @@ func main() {
 			goCompileErrorsEnabledTest = NewTriButtonExternalStateWidget(mathgl.Vec2d{500, 700}, func() bool { return goCompileErrorsEnabled }, func() { goCompileErrorsEnabled = !goCompileErrorsEnabled })
 			widgets = append(widgets, goCompileErrorsEnabledTest)
 
-			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 716 + 2}, &goCompileErrorsManagerTest.DepNode2.NeedToUpdate))
+			//widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 716 + 2}, &goCompileErrorsManagerTest.DepNode2.NeedToUpdate))
 			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 732 + 4}, &goCompileErrorsManagerTest.All))
 		}
 
@@ -4487,7 +4424,7 @@ func main() {
 		// DepNode2 dependency resolution
 		// TODO: General solution
 		if goCompileErrorsEnabledTest.state() {
-			goCompileErrorsManagerTest.MakeUpdated()
+			MakeUpdated(&goCompileErrorsManagerTest)
 		}
 
 		if redraw && !*headlessFlag {
