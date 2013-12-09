@@ -812,9 +812,7 @@ func (this *GoCompileErrorsManagerTest) Update() {
 // ---
 
 type GoCompileErrorsTest struct {
-	Source MultilineContentI
-	//DepNode // TODO: Migrate to using DepNode2
-	DepNode2Manual
+	DepNode2
 
 	Out []GoCompilerError
 }
@@ -827,10 +825,6 @@ type GoErrorMessage struct {
 type GoCompilerError struct {
 	FileUri      string
 	ErrorMessage GoErrorMessage
-}
-
-func (this *GoCompileErrorsTest) NotifyChange() {
-	ExternallyUpdated(this)
 }
 
 func (this *GoCompileErrorsTest) Update() {
@@ -862,7 +856,8 @@ func (this *GoCompileErrorsTest) Update() {
 		return GoCompilerError{FileUri: fileUri, ErrorMessage: GoErrorMessage{LineNumber: lineNumber, Message: message}}
 	}
 
-	outChan := GoReduceLinesFromReader(NewContentReader(this.Source), 4, reduceFunc)
+	source := this.DepNode2.GetSources()[0].(*LiveCmdExpeWidget).Content
+	outChan := GoReduceLinesFromReader(NewContentReader(source), 4, reduceFunc)
 	//outChan := GoReduceLinesFromReader(NewContentReader(this.DepNode2.Sources[0].(MultilineContentI)), 4, reduceFunc)
 
 	this.Out = nil
@@ -1714,12 +1709,11 @@ func (this *commandNode) NotifyChange() {
 
 type LiveCmdExpeWidget struct {
 	*TextBoxWidget
-	cmd              *exec.Cmd
-	stdoutChan       ChanWriter
-	stderrChan       ChanWriter
-	finishedChan     chan *os.ProcessState
-	FinishedDepNode  DepNode
-	FinishedDepNode2 DepNode2Manual
+	cmd            *exec.Cmd
+	stdoutChan     ChanWriter
+	stderrChan     ChanWriter
+	finishedChan   chan *os.ProcessState
+	DepNode2Manual // FinishedDepNode2
 }
 
 func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, template CmdTemplater) *LiveCmdExpeWidget {
@@ -1762,8 +1756,7 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 		w.SuccessDepNode.NotifyAllListeners()
 	}*/
 	case <-w.finishedChan:
-		w.FinishedDepNode.NotifyAllListeners()
-		ExternallyUpdated(&w.FinishedDepNode2)
+		ExternallyUpdated(w)
 	default:
 	}
 }
@@ -4007,17 +4000,17 @@ func main() {
 			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 
 			build := NewLiveCmdExpeWidget(np, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", "gist.github.com/7176504.git" /*src.Path()*/)) // TODO: Do this right
-			spinner.AddSources(&build.FinishedDepNode2)
+			spinner.AddSources(build)
 
 			// Go Compile Errors hardcoded TEST
 			{
 				goCompileErrorsTest := GoCompileErrorsTest{}
-				goCompileErrorsTest.Source = build.Content
-				//goCompileErrorsTest.DepNode2.InitDepNode2(&goCompileErrorsTest, []DepNode2I{build.Content})
-				build.AddChangeListener(&goCompileErrorsTest)
+				//goCompileErrorsTest.Source = build.Content
+				//build.AddChangeListener(&goCompileErrorsTest)
+				goCompileErrorsTest.AddSources(build)
 				//goCompileErrorsManagerTest.Sources = append(goCompileErrorsManagerTest.Sources, &goCompileErrorsTest) // TODO: This should call the next line, etc.
 				//goCompileErrorsTest.AddChangeListener(&goCompileErrorsManagerTest)
-				goCompileErrorsManagerTest.DepNode2.AddSources(&goCompileErrorsTest)
+				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
 			}
 
 			//run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
@@ -4461,4 +4454,6 @@ func main() {
 			redraw = false
 		}
 	}
+
+	os.Remove("./Con2RunBin") // TODO: Generalize this
 }
