@@ -274,7 +274,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 func InitFont() {
 	const fontWidth = 8
 
-	LoadTexture("./data/Font2048.tga")
+	LoadTexture("./Font.tga")
 
 	oFontBase = gl.GenLists(256)
 	oFontBackground = gl.GenLists(1)
@@ -814,7 +814,7 @@ func (this *GoCompileErrorsManagerTest) Update() {
 type GoCompileErrorsTest struct {
 	Source MultilineContentI
 	//DepNode // TODO: Migrate to using DepNode2
-	DepNode2
+	DepNode2Manual
 
 	Out []GoCompilerError
 }
@@ -830,7 +830,7 @@ type GoCompilerError struct {
 }
 
 func (this *GoCompileErrorsTest) NotifyChange() {
-	ForceUpdate(this)
+	ExternallyUpdated(this)
 }
 
 func (this *GoCompileErrorsTest) Update() {
@@ -3762,6 +3762,7 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 func main() {
 	//defer profile.Start(profile.MemProfile).Stop()
 
+	startedProcess := time.Now()
 	fmt.Printf("go version %s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
@@ -4006,7 +4007,7 @@ func main() {
 				build.AddChangeListener(&goCompileErrorsTest)
 				//goCompileErrorsManagerTest.Sources = append(goCompileErrorsManagerTest.Sources, &goCompileErrorsTest) // TODO: This should call the next line, etc.
 				//goCompileErrorsTest.AddChangeListener(&goCompileErrorsManagerTest)
-				goCompileErrorsManagerTest.DepNode2.InitDepNode2(&goCompileErrorsTest)
+				goCompileErrorsManagerTest.DepNode2.AddSources(&goCompileErrorsTest)
 			}
 
 			//run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
@@ -4399,6 +4400,8 @@ func main() {
 	widgets = append(widgets, fpsWidget)
 
 	widget := NewCanvasWidget(np, widgets, nil)
+
+	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
 	// ---
 
