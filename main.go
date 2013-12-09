@@ -2321,7 +2321,7 @@ func NewGoPackageWidget(pos mathgl.Vec2d, pkg *Something) *GoPackageWidget {
 
 type Bool struct {
 	bool
-	DepNode
+	DepNode2Manual
 }
 
 func (t *Bool) Get() bool {
@@ -2330,12 +2330,12 @@ func (t *Bool) Get() bool {
 func (t *Bool) Set(value bool) {
 	if t.bool != value {
 		t.bool = value
-		t.NotifyAllListeners()
+		ExternallyUpdated(&t.DepNode2Manual)
 	}
 }
 func (t *Bool) Toggle() {
 	t.bool = !t.bool
-	t.NotifyAllListeners()
+	ExternallyUpdated(&t.DepNode2Manual)
 }
 
 type GoonWidget struct {
