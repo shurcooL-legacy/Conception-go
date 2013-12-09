@@ -4102,7 +4102,7 @@ func main() {
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 130}, &mousePointer))
 
-		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{350, 30}, "./GoLand/src/"))
+		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
 
 		http.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "Closing.")
