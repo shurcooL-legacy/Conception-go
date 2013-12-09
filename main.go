@@ -901,6 +901,20 @@ func (w *GpcFileWidget) Render() {
 
 // ---
 
+type ButtonTriggerWidget struct {
+	*ButtonWidget
+	DepNode2Manual
+}
+
+func NewButtonTriggerWidget(pos mathgl.Vec2d) *ButtonTriggerWidget {
+	w := &ButtonTriggerWidget{}
+	w.ButtonWidget = NewButtonWidget(pos, func() { ExternallyUpdated(&w.DepNode2Manual) })
+
+	return w
+}
+
+// ---
+
 type ButtonWidget struct {
 	Widget
 	action  func()
@@ -910,13 +924,6 @@ type ButtonWidget struct {
 func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
 	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16})}
 	w.setAction(action)
-
-	return w
-}
-
-func NewButtonTriggerWidget(pos mathgl.Vec2d) *ButtonWidget {
-	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16})}
-	w.setAction(func() { w.NotifyAllListeners() })
 
 	return w
 }
@@ -1707,11 +1714,12 @@ func (this *commandNode) NotifyChange() {
 
 type LiveCmdExpeWidget struct {
 	*TextBoxWidget
-	cmd             *exec.Cmd
-	stdoutChan      ChanWriter
-	stderrChan      ChanWriter
-	finishedChan    chan *os.ProcessState
-	FinishedDepNode DepNode
+	cmd              *exec.Cmd
+	stdoutChan       ChanWriter
+	stderrChan       ChanWriter
+	finishedChan     chan *os.ProcessState
+	FinishedDepNode  DepNode
+	FinishedDepNode2 DepNode2Manual
 }
 
 func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, template CmdTemplater) *LiveCmdExpeWidget {
@@ -1755,6 +1763,7 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 	}*/
 	case <-w.finishedChan:
 		w.FinishedDepNode.NotifyAllListeners()
+		ExternallyUpdated(&w.FinishedDepNode2)
 	default:
 	}
 }
@@ -1872,6 +1881,7 @@ func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
 type SpinnerWidget struct {
 	Widget
 	Spinner uint32
+	DepNode2
 }
 
 func (w *SpinnerWidget) Render() {
@@ -1887,7 +1897,7 @@ func (w *SpinnerWidget) Render() {
 	gl.End()
 }
 
-func (w *SpinnerWidget) NotifyChange() {
+func (w *SpinnerWidget) Update() {
 	//w.Spinner++
 	w.Spinner += 45
 }
@@ -3931,7 +3941,7 @@ func main() {
 
 	// ---
 
-	spinner := SpinnerWidget{NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), 0}
+	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 	widgets = append(widgets, &spinner)
 	if false { // Deleted test widget instances
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
@@ -3997,7 +4007,7 @@ func main() {
 			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 
 			build := NewLiveCmdExpeWidget(np, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", "gist.github.com/7176504.git" /*src.Path()*/)) // TODO: Do this right
-			build.AddChangeListener(&spinner)
+			spinner.AddSources(&build.FinishedDepNode2)
 
 			// Go Compile Errors hardcoded TEST
 			{
@@ -4268,7 +4278,7 @@ func main() {
 
 		{
 			buttonTrigger := NewButtonTriggerWidget(mathgl.Vec2d{50, 30})
-			buttonTrigger.AddChangeListener(&spinner)
+			spinner.AddSources(&buttonTrigger.DepNode2Manual)
 			widgets = append(widgets, buttonTrigger)
 		}
 
@@ -4429,6 +4439,7 @@ func main() {
 		if goCompileErrorsEnabledTest.state() {
 			MakeUpdated(&goCompileErrorsManagerTest)
 		}
+		MakeUpdated(&spinner)
 
 		if redraw && !*headlessFlag {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
