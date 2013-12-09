@@ -114,6 +114,7 @@ var _ = GetExprAsString
 var _ = UnsafeReflectValue
 var _ = profile.Start
 var _ = http.ListenAndServe
+var _ = GetForcedUse
 
 const katOnly = false
 
@@ -575,10 +576,15 @@ type parsedFile struct {
 	fs      *token.FileSet
 	fileAst *ast.File
 
-	DepNode
+	DepNode2Manual
 }
 
 func (t *parsedFile) NotifyChange() {
+	t.Update()
+	ExternallyUpdated(t)
+}
+
+func (t *parsedFile) Update() {
 	fs := token.NewFileSet()
 	fileAst, err := parser.ParseFile(fs, "", t.source.Content(), 1*parser.ParseComments)
 
@@ -594,8 +600,6 @@ func (t *parsedFile) NotifyChange() {
 		t.fs = nil
 		t.fileAst = nil
 	}
-
-	t.NotifyAllListeners()
 }
 
 func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeWidget {
@@ -646,7 +650,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 		return out
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{parsedFile, &source.caretPosition}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{parsedFile, &source.caretPosition}, params, action)
 	return w
 }
 
@@ -661,10 +665,15 @@ type typeCheckedPackage struct {
 	tpkg *types.Package
 	info *types.Info
 
-	DepNode
+	DepNode2Manual
 }
 
 func (t *typeCheckedPackage) NotifyChange() {
+	t.Update()
+	ExternallyUpdated(t)
+}
+
+func (t *typeCheckedPackage) Update() {
 	ImportPath := "gist.github.com/7176504.git"
 	//ImportPath := "gist.github.com/5694308.git"
 
@@ -709,8 +718,6 @@ func (t *typeCheckedPackage) NotifyChange() {
 		t.tpkg = nil
 		t.info = nil
 	}
-
-	t.NotifyAllListeners()
 }
 
 func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpeWidget {
@@ -786,7 +793,7 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 		return out
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, []DepNodeI{typeCheckedPackage, &source.caretPosition}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{typeCheckedPackage, &source.caretPosition}, params, action)
 	return w
 }
 
@@ -1761,9 +1768,10 @@ type actionNode struct {
 	owner  *LiveGoroutineExpeWidget
 	params func() interface{}
 	action func(interface{}) string
+	DepNode2
 }
 
-func (this *actionNode) NotifyChange() {
+func (this *actionNode) Update() {
 	this.owner.lastStartedT++
 	ti := this.owner.lastStartedT
 
@@ -1784,11 +1792,12 @@ type timestampString struct {
 
 type LiveGoroutineExpeWidget struct {
 	*TextBoxWidget
+	actionNode                  *actionNode
 	outChan                     chan timestampString
 	lastStartedT, lastFinishedT uint32
 }
 
-func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
+func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
 	/*dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
 	src.AfterChange = append(src.AfterChange, func() {
 		// TODO: Async?
@@ -1806,18 +1815,18 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, params f
 
 	w := &LiveGoroutineExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), outChan: make(chan timestampString)}
 
-	UniversalClock.AddChangeListener(w)
-
 	// THINK: The only reason to have a separate action node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
-	actionNode := &actionNode{owner: w, params: params, action: action}
-	for _, dependee := range dependees {
-		dependee.AddChangeListener(actionNode)
-	}
+	w.actionNode = &actionNode{owner: w, params: params, action: action}
+	w.actionNode.AddSources(dependees...)
+
+	UniversalClock.AddChangeListener(w)
 
 	return w
 }
 
 func (w *LiveGoroutineExpeWidget) NotifyChange() {
+	MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
+
 	select {
 	case s, ok := <-w.outChan:
 		if ok {
@@ -2552,7 +2561,7 @@ type CaretPosition struct {
 	caretPosition   uint32
 	targetExpandedX uint32
 
-	DepNode
+	DepNode2Manual
 }
 
 func (cp *CaretPosition) Logical() uint32 {
@@ -2593,7 +2602,7 @@ func (cp *CaretPosition) Move(amount int8) {
 	x, _ := cp.ExpandedPosition()
 	cp.targetExpandedX = x
 
-	cp.NotifyAllListeners()
+	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
 func (cp *CaretPosition) TryMoveV(amount int8) {
@@ -2606,7 +2615,7 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 
-			cp.NotifyAllListeners()
+			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
 			cp.Move(-2)
 		}
@@ -2616,7 +2625,7 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 
-			cp.NotifyAllListeners()
+			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
 			cp.Move(+2)
 		}
@@ -2642,7 +2651,7 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 	cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 
-	cp.NotifyAllListeners()
+	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
 // ---
@@ -4024,7 +4033,7 @@ func main() {
 		}
 
 		// GoForcedUseWidget
-		{
+		/*{
 			src := NewTextBoxWidget(np)
 			label := NewTextLabelWidgetString(np, "go Forced Use")
 
@@ -4037,7 +4046,7 @@ func main() {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(np, []DepNodeI{src}, params, action)
+			dst := NewLiveGoroutineExpeWidget(np, []DepNode2I{src.Content}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
@@ -4061,11 +4070,11 @@ func main() {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(np, []DepNodeI{src}, params, action)
+			dst := NewLiveGoroutineExpeWidget(np, []DepNodeI{src.Content}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
-		}
+		}*/
 
 		// git diff
 		{
@@ -4375,7 +4384,7 @@ func main() {
 				// Return import statement as the output
 				return ". \"gist.github.com/" + GistId + ".git\""
 			}
-			output := NewLiveGoroutineExpeWidget(np, []DepNodeI{gistButtonTrigger}, params, action)
+			output := NewLiveGoroutineExpeWidget(np, []DepNode2I{&gistButtonTrigger.DepNode2Manual}, params, action)
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{500, 10}, []Widgeter{username, password, NewTextLabelWidgetString(np, "+Gist"), gistButtonTrigger, output}, nil))
 		}
