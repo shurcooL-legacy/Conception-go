@@ -4029,7 +4029,7 @@ func main() {
 		}
 
 		// GoForcedUseWidget
-		/*{
+		{
 			src := NewTextBoxWidget(np)
 			label := NewTextLabelWidgetString(np, "go Forced Use")
 
@@ -4066,11 +4066,11 @@ func main() {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(np, []DepNodeI{src.Content}, params, action)
+			dst := NewLiveGoroutineExpeWidget(np, []DepNode2I{src.Content}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
-		}*/
+		}
 
 		// git diff
 		{
