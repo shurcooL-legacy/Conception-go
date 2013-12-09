@@ -1665,9 +1665,10 @@ type commandNode struct {
 	w        *LiveCmdExpeWidget
 	template CmdTemplater
 	dst      *TextBoxWidget
+	DepNode2
 }
 
-func (this *commandNode) NotifyChange() {
+func (this *commandNode) Update() {
 	if this.w.cmd != nil && this.w.cmd.ProcessState == nil {
 		//w.cmd.Process.Kill()
 		this.w.cmd.Process.Signal(os.Interrupt)
@@ -1700,6 +1701,7 @@ func (this *commandNode) NotifyChange() {
 
 type LiveCmdExpeWidget struct {
 	*TextBoxWidget
+	commandNode    *commandNode
 	cmd            *exec.Cmd
 	stdoutChan     ChanWriter
 	stderrChan     ChanWriter
@@ -1707,21 +1709,21 @@ type LiveCmdExpeWidget struct {
 	DepNode2Manual // FinishedDepNode2
 }
 
-func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNodeI, template CmdTemplater) *LiveCmdExpeWidget {
+func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, template CmdTemplater) *LiveCmdExpeWidget {
 	w := &LiveCmdExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan *os.ProcessState)}
 
-	UniversalClock.AddChangeListener(w)
-
 	// THINK: The only reason to have a separate command node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
-	commandNode := &commandNode{w: w, template: template}
-	for _, dependee := range dependees {
-		dependee.AddChangeListener(commandNode)
-	}
+	w.commandNode = &commandNode{w: w, template: template}
+	w.commandNode.AddSources(dependees...)
+
+	UniversalClock.AddChangeListener(w)
 
 	return w
 }
 
 func (w *LiveCmdExpeWidget) NotifyChange() {
+	MakeUpdated(w.commandNode) // THINK: Is this a hack or is this the way to go?
+
 	select {
 	case b, ok := <-w.stdoutChan:
 		if ok {
@@ -3998,7 +4000,7 @@ func main() {
 			//src := NewTextFileWidget(mathgl.Vec2d{0, 0}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/5068062.git/gistfile1.go")
 			//src := NewTextBoxWidget(mathgl.Vec2d{50, 200})
 
-			build := NewLiveCmdExpeWidget(np, []DepNodeI{src}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", "gist.github.com/7176504.git" /*src.Path()*/)) // TODO: Do this right
+			build := NewLiveCmdExpeWidget(np, []DepNode2I{src.Content}, NewCmdTemplate("go", "build", "-o", "./Con2RunBin", "gist.github.com/7176504.git" /*src.Path()*/)) // TODO: Do this right
 			spinner.AddSources(build)
 
 			// Go Compile Errors hardcoded TEST
@@ -4079,7 +4081,7 @@ func main() {
 			if isGitRepo, _ := IsFolderGitRepo(dir); isGitRepo {
 				template := NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
 				template.Dir = dir
-				w := NewLiveCmdExpeWidget(np, []DepNodeI{source}, template) // TODO: Figure out []DepNodeI{source} vs. []DepNodeI{source.Content}?
+				w := NewLiveCmdExpeWidget(np, []DepNode2I{source.Content}, template)
 
 				widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
 				w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
