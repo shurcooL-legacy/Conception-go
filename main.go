@@ -133,6 +133,7 @@ var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 // TODO: Remove these
 var globalWindow *glfw.Window
 var np = mathgl.Vec2d{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
+var keepUpdatedTEST = []DepNode2I{}
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -571,22 +572,16 @@ func (w *Test2Widget) ProcessEvent(inputEvent InputEvent) {
 // ---
 
 type parsedFile struct {
-	source MultilineContentI // THINK: I only need this because NotifyChange doesn't tell where the change comes from, maybe it should?
-
 	fs      *token.FileSet
 	fileAst *ast.File
 
-	DepNode2Manual
-}
-
-func (t *parsedFile) NotifyChange() {
-	t.Update()
-	ExternallyUpdated(t)
+	DepNode2
 }
 
 func (t *parsedFile) Update() {
+	source := t.GetSources()[0].(MultilineContentI)
 	fs := token.NewFileSet()
-	fileAst, err := parser.ParseFile(fs, "", t.source.Content(), 1*parser.ParseComments)
+	fileAst, err := parser.ParseFile(fs, "", source.Content(), 1*parser.ParseComments)
 
 	{
 		//fileAst.Decls[0].(*ast.GenDecl).Specs = append(fileAst.Decls[0].(*ast.GenDecl).Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"yay/new/import"`}})
@@ -603,8 +598,8 @@ func (t *parsedFile) Update() {
 }
 
 func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeWidget {
-	parsedFile := &parsedFile{source: source.Content}
-	source.Content.AddChangeListener(parsedFile)
+	parsedFile := &parsedFile{}
+	parsedFile.AddSources(source.Content)
 
 	params := func() interface{} {
 		return []interface{}{
@@ -657,23 +652,18 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 // ---
 
 type typeCheckedPackage struct {
-	source *MultilineContentFile
-
 	fset  *token.FileSet
 	files []*ast.File
 
 	tpkg *types.Package
 	info *types.Info
 
-	DepNode2Manual
-}
-
-func (t *typeCheckedPackage) NotifyChange() {
-	t.Update()
-	ExternallyUpdated(t)
+	DepNode2
 }
 
 func (t *typeCheckedPackage) Update() {
+	_ = t.GetSources()[0].(*MultilineContentFile)
+
 	ImportPath := "gist.github.com/7176504.git"
 	//ImportPath := "gist.github.com/5694308.git"
 
@@ -721,8 +711,8 @@ func (t *typeCheckedPackage) Update() {
 }
 
 func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpeWidget {
-	typeCheckedPackage := &typeCheckedPackage{source: source.Content.(*MultilineContentFile)}
-	source.Content.AddChangeListener(typeCheckedPackage)
+	typeCheckedPackage := &typeCheckedPackage{}
+	typeCheckedPackage.AddSources(source.Content)
 
 	params := func() interface{} {
 		return []interface{}{
@@ -2663,7 +2653,7 @@ type MultilineContentI interface {
 
 	Set(content string)
 
-	AddChangeListener(l ChangeListener)
+	DepNode2ManualI
 }
 
 func NewContentReader(c MultilineContentI) io.Reader { return strings.NewReader(c.Content()) }
@@ -2680,7 +2670,7 @@ type MultilineContent struct {
 	lines       []contentLine
 	longestLine uint32 // Line length
 
-	DepNode
+	DepNode2Manual
 }
 
 func NewMultilineContent() *MultilineContent {
@@ -2702,7 +2692,7 @@ func (mc *MultilineContent) Set(content string) {
 	mc.content = content
 	mc.updateLines()
 
-	mc.NotifyAllListeners()
+	ExternallyUpdated(mc)
 }
 
 func (w *MultilineContent) updateLines() {
@@ -2745,7 +2735,7 @@ func (this *MultilineContentFile) Set(content string) {
 		CheckError(err)
 	}
 
-	this.NotifyAllListeners()
+	ExternallyUpdated(this)
 }
 
 func (this *MultilineContentFile) NotifyChange() {
@@ -2782,7 +2772,7 @@ func (this *MultilineContentPointer) Set(content string) {
 	// TODO: This shouldn't be triggered from NotifyChange() update below... Nor by `this.Set()` in NewMultilineContentPointer().
 	*this.p = this.Content()
 
-	this.NotifyAllListeners()
+	ExternallyUpdated(this)
 }
 
 func (this *MultilineContentPointer) NotifyChange() {
@@ -2816,7 +2806,7 @@ func (this *MultilineContentWS) Set(content string) {
 		this.WsWriteChan <- this.Content()
 	}
 
-	this.NotifyAllListeners()
+	ExternallyUpdated(this)
 }
 
 func (this *MultilineContentWS) NotifyChange() {
@@ -2828,7 +2818,7 @@ func (this *MultilineContentWS) NotifyChange() {
 				this.content = NewContent
 				this.updateLines()
 
-				this.NotifyAllListeners()
+				ExternallyUpdated(this)
 			}
 		}
 	default:
@@ -2891,8 +2881,9 @@ func (this *MultilineContentFuncInstant) LongestLine() uint32 {
 
 type TextLabelWidget struct {
 	Widget
-	Content MultilineContentI
-	tooltip Widgeter
+	Content        MultilineContentI
+	tooltip        Widgeter
+	LayoutDepNode2 DepNode2Func
 }
 
 func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *TextLabelWidget {
@@ -2900,7 +2891,9 @@ func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *
 		Widget:  NewWidget(pos, mathgl.Vec2d{0, 0}),
 		Content: mc,
 	}
-	mc.AddChangeListener(w) // TODO: What about removing w when it's "deleted"?
+	w.LayoutDepNode2.UpdaterFunc = func() { w.NotifyChange() }
+	w.LayoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
+	keepUpdatedTEST = append(keepUpdatedTEST, &w.LayoutDepNode2)
 	return w
 }
 
@@ -2966,9 +2959,10 @@ func (w *TextLabelWidget) Render() {
 
 type TextBoxWidget struct {
 	Widget
-	Content       MultilineContentI
-	caretPosition CaretPosition
-	Private       Bool
+	Content        MultilineContentI
+	caretPosition  CaretPosition
+	Private        Bool
+	LayoutDepNode2 DepNode2Func
 
 	DiffsTest []diffmatchpatch.Diff
 	Side      int8
@@ -2985,7 +2979,9 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 		Content:       mc,
 		caretPosition: CaretPosition{w: mc},
 	}
-	mc.AddChangeListener(w) // TODO: What about removing w when it's "deleted"?
+	w.LayoutDepNode2.UpdaterFunc = func() { w.NotifyChange() }
+	w.LayoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
+	keepUpdatedTEST = append(keepUpdatedTEST, &w.LayoutDepNode2)
 	return w
 }
 
@@ -3223,7 +3219,7 @@ func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 	ec := NewMultilineContentFile(path)
 	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec)}
 	// TODO: So now both TextBoxWidget and TextFileWidget are set to receive change notifications from ec... Is that cool? Or should I remove TextBoxWidget here? Or go from TextBoxWidget to TextFileWidget rather than from ec directly?
-	ec.AddChangeListener(w)
+	//ec.AddChangeListener(w)
 	return w
 }
 
@@ -3231,9 +3227,9 @@ func (w *TextFileWidget) Path() string {
 	return w.TextBoxWidget.Content.(*MultilineContentFile).Path()
 }
 
-func (w *TextFileWidget) NotifyChange() {
+/*func (w *TextFileWidget) NotifyChange() {
 	redraw = true
-}
+}*/
 
 // ---
 
@@ -4436,6 +4432,9 @@ func main() {
 			MakeUpdated(&goCompileErrorsManagerTest)
 		}
 		MakeUpdated(&spinner)
+		for _, keepUpdatedEntry := range keepUpdatedTEST {
+			MakeUpdated(keepUpdatedEntry)
+		}
 
 		if redraw && !*headlessFlag {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
