@@ -114,7 +114,6 @@ var _ = GetExprAsString
 var _ = UnsafeReflectValue
 var _ = profile.Start
 var _ = http.ListenAndServe
-var _ = GetForcedUse
 
 const katOnly = false
 
@@ -421,7 +420,7 @@ type Widgeter interface {
 
 	ParentToLocal(mathgl.Vec2d) mathgl.Vec2d
 
-	AddChangeListener(l ChangeListener)
+	DepNodeI
 }
 
 type Widgeters []Widgeter
@@ -861,8 +860,6 @@ func (this *GoCompileErrorsTest) Update() {
 	for out := range outChan {
 		this.Out = append(this.Out, out.(GoCompilerError))
 	}
-
-	//this.NotifyAllListeners() // TODO: I keep forgetting this... Need a better way
 }
 
 // ---
@@ -1721,6 +1718,7 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, template CmdT
 	return w
 }
 
+// HACK: I'm overriding NotifyChange() of TextBoxWidget here; it works because TextBoxWidget uses its own, but this isn't good
 func (w *LiveCmdExpeWidget) NotifyChange() {
 	MakeUpdated(w.commandNode) // THINK: Is this a hack or is this the way to go?
 
@@ -1816,6 +1814,7 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, params 
 	return w
 }
 
+// HACK: I'm overriding NotifyChange() of TextBoxWidget here; it works because TextBoxWidget uses its own, but this isn't good
 func (w *LiveGoroutineExpeWidget) NotifyChange() {
 	MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
 
@@ -3189,7 +3188,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyR:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.NotifyAllListeners()
+				ExternallyUpdated(w.Content)
 			}
 		// TEST: Closing this widget...
 		case glfw.KeyW:
@@ -3220,18 +3219,12 @@ func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 	// TODO: Opening the same file shouldn't result in a new MultilineContentFile
 	ec := NewMultilineContentFile(path)
 	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec)}
-	// TODO: So now both TextBoxWidget and TextFileWidget are set to receive change notifications from ec... Is that cool? Or should I remove TextBoxWidget here? Or go from TextBoxWidget to TextFileWidget rather than from ec directly?
-	//ec.AddChangeListener(w)
 	return w
 }
 
 func (w *TextFileWidget) Path() string {
 	return w.TextBoxWidget.Content.(*MultilineContentFile).Path()
 }
-
-/*func (w *TextFileWidget) NotifyChange() {
-	redraw = true
-}*/
 
 // ---
 
