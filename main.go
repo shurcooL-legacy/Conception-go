@@ -1476,12 +1476,7 @@ func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *FlowLayo
 	if options == nil {
 		options = &FlowLayoutWidgetOptions{}
 	}
-	w := &FlowLayoutWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets), options: *options}
-	// TODO: Unsure this is a good way of registering ourselves as a listener... can it be more automated? What if someone manually adds another widget later, this'd get bypassed...
-	/*for _, widget := range Widgets {
-		widget.AddChangeListener(w)
-	}*/
-	// TODO: This is a hack, I'm manually overriding parents of each widget that were set in NewCompositeWidget()
+	w := &FlowLayoutWidget{CompositeWidget: CompositeWidget{Widget: NewWidget(pos, mathgl.Vec2d{}), Widgets: Widgets}, options: *options}
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
 	}
@@ -1535,8 +1530,7 @@ func NewCanvasWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *CanvasWidget
 	if options == nil {
 		options = &CanvasWidgetOptions{}
 	}
-	w := &CanvasWidget{CompositeWidget: *NewCompositeWidget(pos, mathgl.Vec2d{0, 0}, Widgets), options: *options}
-	// TODO: This is a hack, I'm manually overriding parents of each widget that were set in NewCompositeWidget()
+	w := &CanvasWidget{CompositeWidget: CompositeWidget{Widget: NewWidget(pos, mathgl.Vec2d{}), Widgets: Widgets}, options: *options}
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
 	}
