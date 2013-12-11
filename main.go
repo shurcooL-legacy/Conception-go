@@ -4357,7 +4357,7 @@ func main() {
 
 				// Clone the gist repo
 				// HACK: Need to generalize this; perhaps use `go get` after go1.2?
-				Command := "cd \"./GoLand\""
+				Command := "cd ../../../" // Hopefully the "$GOPATH/src/" folder
 				Command += "\nmkdir -p \"./src/gist.github.com\""
 				Command += "\ncd \"./src/gist.github.com\""
 				Command += "\ngit clone https://gist.github.com/" + GistId + ".git \"./" + GistId + ".git\""
