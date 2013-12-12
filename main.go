@@ -2454,6 +2454,12 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 		}
 	}
 
+	// Follow pointer
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Interface:
+		v = v.Elem()
+	}
+
 	switch v.Kind() {
 	case reflect.Struct:
 		vt := v.Type()
