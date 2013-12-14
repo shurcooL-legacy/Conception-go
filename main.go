@@ -3045,9 +3045,24 @@ func (w *TextBoxWidget) Render() {
 	if w.DiffsTest == nil {
 		gl.Color3d(0, 0, 0)
 		if !w.Private.Get() {
-			for lineNumber, contentLine := range w.Content.Lines() {
+			// Render only visible lines.
+			// TODO: Generalize this.
+			lines := w.Content.Lines()
+			lineNumber, lastLineNumber := 0, len(lines)-1
+			if topLineNumber := int(GlobalToLocal(w, mathgl.Vec2d{})[1] / 16); topLineNumber > lineNumber {
+				lineNumber = topLineNumber
+			}
+			_, height := globalWindow.GetSize() // HACK
+			if bottomLineNumber := int(GlobalToLocal(w, mathgl.Vec2d{0, float64(height)})[1] / 16); bottomLineNumber < lastLineNumber {
+				lastLineNumber = bottomLineNumber
+			}
+			for ; lineNumber <= lastLineNumber; lineNumber++ {
+				contentLine := lines[lineNumber]
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 			}
+			/*for lineNumber, contentLine := range w.Content.Lines() {
+				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+			}*/
 		} else {
 			for lineNumber, contentLine := range w.Content.Lines() {
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
@@ -3194,7 +3209,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyR:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				ExternallyUpdated(w.Content)
+				ExternallyUpdated(w.Content) // TODO: Need to make this apply only for event-based things; no point in forcibly updating pure data structures
 			}
 		// TEST: Closing this widget...
 		case glfw.KeyW:
