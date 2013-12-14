@@ -3072,7 +3072,7 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	// Go Errors Test
-	if goCompileErrorsEnabledTest.state() {
+	if goCompileErrorsEnabledTest != nil && goCompileErrorsEnabledTest.state() {
 		if contentFile, ok := w.Content.(*MultilineContentFile); ok && strings.HasSuffix(contentFile.Path(), ".go") {
 			gl.Color3d(0, 0, 0)
 			glt := NewOpenGlStream(np)
@@ -3936,7 +3936,11 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 	widgets = append(widgets, &spinner)
-	if false { // Deleted test widget instances
+	if true {
+
+		widgets = append(widgets, NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Conception-go/main.go"))
+
+	} else if false { // Deleted test widget instances
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
 		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0},
 			[]Widgeter{
@@ -4429,7 +4433,7 @@ func main() {
 
 		// DepNode2 dependency resolution
 		// TODO: General solution
-		if goCompileErrorsEnabledTest.state() {
+		if goCompileErrorsEnabledTest != nil && goCompileErrorsEnabledTest.state() {
 			MakeUpdated(&goCompileErrorsManagerTest)
 		}
 		MakeUpdated(&spinner)
