@@ -1649,7 +1649,7 @@ func (w *ChannelExpeWidget) NotifyChange() {
 	case b, ok := <-w.ch:
 		if ok {
 			box := w.CompositeWidget.Widgets[0].(*TextBoxWidget)
-			box.Content.Set(box.Content.Content() + string(b))
+			SetViewGroup(box.Content, box.Content.Content()+string(b))
 			redraw = true
 		}
 	default:
@@ -1674,7 +1674,7 @@ func (this *commandNode) Update() {
 		this.w.cmd = nil
 	}
 
-	this.w.Content.Set("")
+	SetViewGroup(this.w.Content, "")
 
 	this.w.cmd = this.template.NewCommand()
 	this.w.stdoutChan = make(ChanWriter)
@@ -1725,7 +1725,7 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 	select {
 	case b, ok := <-w.stdoutChan:
 		if ok {
-			w.Content.Set(w.Content.Content() + string(b))
+			SetViewGroup(w.Content, w.Content.Content()+string(b))
 			redraw = true
 		}
 	default:
@@ -1734,7 +1734,7 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 	select {
 	case b, ok := <-w.stderrChan:
 		if ok {
-			w.Content.Set(w.Content.Content() + string(b))
+			SetViewGroup(w.Content, w.Content.Content()+string(b))
 			redraw = true
 		}
 	default:
@@ -1824,7 +1824,7 @@ func (w *LiveGoroutineExpeWidget) NotifyChange() {
 			if s.t > w.lastFinishedT {
 				w.lastFinishedT = s.t
 
-				w.Content.Set(s.s)
+				SetViewGroup(w.Content, s.s)
 				redraw = true
 			}
 		}
@@ -2658,9 +2658,7 @@ type MultilineContentI interface {
 	Lines() []contentLine
 	LongestLine() uint32
 
-	Set(content string)
-
-	DepNode2ManualI
+	ViewGroupI
 }
 
 func NewContentReader(c MultilineContentI) io.Reader { return strings.NewReader(c.Content()) }
@@ -2677,17 +2675,19 @@ type MultilineContent struct {
 	lines       []contentLine
 	longestLine uint32 // Line length
 
-	DepNode2Manual
+	ViewGroup
 }
 
 func NewMultilineContent() *MultilineContent {
-	mc := new(MultilineContent)
+	mc := &MultilineContent{}
+	mc.InitViewGroup(mc)
 	mc.updateLines()
 	return mc
 }
 func NewMultilineContentString(content string) *MultilineContent {
-	mc := new(MultilineContent)
-	mc.Set(content)
+	mc := &MultilineContent{}
+	mc.InitViewGroup(mc)
+	SetViewGroup(mc, content)
 	return mc
 }
 
@@ -2695,11 +2695,9 @@ func (c *MultilineContent) Content() string      { return c.content }
 func (c *MultilineContent) Lines() []contentLine { return c.lines }
 func (c *MultilineContent) LongestLine() uint32  { return c.longestLine }
 
-func (mc *MultilineContent) Set(content string) {
+func (mc *MultilineContent) SetSelf(content string) {
 	mc.content = content
 	mc.updateLines()
-
-	ExternallyUpdated(mc)
 }
 
 func (w *MultilineContent) updateLines() {
@@ -2723,34 +2721,29 @@ func (w *MultilineContent) updateLines() {
 type MultilineContentFile struct {
 	*MultilineContent // TODO: Explore this being a pointer vs value
 	path              string
+	ViewGroup
 }
 
 func NewMultilineContentFile(path string) *MultilineContentFile {
 	this := &MultilineContentFile{MultilineContent: NewMultilineContent(), path: path}
-	this.Set(TryReadFile(this.path))
+	this.InitViewGroup(this)
+	this.MultilineContent.AddView(this)
+	SetViewGroupOther(this, TryReadFile(this.path))
 	UniversalClock.AddChangeListener(this)
 	return this
 }
 
-func (this *MultilineContentFile) Set(content string) {
-	this.content = content
-	this.updateLines()
-
-	// TODO: This shouldn't be triggered from TryReadFile() update below... Nor by `this.Set()` in NewMultilineContentFile().
-	{
-		err := ioutil.WriteFile(this.path, []byte(this.Content()), 0666)
-		CheckError(err)
-	}
-
-	ExternallyUpdated(this)
+func (this *MultilineContentFile) SetSelf(content string) {
+	println("Writing file.")
+	err := ioutil.WriteFile(this.path, []byte(this.Content()), 0666)
+	CheckError(err)
 }
 
 func (this *MultilineContentFile) NotifyChange() {
 	// Check if the file has been changed externally, and if so, override this widget
 	NewContent := TryReadFile(this.path)
 	if NewContent != this.Content() {
-		// TODO: Have this not trigger WriteFile() somehow...
-		this.Set(NewContent)
+		SetViewGroupOther(this, NewContent)
 	}
 }
 
@@ -2763,31 +2756,27 @@ func (this *MultilineContentFile) Path() string {
 type MultilineContentPointer struct {
 	*MultilineContent
 	p *string
+	ViewGroup
 }
 
 func NewMultilineContentPointer(p *string) *MultilineContentPointer {
 	this := &MultilineContentPointer{MultilineContent: NewMultilineContent(), p: p}
-	this.Set(*p)
+	this.InitViewGroup(this)
+	this.MultilineContent.AddView(this)
+	SetViewGroupOther(this, *p)
 	UniversalClock.AddChangeListener(this) // TODO: Perhaps switch to a push notifications type setup, instead of constantly polling for change...
 	return this
 }
 
-func (this *MultilineContentPointer) Set(content string) {
-	this.content = content
-	this.updateLines()
-
-	// TODO: This shouldn't be triggered from NotifyChange() update below... Nor by `this.Set()` in NewMultilineContentPointer().
+func (this *MultilineContentPointer) SetSelf(content string) {
 	*this.p = this.Content()
-
-	ExternallyUpdated(this)
 }
 
 func (this *MultilineContentPointer) NotifyChange() {
 	// Check if the pointer value has been changed externally, and if so, override this widget
 	NewContent := *this.p
 	if NewContent != this.Content() {
-		// TODO: Have this not trigger `*this.p = this.Content()` somehow...
-		this.Set(NewContent)
+		SetViewGroupOther(this, NewContent)
 	}
 }
 
@@ -2797,23 +2786,23 @@ type MultilineContentWS struct {
 	*MultilineContent // TODO: Explore this being a pointer vs value
 	WsReadChan        chan string
 	WsWriteChan       chan string
+	ViewGroup
 }
 
 func NewMultilineContentWS() *MultilineContentWS {
 	this := &MultilineContentWS{MultilineContent: NewMultilineContent(), WsReadChan: make(chan string)}
+	this.InitViewGroup(this)
+	this.MultilineContent.AddView(this)
+	// TODO: Update the websocket to existing contents?
 	UniversalClock.AddChangeListener(this)
 	return this
 }
 
-func (this *MultilineContentWS) Set(content string) {
-	this.content = content
-	this.updateLines()
-
+func (this *MultilineContentWS) SetSelf(content string) {
 	if this.WsWriteChan != nil {
+		// TODO: In case of multipart sends, follow with a null separator, have JS parse it out and reassemble parts
 		this.WsWriteChan <- this.Content()
 	}
-
-	ExternallyUpdated(this)
 }
 
 func (this *MultilineContentWS) NotifyChange() {
@@ -2821,11 +2810,7 @@ func (this *MultilineContentWS) NotifyChange() {
 	case NewContent, ok := <-this.WsReadChan:
 		if ok {
 			if NewContent != this.Content() {
-				// HACK: Copying Set() except without write to websocket
-				this.content = NewContent
-				this.updateLines()
-
-				ExternallyUpdated(this)
+				SetViewGroupOther(this, NewContent)
 			}
 		}
 	default:
@@ -2837,26 +2822,30 @@ func (this *MultilineContentWS) NotifyChange() {
 type MultilineContentFunc struct {
 	*MultilineContent // TODO: Explore this being a pointer vs value
 	contentFunc       func() string
+	ViewGroup
 }
 
 // THINK: Merge the func and dependees into one struct? Maybe can't if funcs can have different signatures...
 func NewMultilineContentFunc(contentFunc func() string, dependees []DepNodeI) *MultilineContentFunc {
 	this := &MultilineContentFunc{MultilineContent: NewMultilineContent(), contentFunc: contentFunc}
+	this.InitViewGroup(this)
+	this.MultilineContent.AddView(this)
+	SetViewGroupOther(this, this.contentFunc())
 	for _, dependee := range dependees {
 		dependee.AddChangeListener(this)
 	}
 	return this
 }
 
-func (*MultilineContentFunc) Set(string) {
+func (*MultilineContentFunc) SetSelf(string) {
 	// TODO: Figure out if it's okay to effectively ignore this... or should I prevent it from being possible to call Set()?
 	// Do nothing because the content of MultilineContentFunc can't be set as a string
 }
 
 func (this *MultilineContentFunc) NotifyChange() {
 	NewContent := this.contentFunc()
-	if NewContent != this.MultilineContent.Content() {
-		this.MultilineContent.Set(NewContent)
+	if NewContent != this.Content() {
+		SetViewGroupOther(this, NewContent)
 	}
 }
 
@@ -3142,17 +3131,17 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyBackspace:
 			if w.caretPosition.Logical() >= 1 {
 				w.caretPosition.Move(-1)
-				w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + w.Content.Content()[w.caretPosition.Logical()+1:])
+				SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
 			}
 		case glfw.KeyDelete:
 			if w.caretPosition.Logical()+1 <= uint32(len(w.Content.Content())) {
-				w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + w.Content.Content()[w.caretPosition.Logical()+1:])
+				SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
 			}
 		case glfw.KeyEnter:
-			w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + "\n" + w.Content.Content()[w.caretPosition.Logical():])
+			SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+"\n"+w.Content.Content()[w.caretPosition.Logical():])
 			w.caretPosition.Move(+1)
 		case glfw.KeyTab:
-			w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + "\t" + w.Content.Content()[w.caretPosition.Logical():])
+			SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+"\t"+w.Content.Content()[w.caretPosition.Logical():])
 			w.caretPosition.Move(+1)
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
@@ -3188,7 +3177,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				inputEvent.ModifierKey == glfw.ModSuper {
 
 				globalWindow.SetClipboardString(w.Content.Content()) // TODO: Don't use globalWindow
-				w.Content.Set("")
+				SetViewGroup(w.Content, "")
 			}
 		case glfw.KeyC:
 			if !w.Private.Get() &&
@@ -3201,7 +3190,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				// TODO: Don't use globalWindow
 				if clipboard, err := globalWindow.GetClipboardString(); err == nil && clipboard != "" {
 					//EraseSelectionIfAny();
-					w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + clipboard + w.Content.Content()[w.caretPosition.Logical():])
+					SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+clipboard+w.Content.Content()[w.caretPosition.Logical():])
 					for _ = range []byte(clipboard) { // TODO
 						w.caretPosition.Move(+1)
 					}
@@ -3225,7 +3214,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
-		w.Content.Set(w.Content.Content()[:w.caretPosition.Logical()] + string(byte(inputEvent.InputId)) + w.Content.Content()[w.caretPosition.Logical():])
+		SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+string(byte(inputEvent.InputId))+w.Content.Content()[w.caretPosition.Logical():])
 		w.caretPosition.Move(+1)
 	}
 }
@@ -4262,7 +4251,7 @@ func main() {
 					}
 				}
 			}(contentWs.WsWriteChan, c)
-			contentWs.WsWriteChan <- contentWs.Content() // Send initial value
+			contentWs.WsWriteChan <- contentWs.Content() // HACK: Send initial value
 
 			br := bufio.NewReader(c)
 			for {
