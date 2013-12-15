@@ -2788,7 +2788,6 @@ type WebSocketView struct {
 func NewWebSocketView(c *websocket.Conn) *WebSocketView {
 	this := &WebSocketView{c: c, WsReadChan: make(chan string)}
 	this.InitViewGroup(this)
-	// TODO: Update the websocket to existing contents?
 	UniversalClock.AddChangeListener(this)
 	return this
 }
