@@ -2727,15 +2727,13 @@ type MultilineContentFile struct {
 func NewMultilineContentFile(path string) *MultilineContentFile {
 	this := &MultilineContentFile{MultilineContent: NewMultilineContent(), path: path}
 	this.InitViewGroup(this)
-	this.MultilineContent.AddView(this)
-	SetViewGroupOther(this, TryReadFile(this.path))
+	this.AddAndSetViewGroup(this.MultilineContent, TryReadFile(this.path))
 	UniversalClock.AddChangeListener(this)
 	return this
 }
 
 func (this *MultilineContentFile) SetSelf(content string) {
-	println("Writing file.")
-	err := ioutil.WriteFile(this.path, []byte(this.Content()), 0666)
+	err := ioutil.WriteFile(this.path, []byte(content), 0666)
 	CheckError(err)
 }
 
@@ -2762,14 +2760,13 @@ type MultilineContentPointer struct {
 func NewMultilineContentPointer(p *string) *MultilineContentPointer {
 	this := &MultilineContentPointer{MultilineContent: NewMultilineContent(), p: p}
 	this.InitViewGroup(this)
-	this.MultilineContent.AddView(this)
-	SetViewGroupOther(this, *p)
+	this.AddAndSetViewGroup(this.MultilineContent, *p)
 	UniversalClock.AddChangeListener(this) // TODO: Perhaps switch to a push notifications type setup, instead of constantly polling for change...
 	return this
 }
 
 func (this *MultilineContentPointer) SetSelf(content string) {
-	*this.p = this.Content()
+	*this.p = content
 }
 
 func (this *MultilineContentPointer) NotifyChange() {
@@ -2782,36 +2779,32 @@ func (this *MultilineContentPointer) NotifyChange() {
 
 // ---
 
-type MultilineContentWS struct {
-	*MultilineContent // TODO: Explore this being a pointer vs value
-	WsReadChan        chan string
-	WsWriteChan       chan string
+type WebSocketView struct {
+	c          *websocket.Conn
+	WsReadChan chan string
 	ViewGroup
 }
 
-func NewMultilineContentWS() *MultilineContentWS {
-	this := &MultilineContentWS{MultilineContent: NewMultilineContent(), WsReadChan: make(chan string)}
+func NewWebSocketView(c *websocket.Conn) *WebSocketView {
+	this := &WebSocketView{c: c, WsReadChan: make(chan string)}
 	this.InitViewGroup(this)
-	this.MultilineContent.AddView(this)
 	// TODO: Update the websocket to existing contents?
 	UniversalClock.AddChangeListener(this)
 	return this
 }
 
-func (this *MultilineContentWS) SetSelf(content string) {
-	if this.WsWriteChan != nil {
-		// TODO: In case of multipart sends, follow with a null separator, have JS parse it out and reassemble parts
-		this.WsWriteChan <- this.Content()
-	}
+func (this *WebSocketView) SetSelf(content string) {
+	// TODO: In case of multipart sends, follow with a null separator, have JS parse it out and reassemble parts
+	io.WriteString(this.c, content)
 }
 
-func (this *MultilineContentWS) NotifyChange() {
+func (this *WebSocketView) NotifyChange() {
 	select {
 	case NewContent, ok := <-this.WsReadChan:
 		if ok {
-			if NewContent != this.Content() {
-				SetViewGroupOther(this, NewContent)
-			}
+			//if NewContent != this.Content() {
+			SetViewGroupOther(this, NewContent)
+			//}
 		}
 	default:
 	}
@@ -2829,8 +2822,7 @@ type MultilineContentFunc struct {
 func NewMultilineContentFunc(contentFunc func() string, dependees []DepNodeI) *MultilineContentFunc {
 	this := &MultilineContentFunc{MultilineContent: NewMultilineContent(), contentFunc: contentFunc}
 	this.InitViewGroup(this)
-	this.MultilineContent.AddView(this)
-	SetViewGroupOther(this, this.contentFunc())
+	this.AddAndSetViewGroup(this.MultilineContent, contentFunc())
 	for _, dependee := range dependees {
 		dependee.AddChangeListener(this)
 	}
@@ -3940,7 +3932,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 	widgets = append(widgets, &spinner)
-	if true {
+	if false {
 
 		widgets = append(widgets, NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Conception-go/main.go"))
 
@@ -4208,7 +4200,7 @@ func main() {
 				w.Write(blackfriday.MarkdownCommon([]byte(b)))
 			}
 		})
-		contentWs := NewMultilineContentWS()
+		contentWs := NewMultilineContent()
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800 - 50, 30}, contentWs))
 		http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `<html>
@@ -4241,29 +4233,23 @@ func main() {
 </html>`)
 		})
 		http.Handle("/websocket.ws", websocket.Handler(func(c *websocket.Conn) {
-			contentWs.WsWriteChan = make(chan string)
-			go func(WsWriteChan chan string, c *websocket.Conn) {
-				for {
-					if s, ok := <-WsWriteChan; ok {
-						io.WriteString(c, s)
-					} else {
-						return
-					}
-				}
-			}(contentWs.WsWriteChan, c)
-			contentWs.WsWriteChan <- contentWs.Content() // HACK: Send initial value
+			wsView := NewWebSocketView(c)
+
+			contentWs.AddAndSetViewGroup(wsView, contentWs.Content()) // TODO: Fix race condition
 
 			br := bufio.NewReader(c)
 			for {
 				line, err := br.ReadString('\x00')
 				if err == nil {
-					contentWs.WsReadChan <- line[:len(line)-1] // Trim delimiter
+					wsView.WsReadChan <- line[:len(line)-1] // Trim delimiter
 				} else {
-					//contentWs.WsReadChan <- line
-					//close(contentWs.WsReadChan)
-					return
+					//wsView.WsReadChan <- line
+					//close(wsView.WsReadChan)
+					break
 				}
 			}
+
+			contentWs.RemoveView(wsView) // TODO: Fix race condition
 		}))
 		widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 
