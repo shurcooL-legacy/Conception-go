@@ -406,7 +406,7 @@ func (this *DepNode) RemoveChangeListener(l ChangeListener) {
 			copy(this.changeListeners[i:], this.changeListeners[i+1:])
 			this.changeListeners[len(this.changeListeners)-1] = nil
 			this.changeListeners = this.changeListeners[:len(this.changeListeners)-1]
-			println("removed ith element of originally this many", i, len(this.changeListeners)+1)
+			//println("removed ith element of originally this many", i, len(this.changeListeners)+1)
 			return
 		}
 	}
@@ -1603,13 +1603,6 @@ func (w *ScrollPaneWidget) Render() {
 
 		// Vertical
 		if w.child.Size()[1] > w.size[1] {
-			/*gl.Color3dv((*gl.Double)(&darkColor[0]))
-			gl.Begin(gl.QUADS)
-			gl.Vertex2d(gl.Double(w.size[0]-scrollbarWidth), gl.Double(-w.child.Pos()[1]/w.child.Size()[1]*w.size[1]))
-			gl.Vertex2d(gl.Double(w.size[0]), gl.Double(-w.child.Pos()[1]/w.child.Size()[1]*w.size[1]))
-			gl.Vertex2d(gl.Double(w.size[0]), gl.Double((-w.child.Pos()[1]+w.size[1])/w.child.Size()[1]*w.size[1]))
-			gl.Vertex2d(gl.Double(w.size[0]-scrollbarWidth), gl.Double((-w.child.Pos()[1]+w.size[1])/w.child.Size()[1]*w.size[1]))
-			gl.End()*/
 			DrawBorderlessBox(mathgl.Vec2d{w.size[0] - scrollbarWidth + 1, -w.child.Pos()[1]/w.child.Size()[1]*(w.size[1]+2) - 1},
 				mathgl.Vec2d{scrollbarWidth, w.size[1] / w.child.Size()[1] * (w.size[1] + 2)},
 				darkColor)
@@ -1617,13 +1610,6 @@ func (w *ScrollPaneWidget) Render() {
 
 		// Horizontal
 		if w.child.Size()[0] > w.size[0] {
-			/*gl.Color3dv((*gl.Double)(&darkColor[0]))
-			gl.Begin(gl.QUADS)
-			gl.Vertex2d(gl.Double(-w.child.Pos()[0]/w.child.Size()[0]*w.size[0]), gl.Double(w.size[1]-scrollbarWidth))
-			gl.Vertex2d(gl.Double(-w.child.Pos()[0]/w.child.Size()[0]*w.size[0]), gl.Double(w.size[1]))
-			gl.Vertex2d(gl.Double((-w.child.Pos()[0]+w.size[0])/w.child.Size()[0]*w.size[0]), gl.Double(w.size[1]))
-			gl.Vertex2d(gl.Double((-w.child.Pos()[0]+w.size[0])/w.child.Size()[0]*w.size[0]), gl.Double(w.size[1]-scrollbarWidth))
-			gl.End()*/
 			DrawBorderlessBox(mathgl.Vec2d{-w.child.Pos()[0]/w.child.Size()[0]*(w.size[0]+2) - 1, w.size[1] - scrollbarWidth + 1},
 				mathgl.Vec2d{w.size[0] / w.child.Size()[0] * (w.size[0] + 2), scrollbarWidth},
 				darkColor)
