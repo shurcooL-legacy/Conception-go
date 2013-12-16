@@ -1780,7 +1780,7 @@ func (this *commandNode) Update() {
 		this.w.cmd = nil
 		return
 	}
-	fmt.Println("started new process", this.w.cmd.Process.Pid)
+	fmt.Printf("started new process %v %+v\n", this.w.cmd.Process.Pid, this.w.cmd.Args)
 
 	go func(cmd *exec.Cmd) {
 		_ = cmd.Wait()
@@ -2922,6 +2922,7 @@ func (this *FileView) Close() error {
 func (this *FileView) SetSelf(content string) {
 	err := ioutil.WriteFile(this.path, []byte(content), 0666)
 	CheckError(err)
+	this.lastContentQUICKHACK = content
 }
 
 // TODO: Change detection, closing, etc.
@@ -4150,7 +4151,7 @@ func main() {
 			}
 			template.AddSources(folderListing)
 
-			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editor, folderListing}, template) // TODO: Are both editor and folderListing deps needed? Or is editor enough, since it probably depends on folderListing, etc.
+			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editor}, template) // TODO: Are both editor and folderListing deps needed? Or is editor enough, since it probably depends on folderListing, etc.
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{350, float64(windowSize1 - 2)}, gitDiff))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
