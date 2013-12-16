@@ -1780,7 +1780,7 @@ func (this *commandNode) Update() {
 		this.w.cmd = nil
 		return
 	}
-	//fmt.Println("started new process", this.w.cmd.Process.Pid)
+	fmt.Println("started new process", this.w.cmd.Process.Pid)
 
 	go func(cmd *exec.Cmd) {
 		_ = cmd.Wait()
@@ -2901,6 +2901,8 @@ func (this *MultilineContentFile) Path() string {
 type FileView struct {
 	path string
 	ViewGroup
+
+	lastContentQUICKHACK string // HACK: Need this here for `git diff` testing
 }
 
 // TODO: Opening same path should result in same FileView, etc.
@@ -2926,9 +2928,10 @@ func (this *FileView) SetSelf(content string) {
 func (this *FileView) NotifyChange() {
 	// Check if the file has been changed externally, and if so, override this widget
 	NewContent := TryReadFile(this.path)
-	//if NewContent != this.Content() {
-	SetViewGroupOther(this, NewContent)
-	//}
+	if NewContent != this.lastContentQUICKHACK {
+		this.lastContentQUICKHACK = NewContent
+		SetViewGroupOther(this, NewContent)
+	}
 }
 
 // ---
@@ -3060,7 +3063,7 @@ func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *
 		Widget:  NewWidget(pos, mathgl.Vec2d{0, 0}),
 		Content: mc,
 	}
-	w.layoutDepNode2.UpdaterFunc = func() { w.NotifyChange() }
+	w.layoutDepNode2.UpdateFunc = func() { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
 	keepUpdatedTEST = append(keepUpdatedTEST, &w.layoutDepNode2)
 	return w
@@ -3148,7 +3151,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 		Content:       mc,
 		caretPosition: CaretPosition{w: mc},
 	}
-	w.layoutDepNode2.UpdaterFunc = func() { w.NotifyChange() }
+	w.layoutDepNode2.UpdateFunc = func() { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
 	keepUpdatedTEST = append(keepUpdatedTEST, &w.layoutDepNode2)
 	return w
@@ -4123,12 +4126,34 @@ func main() {
 		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, float64(windowSize1 - 2)}, folderListing))
 
 		//widgets = append(widgets, NewScrollPaneWidget(np, windowSize, NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Conception-go/main.go")))
-		editor := NewMultilineContent()
-		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, NewTextBoxWidgetExternalContent(np, editor)))
 
+		// Main editor
+		editor := NewMultilineContent()
 		editorFileOpener := NewFileOpener(editor)
 		editorFileOpener.AddSources(folderListing)
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
+		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, NewTextBoxWidgetExternalContent(np, editor)))
+
+		// git diff
+		{
+			template := NewCmdTemplateDynamic2()
+			template.UpdateFunc = func() {
+				template.Template = NewCmdTemplate("echo", "-n", "No git diff available.")
+
+				if path := template.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); path != "" && strings.HasSuffix(path, ".go") {
+					dir, file := filepath.Split(path)
+					if isGitRepo, _ := IsFolderGitRepo(dir); isGitRepo {
+						template.Template = NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
+						template.Template.Dir = dir
+					}
+				}
+			}
+			template.AddSources(folderListing)
+
+			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editor, folderListing}, template) // TODO: Are both editor and folderListing deps needed? Or is editor enough, since it probably depends on folderListing, etc.
+			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{350, float64(windowSize1 - 2)}, gitDiff))
+			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
+		}
 
 	} else if false { // Deleted test widget instances
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
@@ -4498,7 +4523,7 @@ func main() {
 				return out
 			})
 			template := NewCmdTemplateDynamic(nameArgs)
-			template.Stdin = func() io.Reader { return NewContentReader(in.Content) }
+			template.Stdin = func() io.Reader { return NewContentReader(in.Content) } // This is not a race condition only because template.NewCommand() gets called from same thread that updates in.Content.
 
 			debugOutput := func() string {
 				cmd := template.NewCommand()
