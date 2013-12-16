@@ -129,6 +129,9 @@ var keyboardPointer *Pointer
 var goCompileErrorsManagerTest GoCompileErrorsManagerTest
 var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 
+// Colors
+var darkColor = mathgl.Vec3d{0.35, 0.35, 0.35}
+
 // TODO: Remove these
 var globalWindow *glfw.Window
 var np = mathgl.Vec2d{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
@@ -395,6 +398,21 @@ func (this *DepNode) AddChangeListener(l ChangeListener) {
 	l.NotifyChange() // TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
 }
 
+// Pre-condition: l is a change listener that exists
+func (this *DepNode) RemoveChangeListener(l ChangeListener) {
+	for i := range this.changeListeners {
+		if this.changeListeners[i] == l {
+			// Delete
+			copy(this.changeListeners[i:], this.changeListeners[i+1:])
+			this.changeListeners[len(this.changeListeners)-1] = nil
+			this.changeListeners = this.changeListeners[:len(this.changeListeners)-1]
+			println("removed ith element of originally this many", i, len(this.changeListeners)+1)
+			return
+		}
+	}
+	panic("RemoveChangeListener: ChangeListener to be deleted wasn't found.")
+}
+
 func (this *DepNode) NotifyAllListeners() {
 	// TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
 	for _, changeListener := range this.changeListeners {
@@ -410,10 +428,8 @@ type Widgeter interface {
 	Hit(mathgl.Vec2d) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
 
-	Pos() mathgl.Vec2d
-	SetPos(mathgl.Vec2d)
-	Size() mathgl.Vec2d
-	SetSize(mathgl.Vec2d)
+	Pos() *mathgl.Vec2d
+	Size() *mathgl.Vec2d
 	HoverPointers() map[*Pointer]bool
 	Parent() Widgeter
 	SetParent(Widgeter)
@@ -460,10 +476,8 @@ func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 }
 func (w *Widget) ProcessEvent(inputEvent InputEvent) {}
 
-func (w *Widget) Pos() mathgl.Vec2d         { return w.pos }
-func (w *Widget) SetPos(pos mathgl.Vec2d)   { w.pos = pos }
-func (w *Widget) Size() mathgl.Vec2d        { return w.size }
-func (w *Widget) SetSize(size mathgl.Vec2d) { w.size = size }
+func (w *Widget) Pos() *mathgl.Vec2d  { return &w.pos }
+func (w *Widget) Size() *mathgl.Vec2d { return &w.size }
 
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
@@ -949,7 +963,7 @@ func (w *ButtonWidget) Render() {
 	if w.tooltip != nil && isHit {
 		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, 16}
-		w.tooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
+		*w.tooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		w.tooltip.Render()
 	}
 }
@@ -996,7 +1010,7 @@ func (w *TriButtonWidget) setAction(action func()) {
 }
 
 func (w *TriButtonWidget) Render() {
-	gl.Color3d(0, 0, 0)
+	gl.Color3dv((*gl.Double)(&darkColor[0]))
 	if !w.state {
 		gl.Begin(gl.TRIANGLES)
 		gl.Vertex2d(gl.Double(w.pos[0]), gl.Double(w.pos[1]))
@@ -1089,7 +1103,7 @@ func (w *BoxWidget) Render() {
 	if isHit {
 		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, -4 - boxWidgetTooltip.Size()[1]}
-		boxWidgetTooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
+		*boxWidgetTooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		boxWidgetTooltip.Render()
 	}
 }
@@ -1417,7 +1431,7 @@ func NewCompositeWidget(pos, size mathgl.Vec2d, Widgets []Widgeter) *CompositeWi
 func (w *CompositeWidget) Layout() {
 	w.size = np
 	for _, widget := range w.Widgets {
-		bottomRight := widget.Pos().Add(widget.Size())
+		bottomRight := widget.Pos().Add(*widget.Size())
 		for d := 0; d < len(w.size); d++ {
 			if bottomRight[d] > w.size[d] {
 				w.size[d] = bottomRight[d]
@@ -1494,10 +1508,10 @@ func (w *FlowLayoutWidget) Layout() {
 	for _, widget := range w.CompositeWidget.Widgets {
 		pos := np
 		pos[w.options.FlowLayoutType] = combinedOffset
-		widget.SetPos(pos)
+		*widget.Pos() = pos
 		combinedOffset += widget.Size()[w.options.FlowLayoutType] + 2
 
-		bottomRight := widget.Pos().Add(widget.Size())
+		bottomRight := widget.Pos().Add(*widget.Size())
 		for d := 0; d < len(w.size); d++ {
 			if bottomRight[d] > w.size[d] {
 				w.size[d] = bottomRight[d]
@@ -1552,6 +1566,99 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 
 func (w *CanvasWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
 	return w.Widget.ParentToLocal(ParentPosition).Sub(w.offset)
+}
+
+// ---
+
+type ScrollPaneWidget struct {
+	Widget
+	child Widgeter
+}
+
+func NewScrollPaneWidget(pos, size mathgl.Vec2d, child Widgeter) *ScrollPaneWidget {
+	w := &ScrollPaneWidget{Widget: NewWidget(pos, size), child: child}
+	w.child.SetParent(w)
+	return w
+}
+
+func (w *ScrollPaneWidget) Layout() {}
+
+func (w *ScrollPaneWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+
+	// TODO: General case (i.e. stacking scissor tests)
+	// HACK: The params to gl.Scissor are calculated hackily
+	gl.Scissor(gl.Int(w.pos[0]), gl.Int(w.pos[1]), gl.Sizei(w.size[0]+2), gl.Sizei(w.size[1]+2))
+	gl.Enable(gl.SCISSOR_TEST)
+
+	w.child.Render()
+
+	gl.Disable(gl.SCISSOR_TEST)
+
+	// Draw scrollbars, if needed
+	{
+		const scrollbarWidth = 2
+
+		// Vertical
+		if w.child.Size()[1] > w.size[1] {
+			/*gl.Color3dv((*gl.Double)(&darkColor[0]))
+			gl.Begin(gl.QUADS)
+			gl.Vertex2d(gl.Double(w.size[0]-scrollbarWidth), gl.Double(-w.child.Pos()[1]/w.child.Size()[1]*w.size[1]))
+			gl.Vertex2d(gl.Double(w.size[0]), gl.Double(-w.child.Pos()[1]/w.child.Size()[1]*w.size[1]))
+			gl.Vertex2d(gl.Double(w.size[0]), gl.Double((-w.child.Pos()[1]+w.size[1])/w.child.Size()[1]*w.size[1]))
+			gl.Vertex2d(gl.Double(w.size[0]-scrollbarWidth), gl.Double((-w.child.Pos()[1]+w.size[1])/w.child.Size()[1]*w.size[1]))
+			gl.End()*/
+			DrawBorderlessBox(mathgl.Vec2d{w.size[0] - scrollbarWidth + 1, -w.child.Pos()[1]/w.child.Size()[1]*(w.size[1]+2) - 1},
+				mathgl.Vec2d{scrollbarWidth, w.size[1] / w.child.Size()[1] * (w.size[1] + 2)},
+				darkColor)
+		}
+
+		// Horizontal
+		if w.child.Size()[0] > w.size[0] {
+			/*gl.Color3dv((*gl.Double)(&darkColor[0]))
+			gl.Begin(gl.QUADS)
+			gl.Vertex2d(gl.Double(-w.child.Pos()[0]/w.child.Size()[0]*w.size[0]), gl.Double(w.size[1]-scrollbarWidth))
+			gl.Vertex2d(gl.Double(-w.child.Pos()[0]/w.child.Size()[0]*w.size[0]), gl.Double(w.size[1]))
+			gl.Vertex2d(gl.Double((-w.child.Pos()[0]+w.size[0])/w.child.Size()[0]*w.size[0]), gl.Double(w.size[1]))
+			gl.Vertex2d(gl.Double((-w.child.Pos()[0]+w.size[0])/w.child.Size()[0]*w.size[0]), gl.Double(w.size[1]-scrollbarWidth))
+			gl.End()*/
+			DrawBorderlessBox(mathgl.Vec2d{-w.child.Pos()[0]/w.child.Size()[0]*(w.size[0]+2) - 1, w.size[1] - scrollbarWidth + 1},
+				mathgl.Vec2d{w.size[0] / w.child.Size()[0] * (w.size[0] + 2), scrollbarWidth},
+				darkColor)
+		}
+	}
+}
+
+func (w *ScrollPaneWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		hits := []Widgeter{w}
+		hits = append(hits, w.child.Hit(LocalPosition)...)
+		return hits
+	} else {
+		return nil
+	}
+}
+
+func (w *ScrollPaneWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2 {
+		w.child.Pos()[0] += inputEvent.Sliders[1] * 10
+		w.child.Pos()[1] += inputEvent.Sliders[0] * 10
+	}
+
+	// Keep the child widget within the scroll pane
+	for i := 0; i < 2; i++ {
+		if w.child.Pos()[i]+w.child.Size()[i] < w.size[i] {
+			w.child.Pos()[i] = w.size[i] - w.child.Size()[i]
+		}
+
+		if w.child.Pos()[i] > 0 {
+			w.child.Pos()[i] = 0
+		}
+	}
 }
 
 // ---
@@ -1865,6 +1972,43 @@ func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
 
 // ---
 
+type FileOpener struct {
+	editor     ViewGroupI
+	openedFile ViewGroupI
+	DepNode2
+}
+
+func NewFileOpener(editor ViewGroupI) *FileOpener {
+	this := &FileOpener{editor: editor}
+	return this
+}
+
+func (this *FileOpener) Update() {
+	if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); strings.HasSuffix(path, ".go") {
+
+		if this.openedFile != nil {
+			this.editor.RemoveView(this.openedFile)
+			this.openedFile.(*FileView).Close()
+		}
+
+		this.openedFile = NewFileView(path)
+
+		this.openedFile.AddAndSetViewGroup(this.editor, TryReadFile(path))
+	}
+}
+
+// ---
+
+type DepDumper struct {
+	DepNode2
+}
+
+func (this *DepDumper) Update() {
+	goon.Dump(this.GetSources()[0].(*FolderListingWidget).GetSelectedPath())
+}
+
+// ---
+
 type SpinnerWidget struct {
 	Widget
 	Spinner uint32
@@ -1950,6 +2094,8 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 type FolderListingWidget struct {
 	*CompositeWidget
 	flow *FlowLayoutWidget // HACK: Shortcut to CompositeWidget.Widgets[0]
+
+	DepNode2Manual // SelectionChanged
 }
 
 func NewFolderListingWidget(pos mathgl.Vec2d, path string) *FolderListingWidget {
@@ -1957,6 +2103,19 @@ func NewFolderListingWidget(pos mathgl.Vec2d, path string) *FolderListingWidget 
 	w.flow = w.Widgets[0].(*FlowLayoutWidget)
 	w.flow.SetParent(w) // HACK?
 	return w
+}
+
+func (w *FolderListingWidget) GetSelectedPath() string {
+	out := ""
+	for _, widget := range w.flow.Widgets {
+		if pure := widget.(*FolderListingPureWidget); pure.selected != 0 {
+			out = filepath.Join(pure.path, pure.entries[pure.selected-1].Name())
+			if pure.entries[pure.selected-1].IsDir() {
+				out += "/"
+			}
+		}
+	}
+	return out
 }
 
 func (w *FolderListingWidget) ProcessEvent(inputEvent InputEvent) {
@@ -2078,6 +2237,8 @@ func (w *FolderListingPureWidget) selectionChangedTest() {
 		index := WidgeterIndex(p.Widgets, w)
 		p.SetWidgets(p.Widgets[:index+1])
 	}
+
+	ExternallyUpdated(w.Parent().Parent().(*FolderListingWidget))
 }
 
 func (w *FolderListingPureWidget) Layout() {
@@ -2751,6 +2912,41 @@ func (this *MultilineContentFile) Path() string {
 
 // ---
 
+type FileView struct {
+	path string
+	ViewGroup
+}
+
+// TODO: Opening same path should result in same FileView, etc.
+func NewFileView(path string) *FileView {
+	this := &FileView{path: path}
+	this.InitViewGroup(this)
+	UniversalClock.AddChangeListener(this) // TODO: Closing, etc.
+	return this
+}
+
+// TODO, THINK: Should I be closing, or "stop keeping updating"? Or is it the same thing...
+func (this *FileView) Close() error {
+	UniversalClock.RemoveChangeListener(this)
+	return nil
+}
+
+func (this *FileView) SetSelf(content string) {
+	err := ioutil.WriteFile(this.path, []byte(content), 0666)
+	CheckError(err)
+}
+
+// TODO: Change detection, closing, etc.
+func (this *FileView) NotifyChange() {
+	// Check if the file has been changed externally, and if so, override this widget
+	NewContent := TryReadFile(this.path)
+	//if NewContent != this.Content() {
+	SetViewGroupOther(this, NewContent)
+	//}
+}
+
+// ---
+
 type MultilineContentPointer struct {
 	*MultilineContent
 	p *string
@@ -2870,7 +3066,7 @@ type TextLabelWidget struct {
 	Widget
 	Content        MultilineContentI
 	tooltip        Widgeter
-	LayoutDepNode2 DepNode2Func
+	layoutDepNode2 DepNode2Func
 }
 
 func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *TextLabelWidget {
@@ -2878,9 +3074,9 @@ func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *
 		Widget:  NewWidget(pos, mathgl.Vec2d{0, 0}),
 		Content: mc,
 	}
-	w.LayoutDepNode2.UpdaterFunc = func() { w.NotifyChange() }
-	w.LayoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
-	keepUpdatedTEST = append(keepUpdatedTEST, &w.LayoutDepNode2)
+	w.layoutDepNode2.UpdaterFunc = func() { w.NotifyChange() }
+	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
+	keepUpdatedTEST = append(keepUpdatedTEST, &w.layoutDepNode2)
 	return w
 }
 
@@ -2937,7 +3133,7 @@ func (w *TextLabelWidget) Render() {
 		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		w.tooltip.Layout()
 		tooltipOffset := mathgl.Vec2d{0, -16 - w.tooltip.Size()[1]}
-		w.tooltip.SetPos(w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset))
+		*w.tooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		w.tooltip.Render()
 	}
 }
@@ -2949,7 +3145,7 @@ type TextBoxWidget struct {
 	Content        MultilineContentI
 	caretPosition  CaretPosition
 	Private        Bool
-	LayoutDepNode2 DepNode2Func
+	layoutDepNode2 DepNode2Func
 
 	DiffsTest []diffmatchpatch.Diff
 	Side      int8
@@ -2966,9 +3162,9 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 		Content:       mc,
 		caretPosition: CaretPosition{w: mc},
 	}
-	w.LayoutDepNode2.UpdaterFunc = func() { w.NotifyChange() }
-	w.LayoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
-	keepUpdatedTEST = append(keepUpdatedTEST, &w.LayoutDepNode2)
+	w.layoutDepNode2.UpdaterFunc = func() { w.NotifyChange() }
+	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
+	keepUpdatedTEST = append(keepUpdatedTEST, &w.layoutDepNode2)
 	return w
 }
 
@@ -3930,10 +4126,23 @@ func main() {
 	// ---
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
-	widgets = append(widgets, &spinner)
-	if false {
 
-		widgets = append(widgets, NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Conception-go/main.go"))
+	if true {
+
+		windowSize0, windowSize1 := window.GetSize()
+		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
+		_ = windowSize
+
+		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
+		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, float64(windowSize1 - 2)}, folderListing))
+
+		//widgets = append(widgets, NewScrollPaneWidget(np, windowSize, NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Conception-go/main.go")))
+		editor := NewMultilineContent()
+		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, NewTextBoxWidgetExternalContent(np, editor)))
+
+		editorFileOpener := NewFileOpener(editor)
+		editorFileOpener.AddSources(folderListing)
+		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
 
 	} else if false { // Deleted test widget instances
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
@@ -3990,6 +4199,8 @@ func main() {
 		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 10}, &y))
 	} else if true {
+		widgets = append(widgets, &spinner)
+
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 15}))
 		{
 			src := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
@@ -4395,7 +4606,9 @@ func main() {
 	fpsWidget := NewFpsWidget(mathgl.Vec2d{10, 120})
 	widgets = append(widgets, fpsWidget)
 
-	widget := NewCanvasWidget(np, widgets, nil)
+	//widget := NewCanvasWidget(np, widgets, nil)
+	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
+	widget := NewCompositeWidget(mathgl.Vec2d{1, 1}, mathgl.Vec2d{500, 500}, widgets)
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
