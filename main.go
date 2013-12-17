@@ -2,15 +2,15 @@ package main
 
 import (
 	"fmt"
-	. "gist.github.com/5286084.git"
 	"log"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+	. "gist.github.com/5286084.git"
 
-	_ "github.com/ftrvxmtrx/tga"
 	"image"
+	_ "github.com/ftrvxmtrx/tga"
 	//_ "image/png"
 	"os"
 
@@ -25,9 +25,9 @@ import (
 
 	. "gist.github.com/6003701.git"
 
+	"os/exec"
 	. "gist.github.com/5258650.git"
 	. "gist.github.com/6096872.git"
-	"os/exec"
 
 	. "gist.github.com/5571468.git"
 
@@ -54,10 +54,10 @@ import (
 
 	. "gist.github.com/4727543.git"
 
-	. "gist.github.com/6445065.git"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	. "gist.github.com/6445065.git"
 
 	"reflect"
 
@@ -71,14 +71,14 @@ import (
 
 	"github.com/davecheney/profile"
 
-	. "gist.github.com/5953185.git"
 	"path/filepath"
+	. "gist.github.com/5953185.git"
 
 	"flag"
-	. "gist.github.com/7390843.git"
-	"github.com/russross/blackfriday"
 	"net/http"
 	_ "net/http/pprof"
+	. "gist.github.com/7390843.git"
+	"github.com/russross/blackfriday"
 
 	. "gist.github.com/7480523.git"
 	//. "gist.github.com/7519227.git"
