@@ -598,7 +598,7 @@ func (t *parsedFile) Update() {
 
 	{
 		//fileAst.Decls[0].(*ast.GenDecl).Specs = append(fileAst.Decls[0].(*ast.GenDecl).Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"yay/new/import"`}})
-		astutil.AddImport(fileAst, "yay/new/import")
+		astutil.AddImport(fs, fileAst, "yay/new/import")
 	}
 
 	if err == nil {
