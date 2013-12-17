@@ -935,6 +935,7 @@ func (w *ButtonWidget) setAction(action func()) {
 	w.action = action
 
 	if action != nil {
+		// HACK: This isn't thread-safe in any way
 		go func() { w.tooltip = NewTextLabelWidgetString(np, GetSourceAsString(action)) }()
 	}
 }
@@ -983,6 +984,9 @@ func (w *ButtonWidget) ProcessEvent(inputEvent InputEvent) {
 		if w.action != nil {
 			w.action()
 			//println(GetSourceAsString(w.action))
+
+			w.Layout()
+			//w.NotifyAllListeners()
 		}
 	}
 }
@@ -1013,15 +1017,15 @@ func (w *TriButtonWidget) Render() {
 	gl.Color3dv((*gl.Double)(&darkColor[0]))
 	if !w.state {
 		gl.Begin(gl.TRIANGLES)
-		gl.Vertex2d(gl.Double(w.pos[0]), gl.Double(w.pos[1]))
-		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]), gl.Double(w.pos[1]+w.size[1]/2))
-		gl.Vertex2d(gl.Double(w.pos[0]), gl.Double(w.pos[1]+w.size[1]))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]*0.25), gl.Double(w.pos[1]+w.size[0]*0.15))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]*0.95), gl.Double(w.pos[1]+w.size[1]*0.5))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]*0.25), gl.Double(w.pos[1]+w.size[1]*0.85))
 		gl.End()
 	} else {
 		gl.Begin(gl.TRIANGLES)
-		gl.Vertex2d(gl.Double(w.pos[0]), gl.Double(w.pos[1]))
-		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]), gl.Double(w.pos[1]))
-		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]/2), gl.Double(w.pos[1]+w.size[1]))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]*0.15), gl.Double(w.pos[1]+w.size[0]*0.25))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]*0.85), gl.Double(w.pos[1]+w.size[1]*0.25))
+		gl.Vertex2d(gl.Double(w.pos[0]+w.size[0]*0.5), gl.Double(w.pos[1]+w.size[1]*0.95))
 		gl.End()
 	}
 }
@@ -1545,7 +1549,10 @@ func NewCanvasWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *CanvasWidget
 	return w
 }
 
-func (w *CanvasWidget) Layout() {}
+func (w *CanvasWidget) Layout() {
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
 
 func (w *CanvasWidget) Render() {
 	gl.PushMatrix()
@@ -1570,6 +1577,74 @@ func (w *CanvasWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition
 
 // ---
 
+type CollapsibleWidget struct {
+	Widget
+	state *TriButtonWidget //*TriButtonExternalStateWidget
+	child Widgeter
+}
+
+func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter) *CollapsibleWidget {
+	w := &CollapsibleWidget{Widget: NewWidget(pos, np), child: child}
+	w.child.SetParent(w)
+
+	//state := true
+	//w.state = NewTriButtonExternalStateWidget(np, func() bool { return state }, func() { state = !state })
+	w.state = NewTriButtonWidget(np, func() {})
+	w.state.state = true // HACK
+	w.state.SetParent(w) // For its Layout() to work...
+
+	// HACK
+	w.child.Pos()[0] = w.state.Size()[0] + 2
+
+	return w
+}
+
+func (w *CollapsibleWidget) Layout() {
+	// HACK
+	Widgets := []Widgeter{w.state}
+	if w.state.State() {
+		Widgets = append(Widgets, w.child)
+	}
+
+	w.size = np
+	for _, widget := range Widgets {
+		bottomRight := widget.Pos().Add(*widget.Size())
+		for d := 0; d < len(w.size); d++ {
+			if bottomRight[d] > w.size[d] {
+				w.size[d] = bottomRight[d]
+			}
+		}
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *CollapsibleWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+
+	w.state.Render()
+
+	if w.state.State() {
+		w.child.Render()
+	}
+}
+
+func (w *CollapsibleWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	hits := w.state.Hit(LocalPosition)
+	if w.state.State() {
+		hits = append(hits, w.child.Hit(LocalPosition)...)
+	}
+
+	return hits
+}
+
+// ---
+
 type ScrollPaneWidget struct {
 	Widget
 	child Widgeter
@@ -1581,7 +1656,10 @@ func NewScrollPaneWidget(pos, size mathgl.Vec2d, child Widgeter) *ScrollPaneWidg
 	return w
 }
 
-func (w *ScrollPaneWidget) Layout() {}
+func (w *ScrollPaneWidget) Layout() {
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
 
 func (w *ScrollPaneWidget) Render() {
 	gl.PushMatrix()
@@ -1813,8 +1891,6 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, template CmdT
 
 // HACK: I'm overriding NotifyChange() of TextBoxWidget here; it works because TextBoxWidget uses its own, but this isn't good
 func (w *LiveCmdExpeWidget) NotifyChange() {
-	MakeUpdated(w.commandNode) // THINK: Is this a hack or is this the way to go?
-
 	select {
 	case b, ok := <-w.stdoutChan:
 		if ok {
@@ -1843,6 +1919,13 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 		ExternallyUpdated(w)
 	default:
 	}
+}
+
+func (w *LiveCmdExpeWidget) Render() {
+	// TODO: I think this should be moved to a new proper Layout2() method or something. Render() is for putting it on the screen, not making changes.
+	MakeUpdated(w.commandNode) // THINK: Is this a hack or is this the way to go?
+
+	w.TextBoxWidget.Render()
 }
 
 // ---
@@ -4152,7 +4235,13 @@ func main() {
 			template.AddSources(folderListing)
 
 			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editor}, template) // TODO: Are both editor and folderListing deps needed? Or is editor enough, since it probably depends on folderListing, etc.
-			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, gitDiff))
+			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff)
+
+			nextTool := NewTextBoxWidgetExternalContent(np, NewMultilineContentString("this will be next tool"))
+			nextToolCollapsible := NewCollapsibleWidget(np, nextTool)
+
+			tools := NewFlowLayoutWidget(np, []Widgeter{gitDiffCollapsible, nextToolCollapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
 
