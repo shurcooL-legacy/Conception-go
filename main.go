@@ -2208,7 +2208,7 @@ func (w *GoPackageListingPureWidget) NotifyChange() {
 	// TODO: Support for preserving selection
 
 	goPackages := make(chan ImportPathFound)
-	go gist8018045.DoAll(goPackages)
+	go gist8018045.GetGoPackages(goPackages)
 
 	for entry := range goPackages {
 		w.entries = append(w.entries, entry)
