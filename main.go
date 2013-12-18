@@ -102,6 +102,9 @@ import (
 	. "gist.github.com/7651991.git"
 
 	. "gist.github.com/7802150.git"
+
+	. "gist.github.com/7519227.git"
+	"gist.github.com/8018045.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -2078,6 +2081,25 @@ func (this *DepDumper) Update() {
 
 // ---
 
+type MultilineContentDepDumper struct {
+	*MultilineContent
+	DepNode2
+}
+
+func NewMultilineContentDepDumper(sources ...DepNode2I) MultilineContentI {
+	this := &MultilineContentDepDumper{MultilineContent: NewMultilineContent()}
+	this.AddSources(sources...)
+	return this
+}
+
+func (this *MultilineContentDepDumper) Update() {
+	content := MustTrimLastNewline(goon.Sdump(this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected()))
+	//content := this.Content() + "+"
+	SetViewGroup(this.MultilineContent, content)
+}
+
+// ---
+
 type SpinnerWidget struct {
 	Widget
 	Spinner uint32
@@ -2156,6 +2178,158 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 	}
 
 	return -1
+}
+
+// ---
+
+type GoPackageListingPureWidget struct {
+	Widget
+	longestEntryLength int
+	selected           uint64 // 0 is unselected, else index+1 is selected
+	DepNode2Manual            // SelectionChanged
+
+	entries []ImportPathFound
+}
+
+func NewGoPackageListingPureWidget() *GoPackageListingPureWidget {
+	w := &GoPackageListingPureWidget{Widget: NewWidget(np, np)}
+	w.NotifyChange() // TODO: Give it a proper source
+	return w
+}
+
+func (this *GoPackageListingPureWidget) GetSelected() *ImportPathFound {
+	if this.selected == 0 {
+		return nil
+	}
+	return &this.entries[this.selected]
+}
+
+func (w *GoPackageListingPureWidget) NotifyChange() {
+	// TODO: Support for preserving selection
+
+	goPackages := make(chan ImportPathFound)
+	go gist8018045.DoAll(goPackages)
+
+	for entry := range goPackages {
+		w.entries = append(w.entries, entry)
+
+		entryLength := len(entry.ImportPath())
+		if entryLength > w.longestEntryLength {
+			w.longestEntryLength = entryLength
+		}
+	}
+
+	w.Layout()
+
+	w.NotifyAllListeners()
+}
+
+func (w *GoPackageListingPureWidget) selectionChangedTest() {
+	ExternallyUpdated(w)
+}
+
+func (w *GoPackageListingPureWidget) Layout() {
+	if w.longestEntryLength < 3 {
+		w.size[0] = float64(8 * 3)
+	} else {
+		w.size[0] = float64(8 * w.longestEntryLength)
+	}
+	if len(w.entries) == 0 {
+		w.size[1] = float64(16 * 1)
+	} else {
+		w.size[1] = float64(16 * len(w.entries))
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *GoPackageListingPureWidget) Render() {
+	DrawNBox(w.pos, w.size)
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	for i, entry := range w.entries {
+		if w.selected == uint64(i+1) {
+			if hasTypingFocus {
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), mathgl.Vec2d{w.size[0], 16}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				gl.Color3d(1, 1, 1)
+			} else {
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), mathgl.Vec2d{w.size[0], 16}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				gl.Color3d(0, 0, 0)
+			}
+		} else {
+			gl.Color3d(0, 0, 0)
+		}
+
+		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), entry.ImportPath())
+	}
+}
+
+func (w *GoPackageListingPureWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *GoPackageListingPureWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		keyboardPointer.OriginMapping = []Widgeter{w}
+	}
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
+		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		localPosition := GlobalToLocal(w, globalPosition)
+		if len(w.entries) > 0 {
+			if localPosition[1] < 0 {
+				w.selected = 1
+			} else if uint64((localPosition[1]/16)+1) > uint64(len(w.entries)) {
+				w.selected = uint64(len(w.entries))
+			} else {
+				w.selected = uint64((localPosition[1] / 16) + 1)
+			}
+			w.selectionChangedTest()
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyUp:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries) > 0 {
+					w.selected = 1
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected > 1 {
+					w.selected--
+					w.selectionChangedTest()
+				}
+			}
+		case glfw.KeyDown:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries) > 0 {
+					w.selected = uint64(len(w.entries))
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected < uint64(len(w.entries)) {
+					w.selected++
+					w.selectionChangedTest()
+				}
+			}
+		}
+	}
 }
 
 // ---
@@ -2307,7 +2481,7 @@ func (w *FolderListingPureWidget) selectionChangedTest() {
 		p.SetWidgets(p.Widgets[:index+1])
 	}
 
-	ExternallyUpdated(w.Parent().Parent().(*FolderListingWidget))
+	ExternallyUpdated(w.Parent().Parent().(DepNode2ManualI))
 }
 
 func (w *FolderListingPureWidget) Layout() {
@@ -2374,7 +2548,7 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	// Check if button 0 was released.
+	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := GlobalToLocal(w, globalPosition)
@@ -4207,9 +4381,10 @@ func main() {
 		_ = windowSize
 
 		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
-		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, float64(windowSize1 - 2)}, folderListing))
+		//widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, float64(windowSize1 - 2)}, folderListing))
 
-		//widgets = append(widgets, NewScrollPaneWidget(np, windowSize, NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Conception-go/main.go")))
+		goPackageListing := NewGoPackageListingPureWidget()
+		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, float64(windowSize1 - 2)}, goPackageListing))
 
 		// Main editor
 		editor := NewMultilineContent()
@@ -4237,7 +4412,7 @@ func main() {
 			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editor}, template) // TODO: Are both editor and folderListing deps needed? Or is editor enough, since it probably depends on folderListing, etc.
 			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff)
 
-			nextTool := NewTextBoxWidgetExternalContent(np, NewMultilineContentString("this will be next tool"))
+			nextTool := NewTextBoxWidgetExternalContent(np, NewMultilineContentDepDumper(goPackageListing))
 			nextToolCollapsible := NewCollapsibleWidget(np, nextTool)
 
 			tools := NewFlowLayoutWidget(np, []Widgeter{gitDiffCollapsible, nextToolCollapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
@@ -4420,6 +4595,8 @@ func main() {
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 130}, &mousePointer))
 
 		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
+
+		//widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{160, 30}, np, []Widgeter{NewGoPackageListingPureWidget()}))
 
 		http.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "Closing.")
