@@ -18,6 +18,7 @@ import (
 	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3"
 	//"github.com/go-gl/glu"
+	glu "github.com/shurcooL/goglu/glu21"
 
 	"github.com/Jragonmiris/mathgl"
 
@@ -1664,14 +1665,45 @@ func (w *ScrollPaneWidget) Layout() {
 	w.Widget.Layout()
 }
 
+func NearInt64(value float64) int64 {
+	if value >= 0 {
+		return int64(value + 0.5)
+	} else {
+		return int64(value - 0.5)
+	}
+}
+
+func SetScissor(pos, size mathgl.Vec2d) {
+	var ModelMatrix [16]gl.Double
+	var ProjectionMatrix [16]gl.Double
+	var Viewport [4]gl.Int
+	var x0, y0, z0, x1, y1, z1, x2, y2, z2 gl.Double
+
+	gl.GetDoublev(gl.MODELVIEW_MATRIX, &ModelMatrix[0])
+	gl.GetDoublev(gl.PROJECTION_MATRIX, &ProjectionMatrix[0])
+	gl.GetIntegerv(gl.VIEWPORT, &Viewport[0])
+
+	glu.Project(gl.Double(pos[0]), gl.Double(pos[1]+size[1]), 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x0, &y0, &z0)
+	glu.Project(gl.Double(size[0]), gl.Double(size[1]), 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x1, &y1, &z1)
+	glu.Project(0, 0, 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x2, &y2, &z2)
+
+	pos0 := NearInt64(float64(x0))
+	pos1 := NearInt64(float64(y0))
+	size0 := NearInt64(float64(x1 - x2))
+	size1 := NearInt64(float64(y2 - y1))
+
+	// Crop the scissor box by the parent scissor box
+	// TODO
+
+	gl.Scissor(gl.Int(pos0), gl.Int(pos1), gl.Sizei(size0), gl.Sizei(size1))
+}
+
 func (w *ScrollPaneWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 
-	// TODO: General case (i.e. stacking scissor tests)
-	// HACK: The params to gl.Scissor are calculated hackily
-	gl.Scissor(gl.Int(w.pos[0]), gl.Int(w.pos[1]), gl.Sizei(w.size[0]+2), gl.Sizei(w.size[1]+2))
+	SetScissor(mathgl.Vec2d{-1, -1}, w.size.Add(mathgl.Vec2d{2, 2}))
 	gl.Enable(gl.SCISSOR_TEST)
 
 	w.child.Render()
@@ -2201,7 +2233,7 @@ func (this *GoPackageListingPureWidget) GetSelected() *ImportPathFound {
 	if this.selected == 0 {
 		return nil
 	}
-	return &this.entries[this.selected]
+	return &this.entries[this.selected-1]
 }
 
 func (w *GoPackageListingPureWidget) NotifyChange() {
