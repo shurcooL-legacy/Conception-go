@@ -2088,13 +2088,15 @@ func NewFileOpener(editor ViewGroupI) *FileOpener {
 }
 
 func (this *FileOpener) Update() {
+	if this.openedFile != nil {
+		this.editor.RemoveView(this.openedFile)
+		this.openedFile.(*FileView).Close()
+		this.openedFile = nil
+
+		SetViewGroup(this.editor, "")
+	}
+
 	if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); strings.HasSuffix(path, ".go") {
-
-		if this.openedFile != nil {
-			this.editor.RemoveView(this.openedFile)
-			this.openedFile.(*FileView).Close()
-		}
-
 		this.openedFile = NewFileView(path)
 
 		this.openedFile.AddAndSetViewGroup(this.editor, TryReadFile(path))
@@ -2451,7 +2453,9 @@ func (w *FolderListingPureWidget) NotifyChange() {
 		w.entries = make([]os.FileInfo, 0, len(entries))
 		w.longestEntryLength = 0
 		for _, v := range entries {
-			if !strings.HasPrefix(v.Name(), ".") {
+			//if !strings.HasPrefix(v.Name(), ".") {
+			// HACK: Temporarily override this to list .go files only
+			if !strings.HasPrefix(v.Name(), ".") && strings.HasSuffix(v.Name(), ".go") && !v.IsDir() {
 				w.entries = w.entries[:len(w.entries)+1]
 				w.entries[len(w.entries)-1] = v
 
@@ -4412,11 +4416,24 @@ func main() {
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 		_ = windowSize
 
-		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
-		//widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, float64(windowSize1 - 2)}, folderListing))
-
 		goPackageListing := NewGoPackageListingPureWidget()
-		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, float64(windowSize1 - 2)}, goPackageListing))
+		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, 600}, goPackageListing))
+
+		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
+		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{0, 600 + 2}, mathgl.Vec2d{200, float64(windowSize1 - 602 - 2)}, folderListing))
+
+		// TEST, HACK: Open the folder listing to the folder of the Go package
+		folderListingDirChanger := DepNode2Func{}
+		folderListingDirChanger.UpdateFunc = func() {
+			if importPathFound := folderListingDirChanger.GetSources()[0].(*GoPackageListingPureWidget).GetSelected(); importPathFound != nil {
+				path := importPathFound.FullPath()
+				fmt.Println(path)
+				folderListing.flow.SetWidgets([]Widgeter{newFolderListingPureWidget(path)})
+				ExternallyUpdated(folderListing)
+			}
+		}
+		folderListingDirChanger.AddSources(goPackageListing)
+		keepUpdatedTEST = append(keepUpdatedTEST, &folderListingDirChanger)
 
 		// Main editor
 		editor := NewMultilineContent()
@@ -4934,6 +4951,7 @@ func main() {
 			// HACK: Close window check
 			if glfw.Release != window.GetKey(glfw.KeyEscape) {
 				keepRunning = false
+				break
 			}
 		}
 
