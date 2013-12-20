@@ -679,12 +679,14 @@ type typeCheckedPackage struct {
 }
 
 func (t *typeCheckedPackage) Update() {
-	_ = t.GetSources()[0].(*MultilineContentFile)
+	goPackage := t.GetSources()[0].(*GoPackageListingPureWidget)
 
-	ImportPath := "gist.github.com/7176504.git"
-	//ImportPath := "gist.github.com/5694308.git"
+	importPath := ""
+	if goPackage.GetSelected() != nil {
+		importPath = goPackage.GetSelected().ImportPath()
+	}
 
-	bpkg, err := BuildPackageFromImportPath(ImportPath)
+	bpkg, err := BuildPackageFromImportPath(importPath)
 	if err != nil {
 		t.fset = nil
 		t.files = nil
@@ -717,7 +719,7 @@ func (t *typeCheckedPackage) Update() {
 		Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		Scopes:     make(map[ast.Node]*types.Scope),
 	}
-	tpkg, err := cfg.Check(ImportPath, fset, files, info)
+	tpkg, err := cfg.Check(importPath, fset, files, info)
 	if err == nil {
 		t.tpkg = tpkg
 		t.info = info
@@ -727,9 +729,9 @@ func (t *typeCheckedPackage) Update() {
 	}
 }
 
-func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpeWidget {
+func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *LiveGoroutineExpeWidget {
 	typeCheckedPackage := &typeCheckedPackage{}
-	typeCheckedPackage.AddSources(source.Content)
+	typeCheckedPackage.AddSources(goPackage, source.Content)
 
 	params := func() interface{} {
 		return []interface{}{
@@ -806,21 +808,25 @@ func NewTest4Widget(pos mathgl.Vec2d, source *TextFileWidget) *LiveGoroutineExpe
 
 // ---
 
+type FileUri string
+
 type GoCompileErrorsManagerTest struct {
 	//Sources []*GoCompileErrorsTest // TODO: Migrate to using DepNode2
 	DepNode2
 
-	All map[string][]GoErrorMessage // TODO: Use some Uri type/interface instead of string, for clarity
+	All map[FileUri][]GoErrorMessage
 }
 
 func (this *GoCompileErrorsManagerTest) Update() {
-	this.All = make(map[string][]GoErrorMessage)
+	this.All = make(map[FileUri][]GoErrorMessage)
 
 	for _, source := range this.GetSources() {
 		for _, goCompilerError := range source.(*GoCompileErrorsTest).Out {
 			this.All[goCompilerError.FileUri] = append(this.All[goCompilerError.FileUri], goCompilerError.ErrorMessage)
 		}
 	}
+
+	redraw = true // TODO: Think about this and deprecate if possible
 }
 
 // ---
@@ -837,7 +843,7 @@ type GoErrorMessage struct {
 }
 
 type GoCompilerError struct {
-	FileUri      string
+	FileUri      FileUri
 	ErrorMessage GoErrorMessage
 }
 
@@ -867,7 +873,7 @@ func (this *GoCompileErrorsTest) Update() {
 		in = in[x+1:]
 		message := TrimFirstSpace(in)
 
-		return GoCompilerError{FileUri: fileUri, ErrorMessage: GoErrorMessage{LineNumber: lineNumber, Message: message}}
+		return GoCompilerError{FileUri: FileUri("file://" + fileUri), ErrorMessage: GoErrorMessage{LineNumber: lineNumber, Message: message}}
 	}
 
 	source := this.DepNode2.GetSources()[0].(*LiveCmdExpeWidget).Content
@@ -1866,7 +1872,7 @@ func (w *ChannelExpeWidget) NotifyChange() {
 
 type commandNode struct {
 	w        *LiveCmdExpeWidget
-	template CmdTemplater
+	template CmdFactory
 	dst      *TextBoxWidget
 	DepNode2
 }
@@ -1912,7 +1918,7 @@ type LiveCmdExpeWidget struct {
 	DepNode2Manual // FinishedDepNode2
 }
 
-func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, template CmdTemplater) *LiveCmdExpeWidget {
+func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, template CmdFactory) *LiveCmdExpeWidget {
 	w := &LiveCmdExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan *os.ProcessState)}
 
 	// THINK: The only reason to have a separate command node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
@@ -2442,6 +2448,14 @@ type FolderListingPureWidget struct {
 func newFolderListingPureWidget(path string) *FolderListingPureWidget {
 	w := &FolderListingPureWidget{Widget: NewWidget(np, np), path: path}
 	w.NotifyChange() // TODO: Give it a proper source
+	return w
+}
+
+func newFolderListingPureWidgetWithSelection(path string) *FolderListingPureWidget {
+	w := newFolderListingPureWidget(path)
+	if len(w.entries) >= 1 {
+		w.selected = 1
+	}
 	return w
 }
 
@@ -3120,13 +3134,13 @@ type MultilineContent struct {
 
 func NewMultilineContent() *MultilineContent {
 	mc := &MultilineContent{}
-	mc.InitViewGroup(mc)
+	mc.InitViewGroup(mc, "memory://???")
 	mc.updateLines()
 	return mc
 }
 func NewMultilineContentString(content string) *MultilineContent {
 	mc := &MultilineContent{}
-	mc.InitViewGroup(mc)
+	mc.InitViewGroup(mc, "memory://???")
 	SetViewGroup(mc, content)
 	return mc
 }
@@ -3166,7 +3180,9 @@ type MultilineContentFile struct {
 
 func NewMultilineContentFile(path string) *MultilineContentFile {
 	this := &MultilineContentFile{MultilineContent: NewMultilineContent(), path: path}
-	this.InitViewGroup(this)
+	absPath, err := filepath.Abs(path)
+	CheckError(err)
+	this.InitViewGroup(this, "file://"+absPath)
 	this.AddAndSetViewGroup(this.MultilineContent, TryReadFile(this.path))
 	UniversalClock.AddChangeListener(this)
 	return this
@@ -3201,7 +3217,9 @@ type FileView struct {
 // TODO: Opening same path should result in same FileView, etc.
 func NewFileView(path string) *FileView {
 	this := &FileView{path: path}
-	this.InitViewGroup(this)
+	absPath, err := filepath.Abs(path)
+	CheckError(err)
+	this.InitViewGroup(this, "file://"+absPath)
 	UniversalClock.AddChangeListener(this) // TODO: Closing, etc.
 	return this
 }
@@ -3238,7 +3256,7 @@ type MultilineContentPointer struct {
 
 func NewMultilineContentPointer(p *string) *MultilineContentPointer {
 	this := &MultilineContentPointer{MultilineContent: NewMultilineContent(), p: p}
-	this.InitViewGroup(this)
+	this.InitViewGroup(this, "memory://???")
 	this.AddAndSetViewGroup(this.MultilineContent, *p)
 	UniversalClock.AddChangeListener(this) // TODO: Perhaps switch to a push notifications type setup, instead of constantly polling for change...
 	return this
@@ -3266,7 +3284,7 @@ type WebSocketView struct {
 
 func NewWebSocketView(c *websocket.Conn) *WebSocketView {
 	this := &WebSocketView{c: c, WsReadChan: make(chan string)}
-	this.InitViewGroup(this)
+	this.InitViewGroup(this, c.LocalAddr().String())
 	UniversalClock.AddChangeListener(this)
 	return this
 }
@@ -3299,7 +3317,7 @@ type MultilineContentFunc struct {
 // THINK: Merge the func and dependees into one struct? Maybe can't if funcs can have different signatures...
 func NewMultilineContentFunc(contentFunc func() string, dependees []DepNodeI) *MultilineContentFunc {
 	this := &MultilineContentFunc{MultilineContent: NewMultilineContent(), contentFunc: contentFunc}
-	this.InitViewGroup(this)
+	this.InitViewGroup(this, "func://???")
 	this.AddAndSetViewGroup(this.MultilineContent, contentFunc())
 	for _, dependee := range dependees {
 		dependee.AddChangeListener(this)
@@ -3357,7 +3375,7 @@ func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *
 		Widget:  NewWidget(pos, mathgl.Vec2d{0, 0}),
 		Content: mc,
 	}
-	w.layoutDepNode2.UpdateFunc = func() { w.NotifyChange() }
+	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
 	keepUpdatedTEST = append(keepUpdatedTEST, &w.layoutDepNode2)
 	return w
@@ -3445,7 +3463,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 		Content:       mc,
 		caretPosition: CaretPosition{w: mc},
 	}
-	w.layoutDepNode2.UpdateFunc = func() { w.NotifyChange() }
+	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
 	keepUpdatedTEST = append(keepUpdatedTEST, &w.layoutDepNode2)
 	return w
@@ -3546,12 +3564,24 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	// Go Errors Test
-	if goCompileErrorsEnabledTest != nil && goCompileErrorsEnabledTest.state() {
+	/*if goCompileErrorsEnabledTest != nil && goCompileErrorsEnabledTest.state() {
 		if contentFile, ok := w.Content.(*MultilineContentFile); ok && strings.HasSuffix(contentFile.Path(), ".go") {
 			gl.Color3d(0, 0, 0)
 			glt := NewOpenGlStream(np)
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
 			for _, goErrorMessage := range goCompileErrorsManagerTest.All[contentFile.Path()] { // TODO: Path() isn't guaranteed to be absolute, so either change that, or use something else here
+				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
+				glt.SetPos(w.pos.Add(mathgl.Vec2d{8 * float64(expandedLineLength+1), 16 * float64(goErrorMessage.LineNumber)}))
+				glt.PrintLine(goErrorMessage.Message)
+			}
+		}
+	}*/
+	for _, uri := range w.Content.GetAllUris() {
+		if _, ok := goCompileErrorsManagerTest.All[FileUri(uri)]; ok {
+			gl.Color3d(0, 0, 0)
+			glt := NewOpenGlStream(np)
+			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
+			for _, goErrorMessage := range goCompileErrorsManagerTest.All[FileUri(uri)] {
 				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
 				glt.SetPos(w.pos.Add(mathgl.Vec2d{8 * float64(expandedLineLength+1), 16 * float64(goErrorMessage.LineNumber)}))
 				glt.PrintLine(goErrorMessage.Message)
@@ -4424,11 +4454,11 @@ func main() {
 
 		// TEST, HACK: Open the folder listing to the folder of the Go package
 		folderListingDirChanger := DepNode2Func{}
-		folderListingDirChanger.UpdateFunc = func() {
-			if importPathFound := folderListingDirChanger.GetSources()[0].(*GoPackageListingPureWidget).GetSelected(); importPathFound != nil {
+		folderListingDirChanger.UpdateFunc = func(this DepNode2I) {
+			if importPathFound := this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected(); importPathFound != nil {
 				path := importPathFound.FullPath()
 				fmt.Println(path)
-				folderListing.flow.SetWidgets([]Widgeter{newFolderListingPureWidget(path)})
+				folderListing.flow.SetWidgets([]Widgeter{newFolderListingPureWidgetWithSelection(path)})
 				ExternallyUpdated(folderListing)
 			}
 		}
@@ -4436,19 +4466,21 @@ func main() {
 		keepUpdatedTEST = append(keepUpdatedTEST, &folderListingDirChanger)
 
 		// Main editor
-		editor := NewMultilineContent()
-		editorFileOpener := NewFileOpener(editor)
+		editorContent := NewMultilineContent()
+		editorFileOpener := NewFileOpener(editorContent)
 		editorFileOpener.AddSources(folderListing)
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
-		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, NewTextBoxWidgetExternalContent(np, editor)))
+		editor := NewTextBoxWidgetExternalContent(np, editorContent)
+		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, editor))
 
-		// git diff
+		// View sidebar
 		{
+			// git diff
 			template := NewCmdTemplateDynamic2()
-			template.UpdateFunc = func() {
+			template.UpdateFunc = func(this DepNode2I) {
 				template.Template = NewCmdTemplate("echo", "-n", "No git diff available.")
 
-				if path := template.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); path != "" && strings.HasSuffix(path, ".go") {
+				if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); path != "" && strings.HasSuffix(path, ".go") {
 					dir, file := filepath.Split(path)
 					if isGitRepo, _ := IsFolderGitRepo(dir); isGitRepo {
 						template.Template = NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
@@ -4458,13 +4490,46 @@ func main() {
 			}
 			template.AddSources(folderListing)
 
-			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editor}, template) // TODO: Are both editor and folderListing deps needed? Or is editor enough, since it probably depends on folderListing, etc.
+			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
 			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff)
 
-			nextTool := NewTextBoxWidgetExternalContent(np, NewMultilineContentDepDumper(goPackageListing))
-			nextToolCollapsible := NewCollapsibleWidget(np, nextTool)
+			// ---
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{gitDiffCollapsible, nextToolCollapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			/*nextTool := NewTextBoxWidgetExternalContent(np, NewMultilineContentDepDumper(goPackageListing))
+			nextToolCollapsible := NewCollapsibleWidget(np, nextTool)*/
+
+			// ---
+
+			// go build
+			template2 := NewCmdTemplateDynamic2()
+			template2.UpdateFunc = func(this DepNode2I) {
+				template2.Template = NewCmdTemplate("echo", "-n", "Nothing to go build.")
+
+				if importPathFound := this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected(); importPathFound != nil {
+					template2.Template = NewCmdTemplate("go", "build", "-o", "./Con2RunBin", importPathFound.ImportPath())
+					//template2.Template.Dir = ""
+				}
+			}
+			template2.AddSources(goPackageListing)
+
+			build := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template2)
+			nextTool2Collapsible := NewCollapsibleWidget(np, build)
+
+			// Go Compile Errors hardcoded TEST
+			{
+				goCompileErrorsTest := GoCompileErrorsTest{}
+				goCompileErrorsTest.AddSources(build)
+				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
+			}
+
+			// ---
+
+			nextTool3 := NewTest4Widget(np, goPackageListing, editor)
+			nextTool3Collapsible := NewCollapsibleWidget(np, nextTool3)
+
+			// =====
+
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
@@ -4527,6 +4592,7 @@ func main() {
 		widgets = append(widgets, &spinner)
 
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 15}))
+
 		{
 			src := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
 			//src := NewTextFileWidget(mathgl.Vec2d{}, "./GoLand/src/simple.go")
@@ -4624,13 +4690,13 @@ func main() {
 		}
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
-		{
-			//w := NewTest3Widget(mathgl.Vec2d{0, 0}, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
-			w := NewTest4Widget(mathgl.Vec2d{0, 0}, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
+		/*{
+			//w := NewTest3Widget(np, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			w := NewTest4Widget(np, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
 			widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
 			w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
 			widgets[2].(*FlowLayoutWidget).Layout()
-		}
+		}*/
 
 		// NumGoroutines
 		{
@@ -4963,9 +5029,10 @@ func main() {
 
 		// DepNode2 dependency resolution
 		// TODO: General solution
-		if goCompileErrorsEnabledTest != nil && goCompileErrorsEnabledTest.state() {
+		/*if goCompileErrorsEnabledTest != nil && goCompileErrorsEnabledTest.state() {
 			MakeUpdated(&goCompileErrorsManagerTest)
-		}
+		}*/
+		MakeUpdated(&goCompileErrorsManagerTest) // TODO: Only when build is on
 		MakeUpdated(&spinner)
 		for _, keepUpdatedEntry := range keepUpdatedTEST {
 			MakeUpdated(keepUpdatedEntry)
