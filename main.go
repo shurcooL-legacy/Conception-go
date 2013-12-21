@@ -1,3 +1,4 @@
+// A work in progress implementation of Conception in Go.
 package main
 
 import (
@@ -153,7 +154,7 @@ func CheckGLError() {
 func PrintText(pos mathgl.Vec2d, s string) {
 	lines := GetLines(s)
 	for lineNumber, line := range lines {
-		PrintLine(pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), line)
+		PrintLine(pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineNumber)}), line)
 	}
 }
 
@@ -162,7 +163,7 @@ func PrintLine(pos mathgl.Vec2d, s string) {
 	segments := strings.Split(s, "\t")
 	var advance uint32
 	for _, segment := range segments {
-		PrintSegment(mathgl.Vec2d{pos[0] + float64(8*advance), pos[1]}, segment)
+		PrintSegment(mathgl.Vec2d{pos[0] + float64(fontWidth*advance), pos[1]}, segment)
 		advance += uint32(len(segment))
 		advance += 4 - (advance % 4)
 	}
@@ -180,7 +181,7 @@ func PrintSegment(pos mathgl.Vec2d, s string) {
 	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
-	gl.Translated(gl.Double(pos[0])-4+0.25, gl.Double(pos[1])-1, 0)
+	gl.Translated(gl.Double(pos[0])-3.75*fontWidth/8.0, gl.Double(pos[1])-1*fontHeight/16.0, 0)
 	gl.ListBase(oFontBase)
 	gl.CallLists(gl.Sizei(len(s)), gl.UNSIGNED_BYTE, gl.Pointer(&[]byte(s)[0]))
 	gl.PopMatrix()
@@ -249,7 +250,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 		return
 	}
 
-	o.pos[0] = o.lineStartX + float64(8*o.advance)
+	o.pos[0] = o.lineStartX + float64(fontWidth*o.advance)
 
 	if o.BackgroundColor != nil {
 		gl.PushAttrib(gl.CURRENT_BIT)
@@ -269,7 +270,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
-	gl.Translated(gl.Double(o.pos[0])-4+0.25, gl.Double(o.pos[1])-1, 0)
+	gl.Translated(gl.Double(o.pos[0])-3.75*fontWidth/8.0, gl.Double(o.pos[1])-1*fontHeight/16.0, 0)
 	gl.ListBase(oFontBase)
 	gl.CallLists(gl.Sizei(len(s)), gl.UNSIGNED_BYTE, gl.Pointer(&[]byte(s)[0]))
 	gl.PopMatrix()
@@ -279,9 +280,9 @@ func (o *OpenGlStream) PrintSegment(s string) {
 
 // ---
 
-func InitFont() {
-	const fontWidth = 8
+const fontWidth, fontHeight = 7, 14
 
+func InitFont() {
 	LoadTexture("./Font.tga")
 
 	oFontBase = gl.GenLists(256)
@@ -292,7 +293,7 @@ func InitFont() {
 		fCharY := gl.Double(iLoop1/16) / 16.0
 
 		gl.NewList(oFontBase+gl.Uint(iLoop1), gl.COMPILE)
-		const offset = gl.Double(0.004)
+		const offset = gl.Double(0.005)
 		//#if DECISION_RENDER_TEXT_VCENTERED_MID
 		VerticalOffset := gl.Double(0.00125)
 		if ('a' <= iLoop1 && iLoop1 <= 'z') || '_' == iLoop1 {
@@ -303,11 +304,11 @@ func InitFont() {
 		//#endif*/
 		gl.Begin(gl.QUADS)
 		gl.TexCoord2d(fCharX+offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
-		gl.Vertex2i(0, 16)
+		gl.Vertex2i(0, fontHeight)
 		gl.TexCoord2d(fCharX+0.0625-offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
-		gl.Vertex2i(16, 16)
+		gl.Vertex2i(fontWidth*2, fontHeight)
 		gl.TexCoord2d(fCharX+0.0625-offset, 1-(1-fCharY-offset+VerticalOffset))
-		gl.Vertex2i(16, 0)
+		gl.Vertex2i(fontWidth*2, 0)
 		gl.TexCoord2d(fCharX+offset, 1-(1-fCharY-offset+VerticalOffset))
 		gl.Vertex2i(0, 0)
 		gl.End()
@@ -317,9 +318,9 @@ func InitFont() {
 
 	gl.NewList(oFontBackground, gl.COMPILE)
 	gl.Begin(gl.QUADS)
-	gl.Vertex2i(0, 16)
-	gl.Vertex2i(8, 16)
-	gl.Vertex2i(8, 0)
+	gl.Vertex2i(0, fontHeight)
+	gl.Vertex2i(fontWidth, fontHeight)
+	gl.Vertex2i(fontWidth, 0)
 	gl.Vertex2i(0, 0)
 	gl.End()
 	gl.Translated(fontWidth, 0.0, 0.0)
@@ -369,7 +370,7 @@ func LoadTexture(path string) {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.GENERATE_MIPMAP, gl.TRUE)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, -0.65)
+	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, -0.75)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.Sizei(bounds.Dx()), gl.Sizei(bounds.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Pointer(pixPointer))
 	CheckGLError()
 }
@@ -935,7 +936,7 @@ type ButtonWidget struct {
 }
 
 func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
-	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16})}
+	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{fontHeight, fontHeight})}
 	w.setAction(action)
 
 	return w
@@ -1600,7 +1601,7 @@ func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter) *CollapsibleWidget {
 	//state := true
 	//w.state = NewTriButtonExternalStateWidget(np, func() bool { return state }, func() { state = !state })
 	w.state = NewTriButtonWidget(np, func() {})
-	w.state.state = true // HACK
+	//w.state.state = true // HACK
 	w.state.SetParent(w) // For its Layout() to work...
 
 	// HACK
@@ -1823,7 +1824,7 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	w.CompositeWidget = NewCompositeWidget(pos, np,
 		[]Widgeter{
 			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
-			NewTriButtonExternalStateWidget(mathgl.Vec2d{0, -16 - 2}, func() bool { return w.cmd != nil }, action),
+			NewTriButtonExternalStateWidget(mathgl.Vec2d{0, -fontHeight - 2}, func() bool { return w.cmd != nil }, action),
 		})
 
 	UniversalClock.AddChangeListener(w)
@@ -1899,7 +1900,7 @@ func (this *commandNode) Update() {
 		this.w.cmd = nil
 		return
 	}
-	fmt.Printf("started new process %v %+v\n", this.w.cmd.Process.Pid, this.w.cmd.Args)
+	//fmt.Printf("started new process %v %+v\n", this.w.cmd.Process.Pid, this.w.cmd.Args)
 
 	go func(cmd *exec.Cmd) {
 		_ = cmd.Wait()
@@ -2033,8 +2034,6 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, params 
 
 // HACK: I'm overriding NotifyChange() of TextBoxWidget here; it works because TextBoxWidget uses its own, but this isn't good
 func (w *LiveGoroutineExpeWidget) NotifyChange() {
-	MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
-
 	select {
 	case s, ok := <-w.outChan:
 		if ok {
@@ -2047,6 +2046,13 @@ func (w *LiveGoroutineExpeWidget) NotifyChange() {
 		}
 	default:
 	}
+}
+
+func (w *LiveGoroutineExpeWidget) Render() {
+	// TODO: I think this should be moved to a new proper Layout2() method or something. Render() is for putting it on the screen, not making changes.
+	MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
+
+	w.TextBoxWidget.Render()
 }
 
 // ---
@@ -2270,14 +2276,14 @@ func (w *GoPackageListingPureWidget) selectionChangedTest() {
 
 func (w *GoPackageListingPureWidget) Layout() {
 	if w.longestEntryLength < 3 {
-		w.size[0] = float64(8 * 3)
+		w.size[0] = float64(fontWidth * 3)
 	} else {
-		w.size[0] = float64(8 * w.longestEntryLength)
+		w.size[0] = float64(fontWidth * w.longestEntryLength)
 	}
 	if len(w.entries) == 0 {
-		w.size[1] = float64(16 * 1)
+		w.size[1] = float64(fontHeight * 1)
 	} else {
-		w.size[1] = float64(16 * len(w.entries))
+		w.size[1] = float64(fontHeight * len(w.entries))
 	}
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
@@ -2293,17 +2299,17 @@ func (w *GoPackageListingPureWidget) Render() {
 	for i, entry := range w.entries {
 		if w.selected == uint64(i+1) {
 			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), mathgl.Vec2d{w.size[0], 16}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
 				gl.Color3d(1, 1, 1)
 			} else {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), mathgl.Vec2d{w.size[0], 16}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
 				gl.Color3d(0, 0, 0)
 			}
 		} else {
 			gl.Color3d(0, 0, 0)
 		}
 
-		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), entry.ImportPath())
+		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), entry.ImportPath())
 	}
 }
 
@@ -2333,10 +2339,10 @@ func (w *GoPackageListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 		if len(w.entries) > 0 {
 			if localPosition[1] < 0 {
 				w.selected = 1
-			} else if uint64((localPosition[1]/16)+1) > uint64(len(w.entries)) {
+			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(len(w.entries)) {
 				w.selected = uint64(len(w.entries))
 			} else {
-				w.selected = uint64((localPosition[1] / 16) + 1)
+				w.selected = uint64((localPosition[1] / fontHeight) + 1)
 			}
 			w.selectionChangedTest()
 		}
@@ -2536,14 +2542,14 @@ func (w *FolderListingPureWidget) selectionChangedTest() {
 
 func (w *FolderListingPureWidget) Layout() {
 	if w.longestEntryLength < 3 {
-		w.size[0] = float64(8 * 3)
+		w.size[0] = float64(fontWidth * 3)
 	} else {
-		w.size[0] = float64(8 * w.longestEntryLength)
+		w.size[0] = float64(fontWidth * w.longestEntryLength)
 	}
 	if len(w.entries) == 0 {
-		w.size[1] = float64(16 * 1)
+		w.size[1] = float64(fontHeight * 1)
 	} else {
-		w.size[1] = float64(16 * len(w.entries))
+		w.size[1] = float64(fontHeight * len(w.entries))
 	}
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
@@ -2559,10 +2565,10 @@ func (w *FolderListingPureWidget) Render() {
 	for i, v := range w.entries {
 		if w.selected == uint64(i+1) {
 			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), mathgl.Vec2d{w.size[0], 16}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
 				gl.Color3d(1, 1, 1)
 			} else {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), mathgl.Vec2d{w.size[0], 16}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
 				gl.Color3d(0, 0, 0)
 			}
 		} else {
@@ -2570,9 +2576,9 @@ func (w *FolderListingPureWidget) Render() {
 		}
 
 		if v.IsDir() {
-			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), v.Name()+"/")
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name()+"/")
 		} else {
-			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * 16)}), v.Name())
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name())
 		}
 	}
 }
@@ -2605,10 +2611,10 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 		if len(w.entries) > 0 {
 			if localPosition[1] < 0 {
 				w.selected = 1
-			} else if uint64((localPosition[1]/16)+1) > uint64(len(w.entries)) {
+			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(len(w.entries)) {
 				w.selected = uint64(len(w.entries))
 			} else {
-				w.selected = uint64((localPosition[1] / 16) + 1)
+				w.selected = uint64((localPosition[1] / fontHeight) + 1)
 			}
 			w.selectionChangedTest()
 		}
@@ -2840,7 +2846,7 @@ func (w *GoonWidget) setupInternals() {
 	oldParent := w.parent
 	if expandable {
 		if w.expanded == nil {
-			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-16 - 2}, func() { w.flip() })
+			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-fontHeight - 2}, func() { w.flip() })
 		}
 
 		w.CompositeWidget = NewCompositeWidget(w.pos, np, []Widgeter{w.expanded, &Widget{}})
@@ -2938,7 +2944,7 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 }
 
 func setupInternals3(titleString string, a reflect.Value) Widgeter {
-	tab := mathgl.Vec2d{8 * 4}
+	tab := mathgl.Vec2d{fontWidth * 4}
 
 	/*if !a.CanInterface() {
 		a = UnsafeReflectValue(a)
@@ -3087,16 +3093,16 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 	var y uint32
 	if pos[1] < 0 {
 		y = 0
-	} else if pos[1] >= float64(len(cp.w.Lines())*16) {
+	} else if pos[1] >= float64(len(cp.w.Lines())*fontHeight) {
 		y = uint32(len(cp.w.Lines()) - 1)
 	} else {
-		y = uint32(pos[1] / 16)
+		y = uint32(pos[1] / fontHeight)
 	}
 
 	if pos[0] < 0 {
 		cp.targetExpandedX = 0
 	} else {
-		cp.targetExpandedX = uint32((pos[0] + 4) / 8)
+		cp.targetExpandedX = uint32((pos[0] + fontWidth/2) / fontWidth)
 	}
 
 	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
@@ -3410,11 +3416,11 @@ func (w *TextLabelWidget) NotifyChange() {
 
 func (w *TextLabelWidget) Layout() {
 	if w.Content.LongestLine() < 3 {
-		w.size[0] = float64(8 * 3)
+		w.size[0] = float64(fontWidth * 3)
 	} else {
-		w.size[0] = float64(8 * w.Content.LongestLine())
+		w.size[0] = float64(fontWidth * w.Content.LongestLine())
 	}
-	w.size[1] = float64(16 * len(w.Content.Lines()))
+	w.size[1] = float64(fontHeight * len(w.Content.Lines()))
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
@@ -3425,7 +3431,7 @@ func (w *TextLabelWidget) Render() {
 
 	gl.Color3d(0, 0, 0)
 	for lineNumber, contentLine := range w.Content.Lines() {
-		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
 	isHit := len(w.HoverPointers()) > 0
@@ -3433,7 +3439,7 @@ func (w *TextLabelWidget) Render() {
 	if w.tooltip != nil && isHit {
 		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		w.tooltip.Layout()
-		tooltipOffset := mathgl.Vec2d{0, -16 - w.tooltip.Size()[1]}
+		tooltipOffset := mathgl.Vec2d{0, -fontHeight - w.tooltip.Size()[1]}
 		*w.tooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		w.tooltip.Render()
 	}
@@ -3484,11 +3490,11 @@ func (w *TextBoxWidget) NotifyChange() {
 
 func (w *TextBoxWidget) Layout() {
 	if w.Content.LongestLine() < 3 {
-		w.size[0] = float64(8 * 3)
+		w.size[0] = float64(fontWidth * 3)
 	} else {
-		w.size[0] = float64(8 * w.Content.LongestLine())
+		w.size[0] = float64(fontWidth * w.Content.LongestLine())
 	}
-	w.size[1] = float64(16 * len(w.Content.Lines()))
+	w.size[1] = float64(fontHeight * len(w.Content.Lines()))
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
@@ -3526,23 +3532,23 @@ func (w *TextBoxWidget) Render() {
 			// TODO: Generalize this.
 			lines := w.Content.Lines()
 			lineNumber, lastLineNumber := 0, len(lines)-1
-			if topLineNumber := int(GlobalToLocal(w, mathgl.Vec2d{})[1] / 16); topLineNumber > lineNumber {
+			if topLineNumber := int(GlobalToLocal(w, mathgl.Vec2d{})[1] / fontHeight); topLineNumber > lineNumber {
 				lineNumber = topLineNumber
 			}
 			_, height := globalWindow.GetSize() // HACK
-			if bottomLineNumber := int(GlobalToLocal(w, mathgl.Vec2d{0, float64(height)})[1] / 16); bottomLineNumber < lastLineNumber {
+			if bottomLineNumber := int(GlobalToLocal(w, mathgl.Vec2d{0, float64(height)})[1] / fontHeight); bottomLineNumber < lastLineNumber {
 				lastLineNumber = bottomLineNumber
 			}
 			for ; lineNumber <= lastLineNumber; lineNumber++ {
 				contentLine := lines[lineNumber]
-				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 			}
 			/*for lineNumber, contentLine := range w.Content.Lines() {
-				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 			}*/
 		} else {
 			for lineNumber, contentLine := range w.Content.Lines() {
-				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
+				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
 			}
 		}
 	} else {
@@ -3571,7 +3577,7 @@ func (w *TextBoxWidget) Render() {
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
 			for _, goErrorMessage := range goCompileErrorsManagerTest.All[contentFile.Path()] { // TODO: Path() isn't guaranteed to be absolute, so either change that, or use something else here
 				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
-				glt.SetPos(w.pos.Add(mathgl.Vec2d{8 * float64(expandedLineLength+1), 16 * float64(goErrorMessage.LineNumber)}))
+				glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineNumber)}))
 				glt.PrintLine(goErrorMessage.Message)
 			}
 		}
@@ -3583,7 +3589,7 @@ func (w *TextBoxWidget) Render() {
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
 			for _, goErrorMessage := range goCompileErrorsManagerTest.All[FileUri(uri)] {
 				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
-				glt.SetPos(w.pos.Add(mathgl.Vec2d{8 * float64(expandedLineLength+1), 16 * float64(goErrorMessage.LineNumber)}))
+				glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineNumber)}))
 				glt.PrintLine(goErrorMessage.Message)
 			}
 		}
@@ -3597,7 +3603,7 @@ func (w *TextBoxWidget) Render() {
 		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Color3d(0, 0, 0)
-		gl.Recti(gl.Int(expandedCaretPosition*8-1), gl.Int(caretLine*16), gl.Int(expandedCaretPosition*8+1), gl.Int(caretLine*16)+16)
+		gl.Recti(gl.Int(expandedCaretPosition*fontWidth-1), gl.Int(caretLine*fontHeight), gl.Int(expandedCaretPosition*fontWidth+1), gl.Int(caretLine*fontHeight)+fontHeight)
 	}
 }
 func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -3803,7 +3809,7 @@ func (w *TextBoxValidationWidget) Render() {
 
 	gl.Color3d(0, 0, 0)
 	for lineNumber, contentLine := range w.Content.Lines() {
-		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(16*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
 	if hasTypingFocus {
@@ -3814,7 +3820,7 @@ func (w *TextBoxValidationWidget) Render() {
 		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Color3d(0, 0, 0)
-		gl.Recti(gl.Int(expandedCaretPosition*8-1), gl.Int(caretLine*16), gl.Int(expandedCaretPosition*8+1), gl.Int(caretLine*16)+16)
+		gl.Recti(gl.Int(expandedCaretPosition*fontWidth-1), gl.Int(caretLine*fontHeight), gl.Int(expandedCaretPosition*fontWidth+1), gl.Int(caretLine*fontHeight)+fontHeight)
 	}
 }
 
@@ -4440,7 +4446,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if true {
+	if false {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -4457,7 +4463,6 @@ func main() {
 		folderListingDirChanger.UpdateFunc = func(this DepNode2I) {
 			if importPathFound := this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected(); importPathFound != nil {
 				path := importPathFound.FullPath()
-				fmt.Println(path)
 				folderListing.flow.SetWidgets([]Widgeter{newFolderListingPureWidgetWithSelection(path)})
 				ExternallyUpdated(folderListing)
 			}
@@ -4821,7 +4826,7 @@ func main() {
 				}
 			}
 
-			var sock = new WebSocket("ws://" + "localhost:8080" + "/websocket.ws");
+			var sock = new WebSocket("ws://" + window.location.host + "/websocket.ws");
 			//sock.addEventListener('open', function(e2) { sock.send( ... ) });
 			sock.onopen = function(evt) { document.getElementById("myLiveOut").textContent = "Connected."; document.getElementById("inputField").select(); liveUpdateTest(document.getElementById("inputField")); console.log("Open: ", evt); };
 			sock.onclose = function(evt) { document.getElementById("myLiveOut").textContent = "Disconnected."; console.log("Close: ", evt); };
