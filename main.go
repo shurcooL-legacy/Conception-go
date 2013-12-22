@@ -1667,6 +1667,17 @@ func NewScrollPaneWidget(pos, size mathgl.Vec2d, child Widgeter) *ScrollPaneWidg
 }
 
 func (w *ScrollPaneWidget) Layout() {
+	// Keep the child widget within the scroll pane
+	for i := 0; i < 2; i++ {
+		if w.child.Pos()[i]+w.child.Size()[i] < w.size[i] {
+			w.child.Pos()[i] = w.size[i] - w.child.Size()[i]
+		}
+
+		if w.child.Pos()[i] > 0 {
+			w.child.Pos()[i] = 0
+		}
+	}
+
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
 }
@@ -1752,17 +1763,8 @@ func (w *ScrollPaneWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2 {
 		w.child.Pos()[0] += inputEvent.Sliders[1] * 10
 		w.child.Pos()[1] += inputEvent.Sliders[0] * 10
-	}
 
-	// Keep the child widget within the scroll pane
-	for i := 0; i < 2; i++ {
-		if w.child.Pos()[i]+w.child.Size()[i] < w.size[i] {
-			w.child.Pos()[i] = w.size[i] - w.child.Size()[i]
-		}
-
-		if w.child.Pos()[i] > 0 {
-			w.child.Pos()[i] = 0
-		}
+		w.Layout()
 	}
 }
 
@@ -4445,7 +4447,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if false {
+	if true {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
