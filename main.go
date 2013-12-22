@@ -4815,11 +4815,12 @@ func main() {
 	<body>
 		<script type="text/javascript">
 			var prev_value = "";
-			function liveUpdateTest(e) {
+			var input_field = null;
+			function liveUpdateTest() {
 				try {
-					if (e.value != prev_value) {
-						sock.send(e.value + "\0");		// HACK: Should make sure that sock.onopen has happened before calling send... Best done by setting 'inputField.onInput=liveUpdateTest' in onopen
-						prev_value = e.value;
+					if (input_field.value != prev_value) {
+						sock.send(input_field.value + "\0");
+						prev_value = input_field.value;
 					}
 				} catch (exc) {
 					document.getElementById("myLiveOut").textContent = "sock.send Error: " + exc;
@@ -4828,13 +4829,30 @@ func main() {
 
 			var sock = new WebSocket("ws://" + window.location.host + "/websocket.ws");
 			//sock.addEventListener('open', function(e2) { sock.send( ... ) });
-			sock.onopen = function(evt) { document.getElementById("myLiveOut").textContent = "Connected."; document.getElementById("inputField").select(); liveUpdateTest(document.getElementById("inputField")); console.log("Open: ", evt); };
-			sock.onclose = function(evt) { document.getElementById("myLiveOut").textContent = "Disconnected."; console.log("Close: ", evt); };
-			sock.onmessage = function(evt) { prev_value = evt.data; document.getElementById("inputField").value = evt.data; /*console.log("Message: ", evt.data);*/ };
-			//sock.onerror = function(evt) { document.getElementById("myLiveOut").textContent += " Error: " + evt; console.log("Error: ", evt); };
+			sock.onopen = function(evt) {
+				document.getElementById("myLiveOut").textContent = "Connected.";
+				input_field = document.getElementById("inputField");
+				input_field.addEventListener('input', liveUpdateTest);
+				//input_field.select();
+				//liveUpdateTest();
+				console.log("Open: ", evt);
+			};
+			sock.onclose = function(evt) {
+				document.getElementById("myLiveOut").textContent = "Disconnected.";
+				console.log("Close: ", evt);
+			};
+			sock.onmessage = function(evt) {
+				prev_value = evt.data;
+				document.getElementById("inputField").value = evt.data;
+				//console.log("Message: ", evt.data);
+			};
+			sock.onerror = function(evt) {
+				document.getElementById("myLiveOut").textContent += " Error: " + evt;
+				console.log("Error: ", evt);
+			};
 		</script>
 
-		<textarea id="inputField" onInput="liveUpdateTest(this);" placeholder="type something..." autofocus></textarea>
+		<textarea id="inputField" placeholder="type something..." autofocus></textarea>
 		<br><br>
 		<div id="myLiveOut">Connecting...</div>
 	</body>
