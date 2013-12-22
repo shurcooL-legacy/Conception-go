@@ -1682,6 +1682,27 @@ func (w *ScrollPaneWidget) Layout() {
 	w.Widget.Layout()
 }
 
+/*func (w *ScrollPaneWidget) scrollToPoint(target mathgl.Vec2d) {
+	for i := 0; i < 2; i++ {
+		if w.child.Pos()[i]+target[i] < 0 {
+			w.child.Pos()[i] = -target[i]
+		} else if w.child.Pos()[i]+target[i] > w.size[i] {
+			w.child.Pos()[i] = w.size[i] - target[i]
+		}
+	}
+}*/
+
+func (w *ScrollPaneWidget) ScrollToArea(target, size mathgl.Vec2d) {
+	for i := 0; i < 2; i++ {
+		// Move the minimum amount that increases overlap
+		w.child.Pos()[i] += math.Min(math.Dim(-w.child.Pos()[i], target[i]), math.Dim(-w.child.Pos()[i]+w.size[i], target[i]+size[i]))
+		w.child.Pos()[i] -= math.Min(math.Dim(target[i], -w.child.Pos()[i]), math.Dim(target[i]+size[i], -w.child.Pos()[i]+w.size[i]))
+	}
+
+	// TODO: Needed?
+	//w.Layout()
+}
+
 func NearInt64(value float64) int64 {
 	if value >= 0 {
 		return int64(value + 0.5)
@@ -2272,6 +2293,13 @@ func (w *GoPackageListingPureWidget) NotifyChange() {
 }
 
 func (w *GoPackageListingPureWidget) selectionChangedTest() {
+	if w.selected != 0 {
+		// TEST
+		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+			scrollPane.ScrollToArea(mathgl.Vec2d{0, float64((w.selected - 1) * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
+		}
+	}
+
 	ExternallyUpdated(w)
 }
 
@@ -3454,6 +3482,7 @@ type TextBoxWidget struct {
 	caretPosition  CaretPosition
 	Private        Bool
 	layoutDepNode2 DepNode2Func
+	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
 
 	DiffsTest []diffmatchpatch.Diff
 	Side      int8
@@ -3473,6 +3502,17 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
 	keepUpdatedTEST = append(keepUpdatedTEST, &w.layoutDepNode2)
+
+	// TEST
+	w.scrollToCaret.UpdateFunc = func(DepNode2I) {
+		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+			expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
+
+			scrollPane.ScrollToArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
+		}
+	}
+	w.scrollToCaret.AddSources(&w.caretPosition)
+
 	return w
 }
 
@@ -3502,6 +3542,9 @@ func (w *TextBoxWidget) Layout() {
 }
 
 func (w *TextBoxWidget) Render() {
+	// TODO: Move to Layout2()
+	MakeUpdated(&w.scrollToCaret)
+
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
