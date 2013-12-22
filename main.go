@@ -293,23 +293,22 @@ func InitFont() {
 		fCharY := gl.Double(iLoop1/16) / 16.0
 
 		gl.NewList(oFontBase+gl.Uint(iLoop1), gl.COMPILE)
-		const offset = gl.Double(0.005)
+		const offset = gl.Double(0.04 / 16)
+		const shiftX, shiftY = gl.Double(0.0 / 16), gl.Double(0.0 / 16)
 		//#if DECISION_RENDER_TEXT_VCENTERED_MID
-		VerticalOffset := gl.Double(0.00125)
+		/*VerticalOffset := gl.Double(0.02 / 16)
 		if ('a' <= iLoop1 && iLoop1 <= 'z') || '_' == iLoop1 {
-			VerticalOffset = gl.Double(-0.00225)
-		}
-		/*#else
+			VerticalOffset = gl.Double(-0.036 / 16)
+		}*/
 		VerticalOffset := gl.Double(0.0)
-		//#endif*/
 		gl.Begin(gl.QUADS)
-		gl.TexCoord2d(fCharX+offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
+		gl.TexCoord2d(fCharX-shiftX+offset, 1-(1-fCharY-0.0625+shiftY+offset+VerticalOffset))
 		gl.Vertex2i(0, fontHeight)
-		gl.TexCoord2d(fCharX+0.0625-offset, 1-(1-fCharY-0.0625+offset+VerticalOffset))
+		gl.TexCoord2d(fCharX+0.0625-shiftX-offset, 1-(1-fCharY-0.0625+shiftY+offset+VerticalOffset))
 		gl.Vertex2i(fontWidth*2, fontHeight)
-		gl.TexCoord2d(fCharX+0.0625-offset, 1-(1-fCharY-offset+VerticalOffset))
+		gl.TexCoord2d(fCharX+0.0625-shiftX-offset, 1-(1-fCharY+shiftY-offset+VerticalOffset))
 		gl.Vertex2i(fontWidth*2, 0)
-		gl.TexCoord2d(fCharX+offset, 1-(1-fCharY-offset+VerticalOffset))
+		gl.TexCoord2d(fCharX-shiftX+offset, 1-(1-fCharY+shiftY-offset+VerticalOffset))
 		gl.Vertex2i(0, 0)
 		gl.End()
 		gl.Translated(fontWidth, 0.0, 0.0)
