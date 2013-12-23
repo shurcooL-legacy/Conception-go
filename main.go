@@ -4747,13 +4747,6 @@ func main() {
 			widgets[2].(*FlowLayoutWidget).Layout()
 		}*/
 
-		// NumGoroutines
-		{
-			contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
-			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
-			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
-		}
-
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 130}, &mousePointer))
@@ -5053,18 +5046,16 @@ func main() {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
 		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
-	} else if true {
-		//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{50, 0}))
-
-		// NumGoroutines
-		{
-			contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
-			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
-			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
-		}
 	}
+
 	fpsWidget := NewFpsWidget(mathgl.Vec2d{10, 120})
 	widgets = append(widgets, fpsWidget)
+	// NumGoroutines
+	{
+		contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
+		mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
+		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
+	}
 
 	//widget := NewCanvasWidget(np, widgets, nil)
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
