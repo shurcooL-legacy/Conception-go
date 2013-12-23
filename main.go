@@ -2957,7 +2957,8 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 		}
 	case reflect.Map:
 		for _, key := range v.MapKeys() {
-			widgets = append(widgets, setupInternals3(key.String(), v.MapIndex(key)))
+			addrValue := UnsafeReflectValue(v.MapIndex(key))
+			widgets = append(widgets, setupInternals3(key.String(), addrValue))
 		}
 	case reflect.Array, reflect.Slice:
 		for i := 0; i < v.Len(); i++ {
