@@ -80,7 +80,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	. "gist.github.com/7390843.git"
-	"github.com/russross/blackfriday"
+	//"github.com/russross/blackfriday"
 
 	. "gist.github.com/7480523.git"
 	//. "gist.github.com/7519227.git"
@@ -4491,7 +4491,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if true {
+	if false {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -4765,12 +4765,13 @@ func main() {
 			fmt.Fprintln(w)
 			fmt.Fprintf(w, "%#v\n", widgets)
 		})
+		http.Handle("/favicon.ico", http.NotFoundHandler())
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 
 			// HACK: Handle .go files specially, just assume they're in "./GoLand"
 			if strings.HasSuffix(r.URL.Path, ".go") {
 				w.Header().Set("Content-Type", "text/plain")
-				w.Write(MustReadFileB(filepath.Join("./GoLand/src/", r.URL.Path)))
+				w.Write(MustReadFileB(filepath.Join("../../../", r.URL.Path)))
 				return
 			}
 
@@ -4824,6 +4825,7 @@ func main() {
 						cmd := exec.Command("git", "diff", "--no-ext-diff")
 						cmd.Dir = something.Path
 						if outputBytes, err := cmd.CombinedOutput(); err == nil {
+							b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
 							b += "\n```diff\n" + string(outputBytes) + "\n```\n"
 						}
 					}
@@ -4843,7 +4845,20 @@ func main() {
 			if plain {
 				w.Write([]byte(b))
 			} else {
-				w.Write(blackfriday.MarkdownCommon([]byte(b)))
+				//w.Write(blackfriday.MarkdownCommon([]byte(b)))
+
+				// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
+				io.WriteString(w, `<html><head><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
+
+				// TODO: Do this locally via a native Go library... That's not too much to ask for, is it?
+				// Convert GitHub-Flavored-Markdown to HTML (includes syntax highlighting for diff, Go, etc.)
+				resp, err := http.Post("https://api.github.com/markdown/raw", "text/x-markdown", strings.NewReader(b))
+				CheckError(err)
+				defer resp.Body.Close()
+				_, err = io.Copy(w, resp.Body)
+				CheckError(err)
+
+				io.WriteString(w, `</article></body></html>`)
 			}
 		})
 		contentWs := NewMultilineContent()
@@ -4929,7 +4944,7 @@ func main() {
 
 		{
 			buttonTrigger := NewButtonTriggerWidget(mathgl.Vec2d{50, 30})
-			spinner.AddSources(&buttonTrigger.DepNode2Manual)
+			spinner.AddSources(buttonTrigger)
 			widgets = append(widgets, buttonTrigger)
 		}
 
@@ -5016,7 +5031,7 @@ func main() {
 				}
 				GistId, err := ParseGistId(out)
 				if err != nil {
-					return goon.SdumpExpr("Error parsing GistId.", err)
+					return goon.SdumpExpr("Error parsing GistId.", err, string(out))
 				}
 
 				// Clone the gist repo
@@ -5039,7 +5054,7 @@ func main() {
 				// Return import statement as the output
 				return ". \"gist.github.com/" + GistId + ".git\""
 			}
-			output := NewLiveGoroutineExpeWidget(np, []DepNode2I{&gistButtonTrigger.DepNode2Manual}, params, action)
+			output := NewLiveGoroutineExpeWidget(np, []DepNode2I{gistButtonTrigger}, params, action)
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{500, 10}, []Widgeter{username, password, NewTextLabelWidgetString(np, "+Gist"), gistButtonTrigger, output}, nil))
 		}
