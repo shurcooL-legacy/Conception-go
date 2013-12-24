@@ -833,14 +833,34 @@ func (this *docPackage) Update() {
 	this.dpkg = GetDocPackageAll(bpkg, nil)
 }
 
+// ---
+
+// TEST
+type NodeStringer struct {
+	ast.Node
+	str string
+}
+
+func NewNodeStringer(node ast.Node) NodeStringer {
+	return NodeStringer{Node: node, str: SprintAstBare(node)}
+}
+
+func (this *NodeStringer) String() string { return this.str }
+
+// ---
+
 type goSymbols struct {
-	entries []string
+	entries []NodeStringer
 
 	DepNode2
 }
 
-func (this *goSymbols) Get() []string {
-	return this.entries
+func (this *goSymbols) Get(index int) fmt.Stringer {
+	return &this.entries[index]
+}
+
+func (this *goSymbols) Len() int {
+	return len(this.entries)
 }
 
 func (this *goSymbols) Update() {
@@ -851,9 +871,10 @@ func (this *goSymbols) Update() {
 		return
 	}
 
-	var buf bytes.Buffer
-	FprintPackageFullSummary(&buf, dpkg)
-	this.entries = GetLines(buf.String())
+	this.entries = nil
+	for _, f := range dpkg.Funcs {
+		this.entries = append(this.entries, NewNodeStringer(f.Decl))
+	}
 }
 
 func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *ListWidget {
@@ -2311,6 +2332,11 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 
 // ---
 
+type Strings2 interface {
+	Get(int) fmt.Stringer
+	Len() int
+}
+
 // TODO: Refactor other list-like widgets to use this?
 type ListWidget struct {
 	Widget
@@ -2319,10 +2345,10 @@ type ListWidget struct {
 	DepNode2Manual            // SelectionChanged
 	layoutDepNode2     DepNode2Func
 
-	entries Strings
+	entries Strings2
 }
 
-func NewListWidget(pos mathgl.Vec2d, entries Strings) *ListWidget {
+func NewListWidget(pos mathgl.Vec2d, entries Strings2) *ListWidget {
 	w := &ListWidget{Widget: NewWidget(pos, np), entries: entries}
 
 	if _, ok := w.entries.(DepNode2I); !ok {
@@ -2334,17 +2360,18 @@ func NewListWidget(pos mathgl.Vec2d, entries Strings) *ListWidget {
 	return w
 }
 
-func (this *ListWidget) GetSelected() *string {
+func (this *ListWidget) GetSelected() fmt.Stringer {
 	if this.selected == 0 {
 		return nil
 	}
-	return &this.entries.Get()[this.selected-1]
+	return this.entries.Get(int(this.selected - 1))
 }
 
 func (w *ListWidget) NotifyChange() {
 	// TODO: Support for preserving selection
 
-	for _, entry := range w.entries.Get() {
+	for index := 0; index < w.entries.Len(); index++ {
+		entry := w.entries.Get(index).String()
 		entryLength := len(entry)
 		if entryLength > w.longestEntryLength {
 			w.longestEntryLength = entryLength
@@ -2373,10 +2400,10 @@ func (w *ListWidget) Layout() {
 	} else {
 		w.size[0] = float64(fontWidth * w.longestEntryLength)
 	}
-	if len(w.entries.Get()) == 0 {
+	if w.entries.Len() == 0 {
 		w.size[1] = float64(fontHeight * 1)
 	} else {
-		w.size[1] = float64(fontHeight * len(w.entries.Get()))
+		w.size[1] = float64(fontHeight * w.entries.Len())
 	}
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
@@ -2392,7 +2419,8 @@ func (w *ListWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	for i, entry := range w.entries.Get() {
+	for i := 0; i < w.entries.Len(); i++ {
+		entry := w.entries.Get(i).String()
 		if w.selected == uint64(i+1) {
 			if hasTypingFocus {
 				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
@@ -2432,11 +2460,11 @@ func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := GlobalToLocal(w, globalPosition)
-		if len(w.entries.Get()) > 0 {
+		if w.entries.Len() > 0 {
 			if localPosition[1] < 0 {
 				w.selected = 1
-			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(len(w.entries.Get())) {
-				w.selected = uint64(len(w.entries.Get()))
+			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(w.entries.Len()) {
+				w.selected = uint64(w.entries.Len())
 			} else {
 				w.selected = uint64((localPosition[1] / fontHeight) + 1)
 			}
@@ -2448,7 +2476,7 @@ func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if len(w.entries.Get()) > 0 {
+				if w.entries.Len() > 0 {
 					w.selected = 1
 					w.selectionChangedTest()
 				}
@@ -2460,12 +2488,12 @@ func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if len(w.entries.Get()) > 0 {
-					w.selected = uint64(len(w.entries.Get()))
+				if w.entries.Len() > 0 {
+					w.selected = uint64(w.entries.Len())
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
-				if w.selected < uint64(len(w.entries.Get())) {
+				if w.selected < uint64(w.entries.Len()) {
 					w.selected++
 					w.selectionChangedTest()
 				}
@@ -3312,8 +3340,7 @@ func (cp *CaretPosition) Move(amount int8) {
 		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
 	}
 
-	x, _ := cp.ExpandedPosition()
-	cp.targetExpandedX = x
+	cp.targetExpandedX, _ = cp.ExpandedPosition()
 
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
@@ -3363,6 +3390,14 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 
 	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 	cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+
+	ExternallyUpdated(&cp.DepNode2Manual)
+}
+
+func (cp *CaretPosition) Set(caretPosition uint32) {
+	cp.caretPosition = caretPosition
+
+	cp.targetExpandedX, _ = cp.ExpandedPosition()
 
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
@@ -3794,6 +3829,18 @@ func (w *TextBoxWidget) Render() {
 		DrawYBox(w.pos, w.size)
 	} else {
 		DrawNBox(w.pos, w.size)
+	}
+
+	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
+	if !hasTypingFocus {
+		_, caretLine := w.caretPosition.ExpandedPosition()
+
+		// Highlight line
+		gl.PushMatrix()
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		gl.Color3d(0.75, 0.75, 0.75)
+		gl.Recti(gl.Int(0), gl.Int(caretLine*fontHeight), gl.Int(w.size[0]), gl.Int(caretLine*fontHeight)+fontHeight)
+		gl.PopMatrix()
 	}
 
 	if w.DiffsTest == nil {
@@ -4819,7 +4866,9 @@ func main() {
 			scrollToSymbol.UpdateFunc = func(this DepNode2I) {
 				if entry := this.GetSources()[0].(*ListWidget).GetSelected(); entry != nil {
 					// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
-					println("selected:", *entry)
+					//println("selected:", entry.String())
+					// TODO: Make it center over the position
+					editor.caretPosition.Set(uint32(entry.(*NodeStringer).Pos()) - 1) // HACK: Accessing private field
 				}
 			}
 			scrollToSymbol.AddSources(nextTool5)
@@ -5035,8 +5084,10 @@ func main() {
 
 			importPath := r.URL.Path[1:]
 			if something := SomethingFromImportPath(importPath); something != nil {
+				// TODO: Cache this via DepNode2I
 				something.Update()
 
+				// TODO: Cache this via DepNode2I
 				dpkg := GetDocPackageAll(something.Bpkg, nil)
 
 				b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
