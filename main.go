@@ -57,6 +57,7 @@ import (
 	. "gist.github.com/4727543.git"
 
 	"go/ast"
+	"go/doc"
 	"go/parser"
 	"go/token"
 	. "gist.github.com/6445065.git"
@@ -729,7 +730,7 @@ func (t *typeCheckedPackage) Update() {
 	}
 }
 
-func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *LiveGoroutineExpeWidget {
+func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
 	typeCheckedPackage := &typeCheckedPackage{}
 	typeCheckedPackage.AddSources(goPackage, source.Content)
 
@@ -803,6 +804,66 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 	}
 
 	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{typeCheckedPackage, &source.caretPosition}, params, action)
+	return w, typeCheckedPackage
+}
+
+// ---
+
+type docPackage struct {
+	dpkg *doc.Package
+
+	DepNode2
+}
+
+func (this *docPackage) Update() {
+	goPackage := this.GetSources()[0].(*GoPackageListingPureWidget)
+
+	importPath := ""
+	if goPackage.GetSelected() != nil {
+		importPath = goPackage.GetSelected().ImportPath()
+	}
+
+	// TODO: Factor out bpkg into buildPackage DepNode2
+	bpkg, err := BuildPackageFromImportPath(importPath)
+	if err != nil {
+		this.dpkg = nil
+		return
+	}
+
+	this.dpkg = GetDocPackageAll(bpkg, nil)
+}
+
+type goSymbols struct {
+	entries []string
+
+	DepNode2
+}
+
+func (this *goSymbols) Get() []string {
+	return this.entries
+}
+
+func (this *goSymbols) Update() {
+	dpkg := this.GetSources()[0].(*docPackage).dpkg
+
+	if dpkg == nil {
+		this.entries = nil
+		return
+	}
+
+	var buf bytes.Buffer
+	FprintPackageFullSummary(&buf, dpkg)
+	this.entries = GetLines(buf.String())
+}
+
+func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *ListWidget {
+	docPackage := &docPackage{}
+	docPackage.AddSources(goPackage, source.Content)
+
+	goSymbols := &goSymbols{}
+	goSymbols.AddSources(docPackage)
+
+	w := NewListWidget(np, goSymbols)
 	return w
 }
 
@@ -2246,6 +2307,171 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 	}
 
 	return -1
+}
+
+// ---
+
+// TODO: Refactor other list-like widgets to use this?
+type ListWidget struct {
+	Widget
+	longestEntryLength int
+	selected           uint64 // 0 is unselected, else index+1 is selected
+	DepNode2Manual            // SelectionChanged
+	layoutDepNode2     DepNode2Func
+
+	entries Strings
+}
+
+func NewListWidget(pos mathgl.Vec2d, entries Strings) *ListWidget {
+	w := &ListWidget{Widget: NewWidget(pos, np), entries: entries}
+
+	if _, ok := w.entries.(DepNode2I); !ok {
+		panic("entries doesn't implement DepNode2I, but ListWidget requires it to") // TODO: Move this into compile-time verification by using an interface that implements DepNode2I
+	}
+	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
+	w.layoutDepNode2.AddSources(entries.(DepNode2I)) // TODO: What about removing w when it's "deleted"?
+
+	return w
+}
+
+func (this *ListWidget) GetSelected() *string {
+	if this.selected == 0 {
+		return nil
+	}
+	return &this.entries.Get()[this.selected-1]
+}
+
+func (w *ListWidget) NotifyChange() {
+	// TODO: Support for preserving selection
+
+	for _, entry := range w.entries.Get() {
+		entryLength := len(entry)
+		if entryLength > w.longestEntryLength {
+			w.longestEntryLength = entryLength
+		}
+	}
+
+	w.Layout()
+
+	w.NotifyAllListeners()
+}
+
+func (w *ListWidget) selectionChangedTest() {
+	if w.selected != 0 {
+		// TEST
+		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+			scrollPane.ScrollToArea(mathgl.Vec2d{0, float64((w.selected - 1) * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
+		}
+	}
+
+	ExternallyUpdated(w)
+}
+
+func (w *ListWidget) Layout() {
+	if w.longestEntryLength < 3 {
+		w.size[0] = float64(fontWidth * 3)
+	} else {
+		w.size[0] = float64(fontWidth * w.longestEntryLength)
+	}
+	if len(w.entries.Get()) == 0 {
+		w.size[1] = float64(fontHeight * 1)
+	} else {
+		w.size[1] = float64(fontHeight * len(w.entries.Get()))
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *ListWidget) Render() {
+	// TODO: Move to Layout2()
+	MakeUpdated(&w.layoutDepNode2)
+
+	DrawNBox(w.pos, w.size)
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	for i, entry := range w.entries.Get() {
+		if w.selected == uint64(i+1) {
+			if hasTypingFocus {
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				gl.Color3d(1, 1, 1)
+			} else {
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				gl.Color3d(0, 0, 0)
+			}
+		} else {
+			gl.Color3d(0, 0, 0)
+		}
+
+		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), entry)
+	}
+}
+
+func (w *ListWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		keyboardPointer.OriginMapping = []Widgeter{w}
+	}
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
+		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		localPosition := GlobalToLocal(w, globalPosition)
+		if len(w.entries.Get()) > 0 {
+			if localPosition[1] < 0 {
+				w.selected = 1
+			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(len(w.entries.Get())) {
+				w.selected = uint64(len(w.entries.Get()))
+			} else {
+				w.selected = uint64((localPosition[1] / fontHeight) + 1)
+			}
+			w.selectionChangedTest()
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyUp:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries.Get()) > 0 {
+					w.selected = 1
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected > 1 {
+					w.selected--
+					w.selectionChangedTest()
+				}
+			}
+		case glfw.KeyDown:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries.Get()) > 0 {
+					w.selected = uint64(len(w.entries.Get()))
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected < uint64(len(w.entries.Get())) {
+					w.selected++
+					w.selectionChangedTest()
+				}
+			}
+		}
+	}
 }
 
 // ---
@@ -4491,7 +4717,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if false {
+	if true {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -4574,12 +4800,34 @@ func main() {
 
 			// ---
 
-			nextTool3 := NewTest4Widget(np, goPackageListing, editor)
+			nextTool3, typeCheckedPackage := NewTest4Widget(np, goPackageListing, editor)
 			nextTool3Collapsible := NewCollapsibleWidget(np, nextTool3)
+
+			// ---
+
+			// DEBUG: Goon widget of typeCheckedPackage
+			nextTool4 := NewCompositeWidget(np, mathgl.Vec2d{100000, 100000}, []Widgeter{NewGoonWidget(mathgl.Vec2d{20, 0}, typeCheckedPackage)})
+			nextTool4Collapsible := NewCollapsibleWidget(np, nextTool4)
+
+			// ---
+
+			nextTool5 := NewTest5Widget(np, goPackageListing, editor)
+			//nextTool5 := NewListWidget(np, []string{"blah", "blah 2", "blah 3"})
+			nextTool5Collapsible := NewCollapsibleWidget(np, nextTool5)
+
+			scrollToSymbol := DepNode2Func{}
+			scrollToSymbol.UpdateFunc = func(this DepNode2I) {
+				if entry := this.GetSources()[0].(*ListWidget).GetSelected(); entry != nil {
+					// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
+					println("selected:", *entry)
+				}
+			}
+			scrollToSymbol.AddSources(nextTool5)
+			keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbol)
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
