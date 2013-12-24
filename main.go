@@ -875,6 +875,14 @@ func (this *goSymbols) Update() {
 	for _, f := range dpkg.Funcs {
 		this.entries = append(this.entries, NewNodeStringer(f.Decl))
 	}
+	for _, t := range dpkg.Types {
+		for _, f := range t.Funcs {
+			this.entries = append(this.entries, NewNodeStringer(f.Decl))
+		}
+		for _, m := range t.Methods {
+			this.entries = append(this.entries, NewNodeStringer(m.Decl))
+		}
+	}
 }
 
 func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *ListWidget {
