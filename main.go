@@ -1793,6 +1793,15 @@ func (w *ScrollPaneWidget) ScrollToArea(target, size mathgl.Vec2d) {
 	//w.Layout()
 }
 
+func (w *ScrollPaneWidget) CenterOnArea(target, size mathgl.Vec2d) {
+	for i := 0; i < 2; i++ {
+		w.child.Pos()[i] = -(target[i] + size[i]/2) + w.size[i]/2
+	}
+
+	// This is needed to normalize the view area, as the above potentially places the viewport outside of the widget
+	w.Layout()
+}
+
 func NearInt64(value float64) int64 {
 	if value >= 0 {
 		return int64(value + 0.5)
@@ -3786,6 +3795,17 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 	return w
 }
 
+func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
+	w.caretPosition.Set(caretPosition)
+
+	// HACK: This kinda conflicts with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+		expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
+
+		scrollPane.CenterOnArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
+	}
+}
+
 func (w *TextBoxWidget) NotifyChange() {
 	if w.caretPosition.caretPosition > uint32(len(w.Content.Content())) {
 		w.caretPosition.Move(+3)
@@ -4876,7 +4896,7 @@ func main() {
 					// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
 					//println("selected:", entry.String())
 					// TODO: Make it center over the position
-					editor.caretPosition.Set(uint32(entry.(*NodeStringer).Pos()) - 1) // HACK: Accessing private field
+					editor.CenterOnCaretPosition(uint32(entry.(*NodeStringer).Pos()) - 1)
 				}
 			}
 			scrollToSymbol.AddSources(nextTool5)
