@@ -2177,17 +2177,23 @@ type actionNode struct {
 }
 
 func (this *actionNode) Update() {
-	this.owner.lastStartedT++
-	ti := this.owner.lastStartedT
+	// TODO: See if it's possible to have a _general_ solution to EOL goroutines whose work has become obsolete
+	// In order not to overload the system, only start a new goroutine if all others have finished
+	if this.owner.lastStartedT == this.owner.lastFinishedT {
+		this.owner.lastStartedT++
+		ti := this.owner.lastStartedT
 
-	//this.owner.Content.Set(this.action()); _ = ti
-	go func(params interface{}) {
-		//defer close(outChan)
-		//started := time.Now()
-		ts := timestampString{this.action(params), ti}
-		//fmt.Println(time.Since(started).Seconds())
-		this.owner.outChan <- ts
-	}(this.params())
+		//this.owner.Content.Set(this.action()); _ = ti
+		go func(params interface{}) {
+			//defer close(outChan)
+			//started := time.Now()
+			ts := timestampString{this.action(params), ti}
+			//fmt.Println(time.Since(started).Seconds())
+			this.owner.outChan <- ts
+		}(this.params())
+	} else {
+		// TODO: Make the update happen later, once the current goroutine is done?
+	}
 }
 
 type timestampString struct {
@@ -4870,7 +4876,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if false {
+	if true {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
