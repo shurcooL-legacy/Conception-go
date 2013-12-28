@@ -136,7 +136,13 @@ var goCompileErrorsManagerTest GoCompileErrorsManagerTest
 var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 
 // Colors
-var darkColor = mathgl.Vec3d{0.35, 0.35, 0.35}
+var (
+	veryLightColor = mathgl.Vec3d{0.95, 0.95, 0.95}
+	darkColor      = mathgl.Vec3d{0.35, 0.35, 0.35}
+
+	blackColor     = mathgl.Vec3d{0, 0, 0}
+	highlightColor = mathgl.Vec3d{0.898, 0.765, 0.396}
+)
 
 // TODO: Remove these
 var globalWindow *glfw.Window
@@ -1232,6 +1238,76 @@ func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
+type WindowWidget struct {
+	Widget
+	chrome *CompositeWidget
+	Name   string
+}
+
+func NewWindowWidget(pos, size mathgl.Vec2d) *WindowWidget {
+	closeButton := NewButtonWidget(np, nil)
+	w := &WindowWidget{Widget: NewWidget(pos, size), chrome: NewCompositeWidget(np, np, []Widgeter{closeButton})}
+	w.chrome.SetParent(w)
+	closeButton.setAction(func() { w.pos[0] -= 100 })
+	return w
+}
+
+func (w *WindowWidget) Render() {
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	DrawNBox(w.pos, w.size)
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, veryLightColor)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		DrawBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, veryLightColor)
+	} else {
+		DrawBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, veryLightColor)
+	}
+
+	// Title
+	gl.Color3dv((*gl.Double)(&blackColor[0]))
+	PrintSegment(w.pos.Add(mathgl.Vec2d{60}), w.Name)
+
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+	w.chrome.Render()
+}
+func (w *WindowWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	Hit := (LocalPosition[0] >= 0 &&
+		LocalPosition[1] >= 0 &&
+		LocalPosition[0] <= w.size[0] &&
+		LocalPosition[1] <= fontHeight)
+
+	if Hit {
+		hits := []Widgeter{w}
+		hits = append(hits, w.chrome.Hit(LocalPosition)...)
+		return hits
+	} else {
+		return nil
+	}
+}
+
+func (w *WindowWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) && (inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 0) {
+		w.pos[0] += inputEvent.Sliders[0]
+		w.pos[1] += inputEvent.Sliders[1]
+	}
+}
+
+// ---
+
 func (widgets *Widgeters) ContainsWidget(targetWidget Widgeter) bool {
 	for _, widget := range mousePointer.Mapping {
 		if widget == targetWidget {
@@ -1257,10 +1333,10 @@ func DrawNBox(pos, size mathgl.Vec2d) {
 	DrawBox(pos, size, mathgl.Vec3d{0.3, 0.3, 0.3}, mathgl.Vec3d{1, 1, 1})
 }
 func DrawYBox(pos, size mathgl.Vec2d) {
-	DrawBox(pos, size, mathgl.Vec3d{0.898, 0.765, 0.396}, mathgl.Vec3d{1, 1, 1})
+	DrawBox(pos, size, highlightColor, mathgl.Vec3d{1, 1, 1})
 }
 func DrawGBox(pos, size mathgl.Vec2d) {
-	DrawBox(pos, size, mathgl.Vec3d{0.898, 0.765, 0.396}, mathgl.Vec3d{0.75, 0.75, 0.75})
+	DrawBox(pos, size, highlightColor, mathgl.Vec3d{0.75, 0.75, 0.75})
 }
 func DrawLGBox(pos, size mathgl.Vec2d) {
 	DrawBox(pos, size, mathgl.Vec3d{0.6, 0.6, 0.6}, mathgl.Vec3d{0.95, 0.95, 0.95})
@@ -1358,7 +1434,7 @@ func (w *KatWidget) Render() {
 	if !hasTypingFocus && !isHit {
 		DrawCircle(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, mathgl.Vec3d{1, 1, 1})
 	} else {
-		DrawCircle(w.pos, w.size, mathgl.Vec3d{0.898, 0.765, 0.396}, mathgl.Vec3d{1, 1, 1})
+		DrawCircle(w.pos, w.size, highlightColor, mathgl.Vec3d{1, 1, 1})
 	}*/
 
 	// Shadow
@@ -4146,11 +4222,11 @@ func (w *TextBoxValidationWidget) Render() {
 
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawBox(w.pos, w.size, mathgl.Vec3d{0.898, 0.765, 0.396}, background)
+		DrawBox(w.pos, w.size, highlightColor, background)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawBox(w.pos, w.size, mathgl.Vec3d{0.898, 0.765, 0.396}, background)
+		DrawBox(w.pos, w.size, highlightColor, background)
 	} else if hasTypingFocus {
-		DrawBox(w.pos, w.size, mathgl.Vec3d{0.898, 0.765, 0.396}, background)
+		DrawBox(w.pos, w.size, highlightColor, background)
 	} else {
 		DrawBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, background)
 	}
@@ -4794,7 +4870,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if true {
+	if false {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -5387,6 +5463,14 @@ func main() {
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{500, 10}, []Widgeter{username, password, NewTextLabelWidgetString(np, "+Gist"), gistButtonTrigger, output}, nil))
 		}
+
+		// Sample Window widget
+		{
+			w := NewWindowWidget(mathgl.Vec2d{500, 400}, mathgl.Vec2d{200, 140})
+			w.Name = "Sample Window"
+			widgets = append(widgets, w)
+		}
+
 	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
