@@ -796,6 +796,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 			return "fileAst == null, caretPos == token.NoPos"
 		}
 
+		// TODO: Remove after some time, to ensure ast.Inspect() returns same results...
 		query := func(i interface{}) bool {
 			if f, ok := i.(ast.Node); ok && (f.Pos() <= caretPos && caretPos <= f.End()) {
 				return true
@@ -804,23 +805,38 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 		}
 		found := FindAll(fileAst, query)
 
-		if len(found) == 0 {
+		var found2 []ast.Node
+		ast.Inspect(fileAst, func(n ast.Node) bool {
+			if n != nil && n.Pos() <= caretPos && caretPos <= n.End() {
+				found2 = append(found2, n)
+				return true
+			}
+			return false
+		})
+
+		// TODO: Remove after some time, to ensure ast.Inspect() returns same results...
+		if len(found) != len(found2) {
+			fmt.Printf("%+v\n%+v\n", found, found2)
+			panic("found vs. found2 diff")
+		}
+		for _, v := range found2 {
+			if !found[v] {
+				fmt.Printf("%+v\n%+v\n", found, found2)
+				panic("found vs. found2 diff")
+			}
+		}
+
+		if len(found2) == 0 {
 			return ""
 		}
 		out := ""
-		smallest := uint64(math.MaxUint64)
-		var smallestV interface{}
-		for v := range found {
-			size := uint64(v.(ast.Node).End() - v.(ast.Node).Pos())
-			if size < smallest {
-				smallestV = v
-				smallest = size
-			}
-
-			out += fmt.Sprintf("%T %d-%d [%d]\n", v, v.(ast.Node).Pos()-1, v.(ast.Node).End()-1, size)
+		smallestV := found2[len(found2)-1]
+		for _, v := range found2 {
+			size := v.End() - v.Pos()
+			out += fmt.Sprintf("%T %d-%d [%d]\n", v, v.Pos()-1, v.End()-1, size)
 		}
 		out += "\n"
-		out += fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
+		out += fmt.Sprintf("%d-%d, ", smallestV.Pos()-1, smallestV.End()-1)
 		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
 		out += SprintAst(fset, smallestV) + "\n\n"
 
