@@ -601,7 +601,7 @@ func (w *Test2Widget) ProcessEvent(inputEvent InputEvent) {
 // ---
 
 type parsedFile struct {
-	fs      *token.FileSet
+	fset    *token.FileSet
 	fileAst *ast.File
 
 	DepNode2
@@ -609,19 +609,19 @@ type parsedFile struct {
 
 func (t *parsedFile) Update() {
 	source := t.GetSources()[0].(MultilineContentI)
-	fs := token.NewFileSet()
-	fileAst, err := parser.ParseFile(fs, "", source.Content(), 1*parser.ParseComments)
+	fset := token.NewFileSet()
+	fileAst, err := parser.ParseFile(fset, "", source.Content(), 1*parser.ParseComments)
 
 	{
 		//fileAst.Decls[0].(*ast.GenDecl).Specs = append(fileAst.Decls[0].(*ast.GenDecl).Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"yay/new/import"`}})
-		astutil.AddImport(fs, fileAst, "yay/new/import")
+		astutil.AddImport(fset, fileAst, "yay/new/import")
 	}
 
 	if err == nil {
-		t.fs = fs
+		t.fset = fset
 		t.fileAst = fileAst
 	} else {
-		t.fs = nil
+		t.fset = nil
 		t.fileAst = nil
 	}
 }
@@ -633,14 +633,14 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 	params := func() interface{} {
 		return []interface{}{
 			source.caretPosition.Logical(),
-			parsedFile.fs,
+			parsedFile.fset,
 			parsedFile.fileAst,
 		}
 	}
 
 	action := func(params interface{}) string {
 		index := params.([]interface{})[0].(uint32)
-		fs := params.([]interface{})[1].(*token.FileSet)
+		fset := params.([]interface{})[1].(*token.FileSet)
 		fileAst := params.([]interface{})[2].(*ast.File)
 
 		query := func(i interface{}) bool {
@@ -665,7 +665,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 		}
 		out := fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
 		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
-		out += SprintAst(fs, smallestV) + "\n\n"
+		out += SprintAst(fset, smallestV) + "\n\n"
 
 		// This is can be huge if ran on root AST node of large Go files, so don't
 		if _, huge := smallestV.(*ast.File); !huge {
@@ -771,21 +771,21 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 	action := func(params interface{}) string {
 		index := params.([]interface{})[0].(uint32)
 		fileUri := params.([]interface{})[1].(string)
-		fs := params.([]interface{})[2].(*token.FileSet)
+		fset := params.([]interface{})[2].(*token.FileSet)
 		files := params.([]interface{})[3].([]*ast.File)
 		//tpkg := typeCheckedPackage.tpkg
 		info := params.([]interface{})[4].(*types.Info)
 
-		if fs == nil {
+		if fset == nil {
 			return "fs == nil"
 		}
 
 		// Figure out the file index and token.Pos of caret in that file
 		var fileAst *ast.File
 		var caretPos token.Pos
-		fs.Iterate(func(file *token.File) bool {
+		fset.Iterate(func(file *token.File) bool {
 			if fileUri == "file://"+file.Name() {
-				fileAst = FindFileAst(fs, file, files)
+				fileAst = FindFileAst(fset, file, files)
 				caretPos = file.Pos(int(index))
 				return false
 			}
@@ -822,7 +822,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 		out += "\n"
 		out += fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
 		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
-		out += SprintAst(fs, smallestV) + "\n\n"
+		out += SprintAst(fset, smallestV) + "\n\n"
 
 		if ident, ok := smallestV.(*ast.Ident); ok {
 			Test4WidgetIdent = ident // HACK
