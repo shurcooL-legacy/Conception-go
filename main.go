@@ -744,13 +744,24 @@ func (t *typeCheckedPackage) Update() {
 // HACK
 var Test4WidgetIdent *ast.Ident
 
+func FindFileAst(fset *token.FileSet, file *token.File, fileAsts []*ast.File) *ast.File {
+	for _, f := range fileAsts {
+		if fset.File(f.Package) == file {
+			return f
+		}
+	}
+	return nil
+}
+
 func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
 	typeCheckedPackage := &typeCheckedPackage{}
 	typeCheckedPackage.AddSources(goPackage, source.Content)
 
 	params := func() interface{} {
+		fileUri, _ := source.Content.GetUriForProtocol("file://")
 		return []interface{}{
 			source.caretPosition.Logical(),
+			fileUri,
 			typeCheckedPackage.fset,
 			typeCheckedPackage.files,
 			typeCheckedPackage.info,
@@ -759,18 +770,34 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 
 	action := func(params interface{}) string {
 		index := params.([]interface{})[0].(uint32)
-		fs := params.([]interface{})[1].(*token.FileSet)
-		files := params.([]interface{})[2].([]*ast.File)
+		fileUri := params.([]interface{})[1].(string)
+		fs := params.([]interface{})[2].(*token.FileSet)
+		files := params.([]interface{})[3].([]*ast.File)
 		//tpkg := typeCheckedPackage.tpkg
-		info := params.([]interface{})[3].(*types.Info)
+		info := params.([]interface{})[4].(*types.Info)
 
-		if len(files) == 0 {
-			return ""
+		if fs == nil {
+			return "fs == nil"
 		}
-		fileAst := files[0] // HACK: Use first file...
+
+		// Figure out the file index and token.Pos of caret in that file
+		var fileAst *ast.File
+		var caretPos token.Pos
+		fs.Iterate(func(file *token.File) bool {
+			if fileUri == "file://"+file.Name() {
+				fileAst = FindFileAst(fs, file, files)
+				caretPos = file.Pos(int(index))
+				return false
+			}
+			return true
+		})
+
+		if fileAst == nil {
+			return "fileAst == null, caretPos == token.NoPos"
+		}
 
 		query := func(i interface{}) bool {
-			if f, ok := i.(ast.Node); ok && (uint32(f.Pos())-1 <= index && index <= uint32(f.End())-1) {
+			if f, ok := i.(ast.Node); ok && (f.Pos() <= caretPos && caretPos <= f.End()) {
 				return true
 			}
 			return false
