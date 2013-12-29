@@ -5031,7 +5031,17 @@ func main() {
 								if inputEvent.ModifierKey == glfw.ModSuper|glfw.ModAlt {
 									if Test4WidgetIdent != nil && Test4WidgetIdent.Obj != nil {
 										if declNode, ok := Test4WidgetIdent.Obj.Decl.(ast.Node); ok {
-											editor.CenterOnCaretPosition(uint32(declNode.Pos()) - 1)
+											if file := typeCheckedPackage.fset.File(declNode.Pos()); file != nil {
+												/*// TEST, HACK: Externally change folderListing selection
+												goFileListing := folderListing.flow.Widgets[0].(*FolderListingPureWidget)
+												for _, entry := range goFileListing.entries {
+													if strings.HasSuffix(file.Name(), entry.Name()) {
+														println(entry.Name())
+													}
+												}*/
+
+												editor.CenterOnCaretPosition(uint32(file.Offset(declNode.Pos())))
+											}
 										}
 									}
 								}
