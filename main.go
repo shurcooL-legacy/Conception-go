@@ -516,10 +516,15 @@ func GlobalToLocal(w Widgeter, GlobalPosition mathgl.Vec2d) (LocalPosition mathg
 
 // ---
 
-/*func NewSpacerWidget(size mathgl.Vec2d) *Widget {
-	w := NewWidget(np, size)
-	return &w
-}*/
+type CustomWidget struct {
+	Widget
+	ProcessEventFunc func(inputEvent InputEvent)
+}
+
+func (this *CustomWidget) ProcessEvent(inputEvent InputEvent) {
+	// TODO: Handle nil?
+	this.ProcessEventFunc(inputEvent)
+}
 
 // ---
 
@@ -736,6 +741,9 @@ func (t *typeCheckedPackage) Update() {
 	}
 }
 
+// HACK
+var Test4WidgetIdent *ast.Ident
+
 func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
 	typeCheckedPackage := &typeCheckedPackage{}
 	typeCheckedPackage.AddSources(goPackage, source.Content)
@@ -790,6 +798,8 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 		out += SprintAst(fs, smallestV) + "\n\n"
 
 		if ident, ok := smallestV.(*ast.Ident); ok {
+			Test4WidgetIdent = ident // HACK
+
 			if info != nil && info.Objects[ident] != nil {
 				obj := info.Objects[ident]
 				out += TypeChainString(obj.Type())
@@ -3845,8 +3855,11 @@ type TextBoxWidget struct {
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
 
+	// TESTS
 	DiffsTest []diffmatchpatch.Diff
 	Side      int8
+
+	ExtensionsTest []Widgeter
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -4044,6 +4057,10 @@ func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	}
 }
 func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
+	for _, extension := range w.ExtensionsTest {
+		extension.ProcessEvent(inputEvent)
+	}
+
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
@@ -4975,6 +4992,28 @@ func main() {
 			// DEBUG: Goon widget of typeCheckedPackage
 			nextTool4 := NewCompositeWidget(np, mathgl.Vec2d{100000, 100000}, []Widgeter{NewGoonWidget(mathgl.Vec2d{20, 0}, typeCheckedPackage)})
 			nextTool4Collapsible := NewCollapsibleWidget(np, nextTool4)
+
+			// TEST: Add goto declaration extension to editor
+			{
+				gotoDecl := &CustomWidget{
+					Widget: NewWidget(np, np),
+					ProcessEventFunc: func(inputEvent InputEvent) {
+						if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+							switch glfw.Key(inputEvent.InputId) {
+							case glfw.KeyDown:
+								if inputEvent.ModifierKey == glfw.ModSuper|glfw.ModAlt {
+									if Test4WidgetIdent != nil && Test4WidgetIdent.Obj != nil {
+										if declNode, ok := Test4WidgetIdent.Obj.Decl.(ast.Node); ok {
+											editor.CenterOnCaretPosition(uint32(declNode.Pos()) - 1)
+										}
+									}
+								}
+							}
+						}
+					},
+				}
+				editor.ExtensionsTest = append(editor.ExtensionsTest, gotoDecl)
+			}
 
 			// ---
 
