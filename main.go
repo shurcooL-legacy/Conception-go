@@ -4720,10 +4720,17 @@ func main() {
 			panic(fmt.Sprintf("glfw.ErrorCallback: %v: %v\n", err, desc))
 		})
 
+		// Verify the GLFW library and header versions match
+		{
+			major, minor, revision := glfw.GetVersion()
+			match := (major == glfw.VersionMajor && minor == glfw.VersionMinor && revision == glfw.VersionRevision)
+			if !match {
+				panic("Error: GLFW library and header versions do not match.")
+			}
+		}
 		if !glfw.Init() {
 			panic("glfw.Init()")
 		}
-		fmt.Printf("glfw %d.%d.%d; ", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision)
 		defer glfw.Terminate()
 
 		//glfw.WindowHint(glfw.Samples, 32) // Anti-aliasing
@@ -4738,7 +4745,8 @@ func main() {
 		if nil != err {
 			log.Print(err)
 		}
-		fmt.Println(gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
+		fmt.Printf("glfw %d.%d.%d; %s %s %s\n", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision,
+			gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
 
 		{
 			m, err := glfw.GetPrimaryMonitor()
