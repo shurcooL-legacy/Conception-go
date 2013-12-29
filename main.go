@@ -745,9 +745,9 @@ func (t *typeCheckedPackage) Update() {
 var Test4WidgetIdent *ast.Ident
 
 func FindFileAst(fset *token.FileSet, file *token.File, fileAsts []*ast.File) *ast.File {
-	for _, f := range fileAsts {
-		if fset.File(f.Package) == file {
-			return f
+	for _, fileAst := range fileAsts {
+		if fset.File(fileAst.Package) == file {
+			return fileAst
 		}
 	}
 	return nil
@@ -777,7 +777,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 		info := params.([]interface{})[4].(*types.Info)
 
 		if fset == nil {
-			return "fs == nil"
+			return "fset == nil"
 		}
 
 		// Figure out the file index and token.Pos of caret in that file
