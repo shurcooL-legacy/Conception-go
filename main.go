@@ -4392,17 +4392,24 @@ func NewTextFieldWidget(pos mathgl.Vec2d) *TextFieldWidget {
 	return &TextFieldWidget{NewWidget(pos, mathgl.Vec2d{0, 0}), "", 0}
 }
 
-func (w *TextFieldWidget) Render() {
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
-
-	// HACK: Setting the widget size in Render() is bad, because all the input calculations will fail before it's rendered
+func (w *TextFieldWidget) Layout() {
 	if len(w.Content) < 3 {
 		w.size[0] = float64(fontWidth * 3)
 	} else {
 		w.size[0] = float64(fontWidth * len(w.Content))
 	}
 	w.size[1] = fontHeight
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *TextFieldWidget) Render() {
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+
+	// HACK: Setting the widget size in Render() is bad, because all the input calculations will fail before it's rendered
+	w.Layout()
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
