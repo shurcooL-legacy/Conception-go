@@ -5105,12 +5105,12 @@ func main() {
 							switch glfw.Key(inputEvent.InputId) {
 							case glfw.KeyDown:
 								if inputEvent.ModifierKey == glfw.ModSuper|glfw.ModAlt {
-									if Test4WidgetIdent != nil && Test4WidgetIdent.Obj != nil {
-										if declNode, ok := Test4WidgetIdent.Obj.Decl.(ast.Node); ok {
-											if file := typeCheckedPackage.fset.File(declNode.Pos()); file != nil {
+									if Test4WidgetIdent != nil && typeCheckedPackage.info != nil {
+										if obj := typeCheckedPackage.info.Objects[Test4WidgetIdent]; obj != nil {
+											if file := typeCheckedPackage.fset.File(obj.Pos()); file != nil {
 												// TODO: Change folderListing selection if it's in a different file
 
-												editor.CenterOnCaretPosition(uint32(file.Offset(declNode.Pos())))
+												editor.CenterOnCaretPosition(uint32(file.Offset(obj.Pos())))
 											}
 										}
 									}
