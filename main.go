@@ -1358,10 +1358,10 @@ type WindowWidget struct {
 }
 
 func NewWindowWidget(pos, size mathgl.Vec2d) *WindowWidget {
-	closeButton := NewButtonWidget(np, nil)
-	w := &WindowWidget{Widget: NewWidget(pos, size), chrome: NewCompositeWidget(np, np, []Widgeter{closeButton})}
+	w := &WindowWidget{Widget: NewWidget(pos, size)}
+	closeButton := NewButtonWidget(np, func() { w.pos[0] -= 100 })
+	w.chrome = NewCompositeWidget(np, np, []Widgeter{closeButton})
 	w.chrome.SetParent(w)
-	closeButton.setAction(func() { w.pos[0] -= 100 })
 	return w
 }
 
