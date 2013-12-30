@@ -4396,13 +4396,13 @@ func (w *TextFieldWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
+	// HACK: Setting the widget size in Render() is bad, because all the input calculations will fail before it's rendered
 	if len(w.Content) < 3 {
-		w.size[0] = float64(8 * 3)
+		w.size[0] = float64(fontWidth * 3)
 	} else {
-		w.size[0] = float64(8 * len(w.Content))
+		w.size[0] = float64(fontWidth * len(w.Content))
 	}
-	w.size[1] = 16
+	w.size[1] = fontHeight
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
@@ -4434,7 +4434,7 @@ func (w *TextFieldWidget) Render() {
 		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Color3d(0, 0, 0)
-		gl.Recti(gl.Int(w.CaretPosition*8-1), 0, gl.Int(w.CaretPosition*8+1), 16)
+		gl.Recti(gl.Int(w.CaretPosition*fontWidth-1), 0, gl.Int(w.CaretPosition*fontWidth+1), 16)
 	}
 }
 func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -4458,12 +4458,14 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
-		if inputEvent.Pointer.State.Axes[0]-w.pos[0] < 0 {
+		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		localPosition := GlobalToLocal(w, globalPosition)
+		if localPosition[0] < 0 {
 			w.CaretPosition = 0
-		} else if inputEvent.Pointer.State.Axes[0]-w.pos[0] > float64(len(w.Content)*8) {
+		} else if localPosition[0] > float64(len(w.Content)*fontWidth) {
 			w.CaretPosition = uint32(len(w.Content))
 		} else {
-			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0] - w.pos[0] + 4) / 8)
+			w.CaretPosition = uint32((localPosition[0] + fontWidth*0.5) / fontWidth)
 		}
 	}
 
@@ -4524,13 +4526,13 @@ func (w *MetaTextFieldWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	// HACK: Setting the widget size in Render() is a bad, because all the input calculations will fail before it's rendered
+	// HACK: Setting the widget size in Render() is bad, because all the input calculations will fail before it's rendered
 	if len(w.Content) < 3 {
-		w.size[0] = float64(8 * 3)
+		w.size[0] = float64(fontWidth * 3)
 	} else {
-		w.size[0] = float64(8 * len(w.Content))
+		w.size[0] = float64(fontWidth * len(w.Content))
 	}
-	w.size[1] = 16
+	w.size[1] = fontHeight
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
