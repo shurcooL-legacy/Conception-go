@@ -858,8 +858,9 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 			out += fmt.Sprintf("%T %d-%d [%d]\n", v, v.Pos()-1, v.End()-1, size)
 		}
 		out += "\n"
-		out += fmt.Sprintf("%d-%d, ", smallestV.Pos()-1, smallestV.End()-1)
-		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
+
+		out += fmt.Sprintf("%d-%d, %p, %T\n\n", smallestV.Pos()-1, smallestV.End()-1, smallestV, smallestV)
+
 		out += SprintAst(fset, smallestV) + "\n\n"
 
 		if ident, ok := smallestV.(*ast.Ident); ok {
@@ -991,6 +992,8 @@ func (this *goSymbolsB) Update() {
 		return
 	}
 
+	// Mimic doc.Package functionality, but stack it on top of types.Package rather than a duplicated ast.Package
+	// https://code.google.com/p/go/source/browse/src/pkg/go/doc/reader.go?name=release#456
 	this.entries = nil
 	for _, fileAst := range files {
 		for _, decl := range fileAst.Decls {
