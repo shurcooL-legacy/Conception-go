@@ -5121,24 +5121,6 @@ func main() {
 
 			// ---
 
-			nextTool5 := NewTest5Widget(np, goPackageListing, editor)
-			//nextTool5 := NewListWidget(np, []string{"blah", "blah 2", "blah 3"})
-			nextTool5Collapsible := NewCollapsibleWidget(np, nextTool5)
-
-			scrollToSymbol := DepNode2Func{}
-			scrollToSymbol.UpdateFunc = func(this DepNode2I) {
-				if entry := this.GetSources()[0].(*ListWidget).GetSelected(); entry != nil {
-					// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
-					//println("selected:", entry.String())
-					// TODO: Make it center over the position
-					editor.CenterOnCaretPosition(uint32(entry.(*NodeStringer).Pos()) - 1)
-				}
-			}
-			scrollToSymbol.AddSources(nextTool5)
-			keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbol)
-
-			// ---
-
 			nextTool5B := NewTest5BWidget(np, typeCheckedPackage)
 			nextTool5BCollapsible := NewCollapsibleWidget(np, nextTool5B)
 
@@ -5177,7 +5159,7 @@ func main() {
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5Collapsible, nextTool5BCollapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
