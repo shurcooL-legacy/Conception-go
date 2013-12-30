@@ -1007,11 +1007,11 @@ func (this *goSymbolsB) Update() {
 	}
 }
 
-func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) *ListWidget {
+func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) *SearchableListWidget {
 	goSymbols := &goSymbolsB{}
 	goSymbols.AddSources(typeCheckedPackage)
 
-	w := NewListWidget(np, goSymbols)
+	w := NewSearchableListWidget(np, goSymbols)
 	return w
 }
 
@@ -2544,6 +2544,50 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 
 // ---
 
+type Selecter interface {
+	GetSelected() fmt.Stringer
+}
+
+type SearchableListWidget struct {
+	*CompositeWidget
+}
+
+func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableListWidget {
+	searchField := NewTextFieldWidget(np)
+	listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
+
+	w := &SearchableListWidget{NewCompositeWidget(pos, np, []Widgeter{searchField, listWidget})}
+
+	return w
+}
+
+func (w *SearchableListWidget) OnSelectionChanged() DepNode2ManualI {
+	return w.CompositeWidget.Widgets[1].(*ListWidget)
+}
+
+func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && // TODO: GetHoverer() // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { // TODO: GetHoverer() // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		// HACK: Temporarily set both widgets as mapping here
+		keyboardPointer.OriginMapping = w.CompositeWidget.Widgets
+	}
+}
+
+func (w *SearchableListWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		hits := []Widgeter{w}
+		hits = append(hits, w.CompositeWidget.Hit(ParentPosition)...)
+		return hits
+	} else {
+		return nil
+	}
+}
+
+// ---
+
 type Strings2 interface {
 	Get(int) fmt.Stringer
 	Len() int
@@ -2628,8 +2672,8 @@ func (w *ListWidget) Render() {
 
 	DrawNBox(w.pos, w.size)
 
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	for i := 0; i < w.entries.Len(); i++ {
 		entry := w.entries.Get(i).String()
@@ -2662,11 +2706,13 @@ func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		keyboardPointer.OriginMapping = []Widgeter{w}
+		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
+			keyboardPointer.OriginMapping = []Widgeter{w}
+		}
 	}
 
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
@@ -4405,8 +4451,8 @@ func (w *TextFieldWidget) Layout() {
 }
 
 func (w *TextFieldWidget) Render() {
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	// HACK: Setting the widget size in Render() is bad, because all the input calculations will fail before it's rendered
 	w.Layout()
@@ -4457,11 +4503,13 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		keyboardPointer.OriginMapping = []Widgeter{w}
+		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
+			keyboardPointer.OriginMapping = []Widgeter{w}
+		}
 	}
 
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
@@ -5142,7 +5190,7 @@ func main() {
 
 			scrollToSymbolB := DepNode2Func{}
 			scrollToSymbolB.UpdateFunc = func(this DepNode2I) {
-				if entry := this.GetSources()[0].(*ListWidget).GetSelected(); entry != nil {
+				if entry := this.GetSources()[0].(Selecter).GetSelected(); entry != nil {
 					// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
 					//println("selected:", entry.String())
 
@@ -5170,7 +5218,7 @@ func main() {
 					}
 				}
 			}
-			scrollToSymbolB.AddSources(nextTool5B)
+			scrollToSymbolB.AddSources(nextTool5B.OnSelectionChanged())
 			keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
 
 			// =====
