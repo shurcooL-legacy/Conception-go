@@ -4483,6 +4483,10 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 				w.CaretPosition--
 				w.Content = w.Content[:w.CaretPosition] + w.Content[w.CaretPosition+1:]
 			}
+		case glfw.KeyDelete:
+			if w.CaretPosition+1 <= uint32(len(w.Content)) {
+				w.Content = w.Content[:w.CaretPosition] + w.Content[w.CaretPosition+1:]
+			}
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				w.CaretPosition = 0
