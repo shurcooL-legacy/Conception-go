@@ -501,17 +501,19 @@ func (w *Widget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathg
 	return ParentPosition.Sub(w.pos)
 }
 
-func GlobalToParent(w Widgeter, GlobalPosition mathgl.Vec2d) (ParentPosition mathgl.Vec2d) {
+type WidgeterS struct{ Widgeter }
+
+func (w WidgeterS) GlobalToParent(GlobalPosition mathgl.Vec2d) (ParentPosition mathgl.Vec2d) {
 	switch w.Parent() {
 	case nil:
 		ParentPosition = GlobalPosition
 	default:
-		ParentPosition = GlobalToLocal(w.Parent(), GlobalPosition)
+		ParentPosition = WidgeterS{w.Parent()}.GlobalToLocal(GlobalPosition)
 	}
 	return ParentPosition
 }
-func GlobalToLocal(w Widgeter, GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
-	return w.ParentToLocal(GlobalToParent(w, GlobalPosition))
+func (w WidgeterS) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+	return w.ParentToLocal(WidgeterS{w}.GlobalToParent(GlobalPosition))
 }
 
 // ---
@@ -1181,7 +1183,7 @@ func (w *ButtonWidget) Render() {
 
 	// Tooltip
 	if w.tooltip != nil && isHit {
-		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, 16}
 		*w.tooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		w.tooltip.Render()
@@ -1324,7 +1326,7 @@ func (w *BoxWidget) Render() {
 
 	// Tooltip
 	if isHit {
-		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		tooltipOffset := mathgl.Vec2d{0, -4 - boxWidgetTooltip.Size()[1]}
 		*boxWidgetTooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		boxWidgetTooltip.Render()
@@ -1619,12 +1621,12 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		w.mode == Shunpo {
-		w.target = GlobalToParent(w, mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
+		w.target = WidgeterS{w}.GlobalToParent(mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
 		w.skillActive = true
 	}
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(1) {
-		pointerPos := GlobalToParent(w, mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
+		pointerPos := WidgeterS{w}.GlobalToParent(mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
 		if pointerPos.Sub(w.pos).Len() > w.size[0]*2/3 || w.target.Sub(w.pos).Len() > w.size[0]*2/3 {
 			w.target = pointerPos
 		}
@@ -2717,7 +2719,7 @@ func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
 	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := GlobalToLocal(w, globalPosition)
+		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if w.entries.Len() > 0 {
 			if localPosition[1] < 0 {
 				w.selected = 1
@@ -2876,7 +2878,7 @@ func (w *GoPackageListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := GlobalToLocal(w, globalPosition)
+		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if len(w.entries) > 0 {
 			if localPosition[1] < 0 {
 				w.selected = 1
@@ -3148,7 +3150,7 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := GlobalToLocal(w, globalPosition)
+		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if len(w.entries) > 0 {
 			if localPosition[1] < 0 {
 				w.selected = 1
@@ -3986,7 +3988,7 @@ func (w *TextLabelWidget) Render() {
 	isHit := len(w.HoverPointers()) > 0
 	// Tooltip
 	if w.tooltip != nil && isHit {
-		mousePointerPositionLocal := GlobalToLocal(w, mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		w.tooltip.Layout()
 		tooltipOffset := mathgl.Vec2d{0, -fontHeight - w.tooltip.Size()[1]}
 		*w.tooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
@@ -4122,11 +4124,11 @@ func (w *TextBoxWidget) Render() {
 			// TODO: Generalize this.
 			lines := w.Content.Lines()
 			lineNumber, lastLineNumber := 0, len(lines)-1
-			if topLineNumber := int(GlobalToLocal(w, mathgl.Vec2d{})[1] / fontHeight); topLineNumber > lineNumber {
+			if topLineNumber := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); topLineNumber > lineNumber {
 				lineNumber = topLineNumber
 			}
 			_, height := globalWindow.GetSize() // HACK
-			if bottomLineNumber := int(GlobalToLocal(w, mathgl.Vec2d{0, float64(height)})[1] / fontHeight); bottomLineNumber < lastLineNumber {
+			if bottomLineNumber := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1] / fontHeight); bottomLineNumber < lastLineNumber {
 				lastLineNumber = bottomLineNumber
 			}
 			for ; lineNumber <= lastLineNumber; lineNumber++ {
@@ -4224,7 +4226,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := GlobalToLocal(w, globalPosition)
+		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		w.caretPosition.SetPositionFromPhysical(localPosition)
 	}
 
@@ -4514,7 +4516,7 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := GlobalToLocal(w, globalPosition)
+		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if localPosition[0] < 0 {
 			w.CaretPosition = 0
 		} else if localPosition[0] > float64(len(w.Content)*fontWidth) {
@@ -4789,7 +4791,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 				(inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2)
 
 			if pointingPointerMovedRelativeToCanvas {
-				LocalPosition := GlobalToLocal(widget, mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])})
+				LocalPosition := WidgeterS{widget}.GlobalToLocal(mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])})
 
 				// Clear previously hit widgets
 				for _, widget := range inputEvent.Pointer.Mapping {
