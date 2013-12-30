@@ -979,6 +979,41 @@ func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 
 // ---
 
+type goSymbolsB struct {
+	goSymbols
+}
+
+func (this *goSymbolsB) Update() {
+	files := this.GetSources()[0].(*typeCheckedPackage).files
+
+	if files == nil {
+		this.entries = nil
+		return
+	}
+
+	this.entries = nil
+	for _, fileAst := range files {
+		for _, decl := range fileAst.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				funcDeclSignature := &ast.FuncDecl{Recv: d.Recv, Name: d.Name, Type: d.Type}
+				nodeStringer := NodeStringer{Node: d, str: SprintAstBare(funcDeclSignature)}
+				this.entries = append(this.entries, nodeStringer)
+			}
+		}
+	}
+}
+
+func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) *ListWidget {
+	goSymbols := &goSymbolsB{}
+	goSymbols.AddSources(typeCheckedPackage)
+
+	w := NewListWidget(np, goSymbols)
+	return w
+}
+
+// ---
+
 type FileUri string
 
 type GoCompileErrorsManagerTest struct {
@@ -5070,13 +5105,7 @@ func main() {
 									if Test4WidgetIdent != nil && Test4WidgetIdent.Obj != nil {
 										if declNode, ok := Test4WidgetIdent.Obj.Decl.(ast.Node); ok {
 											if file := typeCheckedPackage.fset.File(declNode.Pos()); file != nil {
-												/*// TEST, HACK: Externally change folderListing selection
-												goFileListing := folderListing.flow.Widgets[0].(*FolderListingPureWidget)
-												for _, entry := range goFileListing.entries {
-													if strings.HasSuffix(file.Name(), entry.Name()) {
-														println(entry.Name())
-													}
-												}*/
+												// TODO: Change folderListing selection if it's in a different file
 
 												editor.CenterOnCaretPosition(uint32(file.Offset(declNode.Pos())))
 											}
@@ -5108,9 +5137,47 @@ func main() {
 			scrollToSymbol.AddSources(nextTool5)
 			keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbol)
 
+			// ---
+
+			nextTool5B := NewTest5BWidget(np, typeCheckedPackage)
+			nextTool5BCollapsible := NewCollapsibleWidget(np, nextTool5B)
+
+			scrollToSymbolB := DepNode2Func{}
+			scrollToSymbolB.UpdateFunc = func(this DepNode2I) {
+				if entry := this.GetSources()[0].(*ListWidget).GetSelected(); entry != nil {
+					// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
+					//println("selected:", entry.String())
+
+					if declNode := entry.(*NodeStringer); true {
+
+						if file := typeCheckedPackage.fset.File(declNode.Pos()); file != nil {
+							// TODO: Change folderListing selection if it's in a different file
+							// TEST, HACK: Externally change folderListing selection
+							goFileListing := folderListing.flow.Widgets[0].(*FolderListingPureWidget)
+							for index, entry := range goFileListing.entries {
+								if strings.HasSuffix(file.Name(), entry.Name()) {
+									if goFileListing.selected != uint64(index)+1 {
+										goFileListing.selected = uint64(index) + 1
+										goFileListing.selectionChangedTest()
+									}
+									break
+								}
+							}
+
+							// TODO: There's a race condition here, to do the thing below I need to have finished changing the file, but
+							//       that currently reloads ASTs, etc. causing crashes sometimes depending on order of file ASTs being processed.
+
+							editor.CenterOnCaretPosition(uint32(file.Offset(declNode.Pos())))
+						}
+					}
+				}
+			}
+			scrollToSymbolB.AddSources(nextTool5B)
+			keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
+
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5Collapsible, nextTool5BCollapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
