@@ -1421,8 +1421,8 @@ func (w *WindowWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
-func (widgets *Widgeters) ContainsWidget(targetWidget Widgeter) bool {
-	for _, widget := range mousePointer.Mapping {
+func (widgets Widgeters) ContainsWidget(targetWidget Widgeter) bool {
+	for _, widget := range widgets {
 		if widget == targetWidget {
 			return true
 		}
