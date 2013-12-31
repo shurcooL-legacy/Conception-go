@@ -2556,7 +2556,8 @@ type SearchableListWidget struct {
 
 func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableListWidget {
 	searchField := NewTextFieldWidget(np)
-	listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
+	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
+	listWidget := NewFilterableListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField)
 
 	w := &SearchableListWidget{NewCompositeWidget(pos, np, []Widgeter{searchField, listWidget})}
 
@@ -2564,7 +2565,7 @@ func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableList
 }
 
 func (w *SearchableListWidget) OnSelectionChanged() DepNode2ManualI {
-	return w.CompositeWidget.Widgets[1].(*ListWidget)
+	return w.CompositeWidget.Widgets[1].(DepNode2ManualI)
 }
 
 func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
@@ -2590,9 +2591,71 @@ func (w *SearchableListWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 
 // ---
 
+type FilterableStrings2 struct {
+	filteredEntries []fmt.Stringer
+
+	DepNode2
+}
+
+// TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
+func NewFilterableStrings2(source Strings2, filter *TextFieldWidget) *FilterableStrings2 {
+	this := &FilterableStrings2{}
+	this.AddSources(source, filter)
+	return this
+}
+
+func (this *FilterableStrings2) Get(index int) fmt.Stringer {
+	return this.filteredEntries[index]
+}
+
+func (this *FilterableStrings2) Len() int {
+	return len(this.filteredEntries)
+}
+
+func (this *FilterableStrings2) Update() {
+	source := this.GetSources()[0].(Strings2)
+	filter := this.GetSources()[1].(*TextFieldWidget)
+
+	this.filteredEntries = nil
+	for index := 0; index < source.Len(); index++ {
+		entry := source.Get(index).String()
+
+		if filter.Content != "" {
+			if !strings.Contains(strings.ToLower(entry), strings.ToLower(filter.Content)) {
+				continue
+			}
+		}
+
+		this.filteredEntries = append(this.filteredEntries, source.Get(index))
+	}
+}
+
+// ---
+
+/*type FilterableListWidget struct {
+	*ListWidget
+	filter *TextFieldWidget
+}
+
+// TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
+func NewFilterableListWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFieldWidget) *FilterableListWidget {
+	w := &FilterableListWidget{ListWidget: NewListWidget(pos, NewFilterableStrings2(entries, filter)), filter: filter}
+
+	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
+
+	return w
+}*/
+func NewFilterableListWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFieldWidget) *ListWidget {
+	return NewListWidget(pos, NewFilterableStrings2(entries, filter))
+}
+
+// ---
+
 type Strings2 interface {
 	Get(int) fmt.Stringer
 	Len() int
+
+	DepNode2I
 }
 
 // TODO: Refactor other list-like widgets to use this?
@@ -2609,11 +2672,8 @@ type ListWidget struct {
 func NewListWidget(pos mathgl.Vec2d, entries Strings2) *ListWidget {
 	w := &ListWidget{Widget: NewWidget(pos, np), entries: entries}
 
-	if _, ok := w.entries.(DepNode2I); !ok {
-		panic("entries doesn't implement DepNode2I, but ListWidget requires it to") // TODO: Move this into compile-time verification by using an interface that implements DepNode2I
-	}
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
-	w.layoutDepNode2.AddSources(entries.(DepNode2I)) // TODO: What about removing w when it's "deleted"?
+	w.layoutDepNode2.AddSources(entries) // TODO: What about removing w when it's "deleted"?
 
 	return w
 }
@@ -2627,7 +2687,9 @@ func (this *ListWidget) GetSelected() fmt.Stringer {
 
 func (w *ListWidget) NotifyChange() {
 	// TODO: Support for preserving selection
+	w.selected = 0
 
+	w.longestEntryLength = 0
 	for index := 0; index < w.entries.Len(); index++ {
 		entry := w.entries.Get(index).String()
 		entryLength := len(entry)
@@ -4432,12 +4494,13 @@ func (w *TextBoxValidationWidget) NotifyChange() {
 
 type TextFieldWidget struct {
 	Widget
-	Content       string
-	CaretPosition uint32
+	Content        string
+	DepNode2Manual // ContentChanged
+	CaretPosition  uint32
 }
 
 func NewTextFieldWidget(pos mathgl.Vec2d) *TextFieldWidget {
-	return &TextFieldWidget{NewWidget(pos, mathgl.Vec2d{0, 0}), "", 0}
+	return &TextFieldWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0})}
 }
 
 func (w *TextFieldWidget) Layout() {
@@ -4532,10 +4595,12 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 			if w.CaretPosition >= 1 {
 				w.CaretPosition--
 				w.Content = w.Content[:w.CaretPosition] + w.Content[w.CaretPosition+1:]
+				ExternallyUpdated(&w.DepNode2Manual)
 			}
 		case glfw.KeyDelete:
 			if w.CaretPosition+1 <= uint32(len(w.Content)) {
 				w.Content = w.Content[:w.CaretPosition] + w.Content[w.CaretPosition+1:]
+				ExternallyUpdated(&w.DepNode2Manual)
 			}
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
@@ -4558,6 +4623,7 @@ func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
 		w.Content = w.Content[:w.CaretPosition] + string(byte(inputEvent.InputId)) + w.Content[w.CaretPosition:]
+		ExternallyUpdated(&w.DepNode2Manual)
 		w.CaretPosition++
 	}
 }
