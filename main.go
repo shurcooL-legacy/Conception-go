@@ -939,12 +939,12 @@ type goSymbols struct {
 	DepNode2
 }
 
-func (this *goSymbols) Get(index int) fmt.Stringer {
+func (this *goSymbols) Get(index uint64) fmt.Stringer {
 	return &this.entries[index]
 }
 
-func (this *goSymbols) Len() int {
-	return len(this.entries)
+func (this *goSymbols) Len() uint64 {
+	return uint64(len(this.entries))
 }
 
 func (this *goSymbols) Update() {
@@ -2604,12 +2604,12 @@ func NewFilterableStrings2(source Strings2, filter *TextFieldWidget) *Filterable
 	return this
 }
 
-func (this *FilterableStrings2) Get(index int) fmt.Stringer {
+func (this *FilterableStrings2) Get(index uint64) fmt.Stringer {
 	return this.filteredEntries[index]
 }
 
-func (this *FilterableStrings2) Len() int {
-	return len(this.filteredEntries)
+func (this *FilterableStrings2) Len() uint64 {
+	return uint64(len(this.filteredEntries))
 }
 
 func (this *FilterableStrings2) Update() {
@@ -2617,7 +2617,7 @@ func (this *FilterableStrings2) Update() {
 	filter := this.GetSources()[1].(*TextFieldWidget)
 
 	this.filteredEntries = nil
-	for index := 0; index < source.Len(); index++ {
+	for index := uint64(0); index < source.Len(); index++ {
 		entry := source.Get(index).String()
 
 		if filter.Content != "" {
@@ -2637,7 +2637,6 @@ func (this *FilterableStrings2) Update() {
 	filter *TextFieldWidget
 }
 
-// TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
 func NewFilterableListWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFieldWidget) *FilterableListWidget {
 	w := &FilterableListWidget{ListWidget: NewListWidget(pos, NewFilterableStrings2(entries, filter)), filter: filter}
 
@@ -2645,6 +2644,7 @@ func NewFilterableListWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFie
 
 	return w
 }*/
+// TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
 func NewFilterableListWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFieldWidget) *ListWidget {
 	return NewListWidget(pos, NewFilterableStrings2(entries, filter))
 }
@@ -2652,17 +2652,18 @@ func NewFilterableListWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFie
 // ---
 
 type Strings2 interface {
-	Get(int) fmt.Stringer
-	Len() int
+	Get(uint64) fmt.Stringer
+	Len() uint64
 
 	DepNode2I
 }
 
 // TODO: Refactor other list-like widgets to use this?
+// TODO: Rename to SelecterWidget, since it focuses on having one entry selected/notifies of selection change
 type ListWidget struct {
 	Widget
 	longestEntryLength int
-	selected           uint64 // 0 is unselected, else index+1 is selected
+	selected           uint64 // index of selected entry [0, len)
 	DepNode2Manual            // SelectionChanged
 	layoutDepNode2     DepNode2Func
 
@@ -2679,10 +2680,10 @@ func NewListWidget(pos mathgl.Vec2d, entries Strings2) *ListWidget {
 }
 
 func (this *ListWidget) GetSelected() fmt.Stringer {
-	if this.selected == 0 {
+	if this.entries.Len() == 0 {
 		return nil
 	}
-	return this.entries.Get(int(this.selected - 1))
+	return this.entries.Get(this.selected)
 }
 
 func (w *ListWidget) NotifyChange() {
@@ -2690,7 +2691,7 @@ func (w *ListWidget) NotifyChange() {
 	w.selected = 0
 
 	w.longestEntryLength = 0
-	for index := 0; index < w.entries.Len(); index++ {
+	for index := uint64(0); index < w.entries.Len(); index++ {
 		entry := w.entries.Get(index).String()
 		entryLength := len(entry)
 		if entryLength > w.longestEntryLength {
@@ -2704,10 +2705,10 @@ func (w *ListWidget) NotifyChange() {
 }
 
 func (w *ListWidget) selectionChangedTest() {
-	if w.selected != 0 {
+	if w.entries.Len() > 0 {
 		// TEST
 		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
-			scrollPane.ScrollToArea(mathgl.Vec2d{0, float64((w.selected - 1) * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
+			scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
 		}
 	}
 
@@ -2739,21 +2740,21 @@ func (w *ListWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
 	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
-	for i := 0; i < w.entries.Len(); i++ {
-		entry := w.entries.Get(i).String()
-		if w.selected == uint64(i+1) {
+	for index := uint64(0); index < w.entries.Len(); index++ {
+		entry := w.entries.Get(index).String()
+		if w.selected == index {
 			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(index * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
 				gl.Color3d(1, 1, 1)
 			} else {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(index * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
 				gl.Color3d(0, 0, 0)
 			}
 		} else {
 			gl.Color3d(0, 0, 0)
 		}
 
-		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), entry)
+		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(index * fontHeight)}), entry)
 	}
 }
 
@@ -2784,11 +2785,11 @@ func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
 		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if w.entries.Len() > 0 {
 			if localPosition[1] < 0 {
-				w.selected = 1
-			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(w.entries.Len()) {
-				w.selected = uint64(w.entries.Len())
+				w.selected = 0
+			} else if uint64(localPosition[1]/fontHeight) > uint64(w.entries.Len()-1) {
+				w.selected = uint64(w.entries.Len() - 1)
 			} else {
-				w.selected = uint64((localPosition[1] / fontHeight) + 1)
+				w.selected = uint64(localPosition[1] / fontHeight)
 			}
 			w.selectionChangedTest()
 		}
@@ -2798,24 +2799,24 @@ func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if w.entries.Len() > 0 {
-					w.selected = 1
+				if w.entries.Len() != 0 && w.selected > 0 {
+					w.selected = 0
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
-				if w.selected > 1 {
+				if w.entries.Len() != 0 && w.selected > 0 {
 					w.selected--
 					w.selectionChangedTest()
 				}
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if w.entries.Len() > 0 {
-					w.selected = uint64(w.entries.Len())
+				if w.entries.Len() != 0 && w.selected < uint64(w.entries.Len()-1) {
+					w.selected = uint64(w.entries.Len() - 1)
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
-				if w.selected < uint64(w.entries.Len()) {
+				if w.entries.Len() != 0 && w.selected < uint64(w.entries.Len()-1) {
 					w.selected++
 					w.selectionChangedTest()
 				}
