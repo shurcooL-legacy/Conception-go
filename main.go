@@ -969,7 +969,7 @@ func (this *goSymbols) Update() {
 	}
 }
 
-func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *ListWidget {
+/*func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *ListWidget {
 	docPackage := &docPackage{}
 	docPackage.AddSources(goPackage, source.Content)
 
@@ -978,7 +978,7 @@ func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 
 	w := NewListWidget(np, goSymbols)
 	return w
-}
+}*/
 
 // ---
 
@@ -2546,10 +2546,6 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 
 // ---
 
-type Selecter interface {
-	GetSelected() fmt.Stringer
-}
-
 type SearchableListWidget struct {
 	*CompositeWidget
 }
@@ -2557,7 +2553,7 @@ type SearchableListWidget struct {
 func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableListWidget {
 	searchField := NewTextFieldWidget(np)
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
-	listWidget := NewFilterableListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField)
+	listWidget := NewFilterableSelecterWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField)
 
 	w := &SearchableListWidget{NewCompositeWidget(pos, np, []Widgeter{searchField, listWidget})}
 
@@ -2632,25 +2628,6 @@ func (this *FilterableStrings2) Update() {
 
 // ---
 
-/*type FilterableListWidget struct {
-	*ListWidget
-	filter *TextFieldWidget
-}
-
-func NewFilterableListWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFieldWidget) *FilterableListWidget {
-	w := &FilterableListWidget{ListWidget: NewListWidget(pos, NewFilterableStrings2(entries, filter)), filter: filter}
-
-	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
-
-	return w
-}*/
-// TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
-func NewFilterableListWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFieldWidget) *ListWidget {
-	return NewListWidget(pos, NewFilterableStrings2(entries, filter))
-}
-
-// ---
-
 type Strings2 interface {
 	Get(uint64) fmt.Stringer
 	Len() uint64
@@ -2658,20 +2635,29 @@ type Strings2 interface {
 	DepNode2I
 }
 
+type Selecter interface {
+	GetSelected() fmt.Stringer
+}
+
 // TODO: Refactor other list-like widgets to use this?
-// TODO: Rename to SelecterWidget, since it focuses on having one entry selected/notifies of selection change
-type ListWidget struct {
+type FilterableSelecterWidget struct {
 	Widget
 	longestEntryLength int
 	selected           uint64 // index of selected entry [0, len)
-	DepNode2Manual            // SelectionChanged
+	manuallyPicked     fmt.Stringer
+	DepNode2Manual     // SelectionChanged
 	layoutDepNode2     DepNode2Func
 
 	entries Strings2
+
+	filter *TextFieldWidget
 }
 
-func NewListWidget(pos mathgl.Vec2d, entries Strings2) *ListWidget {
-	w := &ListWidget{Widget: NewWidget(pos, np), entries: entries}
+// TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
+func NewFilterableSelecterWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFieldWidget) *FilterableSelecterWidget {
+	entries = NewFilterableStrings2(entries, filter)
+
+	w := &FilterableSelecterWidget{Widget: NewWidget(pos, np), entries: entries, filter: filter}
 
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(entries) // TODO: What about removing w when it's "deleted"?
@@ -2679,16 +2665,15 @@ func NewListWidget(pos mathgl.Vec2d, entries Strings2) *ListWidget {
 	return w
 }
 
-func (this *ListWidget) GetSelected() fmt.Stringer {
+func (this *FilterableSelecterWidget) GetSelected() fmt.Stringer {
 	if this.entries.Len() == 0 {
 		return nil
 	}
 	return this.entries.Get(this.selected)
 }
 
-func (w *ListWidget) NotifyChange() {
-	// TODO: Support for preserving selection
-	w.selected = 0
+func (w *FilterableSelecterWidget) NotifyChange() {
+	selectionPreserved := false
 
 	w.longestEntryLength = 0
 	for index := uint64(0); index < w.entries.Len(); index++ {
@@ -2697,6 +2682,17 @@ func (w *ListWidget) NotifyChange() {
 		if entryLength > w.longestEntryLength {
 			w.longestEntryLength = entryLength
 		}
+
+		// Preserve selection
+		if w.entries.Get(index) == w.manuallyPicked {
+			w.selected = index
+			selectionPreserved = true
+		}
+	}
+
+	if !selectionPreserved {
+		w.selected = 0
+		w.manuallyPicked = nil
 	}
 
 	w.Layout()
@@ -2704,18 +2700,19 @@ func (w *ListWidget) NotifyChange() {
 	w.NotifyAllListeners()
 }
 
-func (w *ListWidget) selectionChangedTest() {
-	if w.entries.Len() > 0 {
-		// TEST
-		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
-			scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
-		}
+// Pre-condition: w.entries.Len() > 0
+func (w *FilterableSelecterWidget) selectionChangedTest() {
+	// TEST
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+		scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
 	}
+
+	w.manuallyPicked = w.entries.Get(w.selected)
 
 	ExternallyUpdated(w)
 }
 
-func (w *ListWidget) Layout() {
+func (w *FilterableSelecterWidget) Layout() {
 	if w.longestEntryLength < 3 {
 		w.size[0] = float64(fontWidth * 3)
 	} else {
@@ -2731,7 +2728,7 @@ func (w *ListWidget) Layout() {
 	w.Widget.Layout()
 }
 
-func (w *ListWidget) Render() {
+func (w *FilterableSelecterWidget) Render() {
 	// TODO: Move to Layout2()
 	MakeUpdated(&w.layoutDepNode2)
 
@@ -2758,14 +2755,14 @@ func (w *ListWidget) Render() {
 	}
 }
 
-func (w *ListWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *FilterableSelecterWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
 		return nil
 	}
 }
-func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
+func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
@@ -2799,24 +2796,24 @@ func (w *ListWidget) ProcessEvent(inputEvent InputEvent) {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if w.entries.Len() != 0 && w.selected > 0 {
+				if w.entries.Len() > 0 && w.selected > 0 {
 					w.selected = 0
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
-				if w.entries.Len() != 0 && w.selected > 0 {
+				if w.entries.Len() > 0 && w.selected > 0 {
 					w.selected--
 					w.selectionChangedTest()
 				}
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if w.entries.Len() != 0 && w.selected < uint64(w.entries.Len()-1) {
+				if w.entries.Len() > 0 && w.selected < uint64(w.entries.Len()-1) {
 					w.selected = uint64(w.entries.Len() - 1)
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
-				if w.entries.Len() != 0 && w.selected < uint64(w.entries.Len()-1) {
+				if w.entries.Len() > 0 && w.selected < uint64(w.entries.Len()-1) {
 					w.selected++
 					w.selectionChangedTest()
 				}
