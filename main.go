@@ -2737,9 +2737,19 @@ func (w *FilterableSelecterWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
 	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
-	for index := uint64(0); index < w.entries.Len(); index++ {
-		entry := w.entries.Get(index).String()
-		if w.selected == index {
+	// Render only visible lines.
+	// TODO: Generalize this.
+	index, lastIndex := 0, int(w.entries.Len()-1)
+	if topIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); topIndex > index {
+		index = topIndex
+	}
+	_, height := globalWindow.GetSize() // HACK
+	if bottomIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1] / fontHeight); bottomIndex < lastIndex {
+		lastIndex = bottomIndex
+	}
+	for ; index <= lastIndex; index++ {
+		entry := w.entries.Get(uint64(index)).String()
+		if w.selected == uint64(index) {
 			if hasTypingFocus {
 				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(index * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
 				gl.Color3d(1, 1, 1)
@@ -4550,7 +4560,7 @@ func (w *TextFieldWidget) Render() {
 		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Color3d(0, 0, 0)
-		gl.Recti(gl.Int(w.CaretPosition*fontWidth-1), 0, gl.Int(w.CaretPosition*fontWidth+1), 16)
+		gl.Recti(gl.Int(w.CaretPosition*fontWidth-1), 0, gl.Int(w.CaretPosition*fontWidth+1), fontHeight)
 	}
 }
 func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
