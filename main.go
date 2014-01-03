@@ -1887,6 +1887,9 @@ func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter) *CollapsibleWidget {
 	// HACK
 	w.child.Pos()[0] = w.state.Size()[0] + 2
 
+	// TODO: This needs to be automated, easy to forget, moved into Layout2(), etc.
+	w.Layout() // TODO: Should this be automatic from above SetParent()?
+
 	return w
 }
 
@@ -4096,7 +4099,6 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 	}
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
-	keepUpdatedTEST = append(keepUpdatedTEST, &w.layoutDepNode2)
 
 	// TEST
 	w.scrollToCaret.UpdateFunc = func(DepNode2I) {
@@ -4149,6 +4151,7 @@ func (w *TextBoxWidget) Layout() {
 
 func (w *TextBoxWidget) Render() {
 	// TODO: Move to Layout2()
+	MakeUpdated(&w.layoutDepNode2)
 	MakeUpdated(&w.scrollToCaret)
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
