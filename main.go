@@ -19,7 +19,9 @@ import (
 	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3"
 	//"github.com/go-gl/glu"
+	"github.com/shurcooL/go/vcs"
 	glu "github.com/shurcooL/goglu/glu21"
+	"github.com/shurcooL/gostatus/status"
 
 	"github.com/Jragonmiris/mathgl"
 
@@ -5185,7 +5187,7 @@ func main() {
 
 				if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); path != "" && strings.HasSuffix(path, ".go") {
 					dir, file := filepath.Split(path)
-					if isGitRepo, _ := IsFolderGitRepo(dir); isGitRepo {
+					if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
 						template.Template = NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
 						template.Template.Dir = dir
 					}
@@ -5451,7 +5453,7 @@ func main() {
 		{
 			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget)
 			dir, file := filepath.Split(source.Path())
-			if isGitRepo, _ := IsFolderGitRepo(dir); isGitRepo {
+			if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
 				template := NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
 				template.Dir = dir
 				w := NewLiveCmdExpeWidget(np, []DepNode2I{source.Content}, template)
@@ -5509,12 +5511,13 @@ func main() {
 			var b string
 
 			importPath := r.URL.Path[1:]
-			if something := SomethingFromImportPath(importPath); something != nil {
+			if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
 				// TODO: Cache this via DepNode2I
-				something.Update()
+				goPackage.CheckIfUnderVcs()
+				goPackage.UpdateVcsFields()
 
 				// TODO: Cache this via DepNode2I
-				dpkg := GetDocPackageAll(something.Bpkg, nil)
+				dpkg := GetDocPackageAll(goPackage.Bpkg, nil)
 
 				b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
 				var buf bytes.Buffer
@@ -5529,37 +5532,39 @@ func main() {
 
 				b += "\n---\n\n"
 
-				b += "```\n" + something.String() + "\n```\n"
+				b += "```\n" + status.Presenter(goPackage) + "\n```\n"
 
 				b += "\n---\n\n"
 
-				if something.IsGitRepo {
+				if goPackage.Vcs != nil {
 					b += "```\n"
-					if something.Status == "" {
+					if goPackage.Status == "" {
 						b += "nothing to commit, working directory clean\n\n"
 					} else {
-						b += something.Status + "\n"
+						b += goPackage.Status + "\n"
 					}
-					b += "Branch: " + something.LocalBranch + "\n"
-					b += "Local:  " + something.Local + "\n"
-					b += "Remote: " + something.Remote + "\n"
+					b += "Branch: " + goPackage.LocalBranch + "\n"
+					b += "Local:  " + goPackage.Local + "\n"
+					b += "Remote: " + goPackage.Remote + "\n"
 					b += "```\n"
 
 					// git diff
-					if something.Status != "" {
-						cmd := exec.Command("git", "diff", "--no-ext-diff")
-						cmd.Dir = something.Path
-						if outputBytes, err := cmd.CombinedOutput(); err == nil {
-							b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
-							b += "\n```diff\n" + string(outputBytes) + "\n```\n"
+					if goPackage.Status != "" {
+						if goPackage.Vcs.Type() == vcs.Git {
+							cmd := exec.Command("git", "diff", "--no-ext-diff")
+							cmd.Dir = goPackage.Path()
+							if outputBytes, err := cmd.CombinedOutput(); err == nil {
+								b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
+								b += "\n```diff\n" + string(outputBytes) + "\n```\n"
+							}
 						}
 					}
 				}
 
 				b += "\n---\n\n"
 
-				b += "`" + something.Path + "`  \n"
-				x := newFolderListingPureWidget(something.Path)
+				b += "`" + goPackage.Path() + "`  \n"
+				x := newFolderListingPureWidget(goPackage.Path())
 				for _, v := range x.entries {
 					b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
 				}
