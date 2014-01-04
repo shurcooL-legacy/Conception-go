@@ -5523,11 +5523,6 @@ func main() {
 				var buf bytes.Buffer
 				FprintPackageFullSummary(&buf, dpkg)
 				b += buf.String()
-				b += "\n"
-				for _, t := range dpkg.Types {
-					b += t.Name + "\n"
-					//PrintlnAstBare(t.Decl)
-				}
 				b += "\n```\n"
 
 				b += "\n---\n\n"
