@@ -3270,115 +3270,6 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
-func IsGitRepoWidgeter(w *GoPackage) Widgeter {
-	if w.Vcs != nil {
-		return NewTextLabelWidgetString(mathgl.Vec2d{}, "@")
-	} else {
-		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
-	}
-}
-
-func StatusWidgeter(w *GoPackage) Widgeter {
-	if w.Vcs == nil {
-		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
-	}
-	if w.Status != "" {
-		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, "*", w.Status)
-	} else {
-		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
-	}
-}
-
-func RemoteWidgeter(w *GoPackage) Widgeter {
-	if w.Vcs == nil {
-		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
-	}
-	if w.Remote != w.Local {
-		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, "+", w.Remote)
-	} else {
-		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, " ", w.Remote)
-	}
-}
-
-func LocalWidgeter(w *GoPackage) Widgeter {
-	if w.Vcs == nil {
-		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
-	}
-	if w.Remote != w.Local {
-		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, "+", w.Local)
-	} else {
-		return NewTextLabelWidgetStringTooltip(mathgl.Vec2d{}, " ", w.Local)
-	}
-}
-
-func IsCommandWidgeter(w *GoPackage) Widgeter {
-	if w.Vcs == nil {
-		return NewTextLabelWidgetString(mathgl.Vec2d{}, "/")
-	} else {
-		return NewTextLabelWidgetString(mathgl.Vec2d{}, " ")
-	}
-}
-
-func rec(pkgs *[]GoPackage, gopathEntry, importPath string) {
-	pkg := GoPackageFromImportPathFound(NewImportPathFound(importPath, gopathEntry))
-	if pkg != nil {
-		//*pkgs = append(*pkgs, NewGoPackageWidget(mathgl.Vec2d{}, pkg))
-		*pkgs = append(*pkgs, *pkg)
-		(*pkgs)[len(*pkgs)-1].CheckIfUnderVcs()
-		(*pkgs)[len(*pkgs)-1].UpdateVcsFields()
-	}
-
-	path := filepath.Join(gopathEntry, "src", importPath)
-	entries, err := ioutil.ReadDir(path)
-	if err == nil {
-		for _, v := range entries {
-			if v.IsDir() && !strings.HasPrefix(v.Name(), ".") {
-				rec(pkgs, gopathEntry, filepath.Join(importPath, v.Name()))
-			}
-		}
-	}
-}
-
-type GoPackageWidget struct {
-	*FlowLayoutWidget
-	//pkg *GoPackage
-}
-
-func NewGoPackageWidget(pos mathgl.Vec2d, pkg *GoPackage) *GoPackageWidget {
-	contentFunc := func() Widgeter {
-		pkg.CheckIfUnderVcs()
-		pkg.UpdateVcsFields()
-
-		isGitRepo := IsGitRepoWidgeter(pkg)
-		status := StatusWidgeter(pkg)
-		remote := RemoteWidgeter(pkg)
-		local := LocalWidgeter(pkg)
-		isCommand := IsCommandWidgeter(pkg)
-		bpkg := NewTextLabelWidgetString(mathgl.Vec2d{}, pkg.Bpkg.ImportPath)
-
-		inner := NewFlowLayoutWidget(mathgl.Vec2d{}, []Widgeter{isGitRepo, status, remote, local, isCommand, bpkg}, nil)
-
-		return inner
-		//return pkg.String() //+ "\n" + goon.SdumpExpr(pkg.Local) + goon.SdumpExpr(pkg.Remote)
-	}
-	//mc := NewMultilineContentFunc(contentFunc, []DepNodeI{})
-	// TODO: mc := NewMultilineContentStruct(&GoPackageWidget{}, []DepNodeI{})
-	//mc.NotifyChange()
-	//l := NewTextLabelWidgetExternalContent(mathgl.Vec2d{}, mc)
-
-	l := contentFunc()
-
-	b := NewButtonWidget(mathgl.Vec2d{}, nil)
-
-	w := &GoPackageWidget{FlowLayoutWidget: NewFlowLayoutWidget(pos, []Widgeter{b, l}, nil)}
-
-	w.Widgets[0].(*ButtonWidget).setAction(func() { x := contentFunc(); x.SetParent(w); w.Widgets[1] = x; w.Layout() })
-
-	return w
-}
-
-// ---
-
 type Bool struct {
 	bool
 	DepNode2Manual
@@ -5639,26 +5530,6 @@ func main() {
 		}))
 		widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 
-		// In main()
-		if false {
-			//pkgs := []Widgeter(nil)
-			pkgs := []GoPackage(nil)
-
-			//pkgs = append(pkgs, NewGoPackageWidget(mathgl.Vec2d{}, "/Users/Dmitri/Dropbox/Work/2013/GoLand", "honnef.co/go/importer"))
-			//pkgs = append(pkgs, NewGoPackageWidget(mathgl.Vec2d{}, SomethingFromPath("/Users/Dmitri/Dropbox/Work/2013/GoLand", "honnef.co/go/importer")))
-			var skipGopath = map[string]bool{"/Users/Dmitri/Local/GoTrLand": true, "/Users/Dmitri/Dropbox/Work/2013/GoLanding": true}
-			gopathEntries := filepath.SplitList(os.Getenv("GOPATH"))
-			for _, gopathEntry := range gopathEntries {
-				if skipGopath[gopathEntry] {
-					continue
-				}
-				rec(&pkgs, gopathEntry, ".")
-			}
-
-			//widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{}, pkgs, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}))
-			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{}, &pkgs))
-		}
-
 		// Shuryear Clock
 		{
 			contentFunc := func() string {
@@ -5808,9 +5679,9 @@ func main() {
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 	}
 
-	widget := NewCanvasWidget(np, widgets, nil)
+	//widget := NewCanvasWidget(np, widgets, nil)
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
-	//widget := NewCompositeWidget(mathgl.Vec2d{1, 1}, mathgl.Vec2d{500, 500}, widgets)
+	widget := NewCompositeWidget(mathgl.Vec2d{1, 1}, mathgl.Vec2d{500, 500}, widgets)
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
