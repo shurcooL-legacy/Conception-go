@@ -5386,7 +5386,6 @@ func main() {
 			importPath := r.URL.Path[1:]
 			if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
 				// TODO: Cache this via DepNode2I
-				goPackage.CheckIfUnderVcs()
 				goPackage.UpdateVcsFields()
 
 				// TODO: Cache this via DepNode2I
@@ -5420,7 +5419,7 @@ func main() {
 					if goPackage.Status != "" {
 						if goPackage.Vcs.Type() == vcs.Git {
 							cmd := exec.Command("git", "diff", "--no-ext-diff")
-							cmd.Dir = goPackage.Path()
+							cmd.Dir = goPackage.Bpkg.Dir
 							if outputBytes, err := cmd.CombinedOutput(); err == nil {
 								b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
 								b += "\n```diff\n" + string(outputBytes) + "\n```\n"
@@ -5431,8 +5430,8 @@ func main() {
 
 				b += "\n---\n\n"
 
-				b += "`" + goPackage.Path() + "`  \n"
-				x := newFolderListingPureWidget(goPackage.Path())
+				b += "`" + goPackage.Bpkg.Dir + "`  \n"
+				x := newFolderListingPureWidget(goPackage.Bpkg.Dir)
 				for _, v := range x.entries {
 					b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
 				}
