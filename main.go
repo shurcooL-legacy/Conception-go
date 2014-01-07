@@ -4838,6 +4838,7 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 }
 
 func main() {
+	//defer profile.Start(profile.CPUProfile).Stop()
 	//defer profile.Start(profile.MemProfile).Stop()
 
 	startedProcess := time.Now()
@@ -5386,6 +5387,7 @@ func main() {
 			importPath := r.URL.Path[1:]
 			if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
 				// TODO: Cache this via DepNode2I
+				goPackage.UpdateVcs()
 				goPackage.UpdateVcsFields()
 
 				// TODO: Cache this via DepNode2I
