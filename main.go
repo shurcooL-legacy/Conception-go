@@ -140,6 +140,7 @@ var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 // Colors
 var (
 	veryLightColor = mathgl.Vec3d{0.95, 0.95, 0.95}
+	lightColor     = mathgl.Vec3d{0.85, 0.85, 0.85}
 	darkColor      = mathgl.Vec3d{0.35, 0.35, 0.35}
 
 	blackColor     = mathgl.Vec3d{0, 0, 0}
@@ -1383,11 +1384,11 @@ func (w *WindowWidget) Render() {
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	DrawNBox(w.pos, w.size)
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, veryLightColor)
+		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, veryLightColor, lightColor)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, veryLightColor)
+		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, veryLightColor, lightColor)
 	} else {
-		DrawBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, veryLightColor)
+		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, veryLightColor, lightColor)
 	}
 
 	// Title
@@ -1441,6 +1442,17 @@ func DrawBorderlessBox(pos, size mathgl.Vec2d, backgroundColor mathgl.Vec3d) {
 	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
 }
 
+func DrawBorderlessGradientBox(pos, size mathgl.Vec2d, topColor, bottomColor mathgl.Vec3d) {
+	gl.Begin(gl.TRIANGLE_STRIP)
+	gl.Color3dv((*gl.Double)(&topColor[0]))
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
+	gl.Vertex2d(gl.Double(pos.Add(size)[0]), gl.Double(pos[1]))
+	gl.Color3dv((*gl.Double)(&bottomColor[0]))
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos.Add(size)[1]))
+	gl.Vertex2d(gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
+	gl.End()
+}
+
 func DrawBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
@@ -1457,6 +1469,12 @@ func DrawGBox(pos, size mathgl.Vec2d) {
 }
 func DrawLGBox(pos, size mathgl.Vec2d) {
 	DrawBox(pos, size, mathgl.Vec3d{0.6, 0.6, 0.6}, mathgl.Vec3d{0.95, 0.95, 0.95})
+}
+
+func DrawGradientBox(pos, size mathgl.Vec2d, borderColor, topColor, bottomColor mathgl.Vec3d) {
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
+	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
+	DrawBorderlessGradientBox(pos, size, topColor, bottomColor)
 }
 
 func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
