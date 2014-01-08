@@ -2863,12 +2863,17 @@ type GoPackageListingPureWidget struct {
 	selected           uint64 // 0 is unselected, else index+1 is selected
 	DepNode2Manual            // SelectionChanged
 
+	goPackages chan ImportPathFound // TODO: Generalize this, this should be refactored out into an external DepNode2I Strings2 with goPackages.
+
 	entries []ImportPathFound
 }
 
 func NewGoPackageListingPureWidget() *GoPackageListingPureWidget {
-	w := &GoPackageListingPureWidget{Widget: NewWidget(np, np)}
-	w.NotifyChange() // TODO: Give it a proper source
+	w := &GoPackageListingPureWidget{Widget: NewWidget(np, np), goPackages: make(chan ImportPathFound, 64)}
+
+	go gist8018045.GetGoPackages(w.goPackages)
+	UniversalClock.AddChangeListener(w)
+
 	return w
 }
 
@@ -2882,21 +2887,27 @@ func (this *GoPackageListingPureWidget) GetSelected() *ImportPathFound {
 func (w *GoPackageListingPureWidget) NotifyChange() {
 	// TODO: Support for preserving selection
 
-	goPackages := make(chan ImportPathFound)
-	go gist8018045.GetGoPackages(goPackages)
+	for {
+		select {
+		case entry, ok := <-w.goPackages:
+			if ok {
+				w.entries = append(w.entries, entry)
 
-	for entry := range goPackages {
-		w.entries = append(w.entries, entry)
+				entryLength := len(entry.ImportPath())
+				if entryLength > w.longestEntryLength {
+					w.longestEntryLength = entryLength
+				}
 
-		entryLength := len(entry.ImportPath())
-		if entryLength > w.longestEntryLength {
-			w.longestEntryLength = entryLength
+				redraw = true
+
+				w.Layout()
+			} else {
+				return
+			}
+		default:
+			return
 		}
 	}
-
-	w.Layout()
-
-	w.NotifyAllListeners()
 }
 
 func (w *GoPackageListingPureWidget) selectionChangedTest() {
@@ -5038,7 +5049,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if false {
+	if true {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
