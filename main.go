@@ -130,7 +130,6 @@ var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 var keepRunning = true
 var oFontBase, oFontBackground gl.Uint
 var redraw bool = true
-var widgets []Widgeter
 var mousePointer *Pointer
 var keyboardPointer *Pointer
 
@@ -574,8 +573,8 @@ func (w *Test1Widget) Render() {
 		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), SprintAstBare(y.Decl))
 	}*/
 
-	kat := widgets[len(widgets)-2].(*KatWidget)
-	PrintText(w.pos, fmt.Sprintf("%d %s", kat.mode, kat.mode.String()))
+	/*kat := widgets[len(widgets)-2].(*KatWidget)
+	PrintText(w.pos, fmt.Sprintf("%d %s", kat.mode, kat.mode.String()))*/
 }
 
 // ---
@@ -1364,8 +1363,12 @@ type WindowWidget struct {
 
 func NewWindowWidget(pos, size mathgl.Vec2d) *WindowWidget {
 	w := &WindowWidget{Widget: NewWidget(pos, size)}
-	closeButton := NewButtonWidget(np, func() { w.pos[0] -= 100 })
-	w.chrome = NewCompositeWidget(np, np, []Widgeter{closeButton})
+	closeButton := NewButtonWidget(np, func() {
+		// HACK: Assumes *CompositeWidget
+		(&w.Parent().(*CompositeWidget).Widgets).RemoveWidget(w)
+		w.SetParent(nil) // TODO: Not sure if needed
+	})
+	w.chrome = NewCompositeWidget(np, []Widgeter{closeButton})
 	w.chrome.SetParent(w)
 	return w
 }
@@ -1433,6 +1436,18 @@ func (widgets Widgeters) ContainsWidget(targetWidget Widgeter) bool {
 		}
 	}
 	return false
+}
+
+// TEST
+func (widgets *Widgeters) RemoveWidget(targetWidget Widgeter) {
+	for index, widget := range *widgets {
+		if widget == targetWidget {
+			copy((*widgets)[index:], (*widgets)[index+1:])
+			(*widgets)[len(*widgets)-1] = nil
+			*widgets = (*widgets)[:len(*widgets)-1]
+			return
+		}
+	}
 }
 
 // ---
@@ -1731,11 +1746,11 @@ func (w *KatWidget) NotifyChange() {
 
 type CompositeWidget struct {
 	Widget
-	Widgets []Widgeter
+	Widgets Widgeters
 }
 
-func NewCompositeWidget(pos, size mathgl.Vec2d, Widgets []Widgeter) *CompositeWidget {
-	w := &CompositeWidget{Widget: NewWidget(pos, size), Widgets: Widgets}
+func NewCompositeWidget(pos mathgl.Vec2d, Widgets Widgeters) *CompositeWidget {
+	w := &CompositeWidget{Widget: NewWidget(pos, np), Widgets: Widgets}
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
 	}
@@ -2156,7 +2171,7 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 			w.cmd = nil
 		}
 	}
-	w.CompositeWidget = NewCompositeWidget(pos, np,
+	w.CompositeWidget = NewCompositeWidget(pos,
 		[]Widgeter{
 			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
 			NewTriButtonExternalStateWidget(mathgl.Vec2d{0, -fontHeight - 2}, func() bool { return w.cmd != nil }, action),
@@ -2578,7 +2593,7 @@ func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableList
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
 	listWidget := NewFilterableSelecterWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField)
 
-	w := &SearchableListWidget{NewCompositeWidget(pos, np, []Widgeter{searchField, listWidget})}
+	w := &SearchableListWidget{NewCompositeWidget(pos, []Widgeter{searchField, listWidget})}
 
 	return w
 }
@@ -3035,7 +3050,7 @@ type FolderListingWidget struct {
 }
 
 func NewFolderListingWidget(pos mathgl.Vec2d, path string) *FolderListingWidget {
-	w := &FolderListingWidget{CompositeWidget: NewCompositeWidget(pos, np, []Widgeter{NewFlowLayoutWidget(np, []Widgeter{newFolderListingPureWidget(path)}, nil)})}
+	w := &FolderListingWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{NewFlowLayoutWidget(np, []Widgeter{newFolderListingPureWidget(path)}, nil)})}
 	w.flow = w.Widgets[0].(*FlowLayoutWidget)
 	w.flow.SetParent(w) // HACK?
 	return w
@@ -3349,11 +3364,11 @@ func newGoonWidget(pos mathgl.Vec2d, title string, a reflect.Value) *GoonWidget 
 	mc.NotifyChange()
 	t := NewTextLabelWidgetExternalContent(mathgl.Vec2d{16 + 2}, mc)
 
-	return &GoonWidget{CompositeWidget: NewCompositeWidget(pos, mathgl.Vec2d{}, []Widgeter{b, t}), a: a}*/
+	return &GoonWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{b, t}), a: a}*/
 
 	a = UnsafeReflectValue(a)
 
-	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, np, nil), title: title, a: a}
+	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, nil), title: title, a: a}
 	w.setupInternals()
 	return w
 }
@@ -3369,9 +3384,9 @@ func (w *GoonWidget) setupInternals() {
 			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-fontHeight - 2}, func() { w.flip() })
 		}
 
-		w.CompositeWidget = NewCompositeWidget(w.pos, np, []Widgeter{w.expanded, &Widget{}})
+		w.CompositeWidget = NewCompositeWidget(w.pos, []Widgeter{w.expanded, &Widget{}})
 	} else {
-		w.CompositeWidget = NewCompositeWidget(w.pos, np, []Widgeter{&Widget{}})
+		w.CompositeWidget = NewCompositeWidget(w.pos, []Widgeter{&Widget{}})
 	}
 	w.SetParent(oldParent)
 
@@ -3489,7 +3504,7 @@ func setupInternals3(titleString string, a reflect.Value) Widgeter {
 		w = NewTextLabelWidgetString(tab, fmt.Sprintf("(%s)(can't addr... %s)", vv.Kind().String(), vv.String()))
 	}
 
-	spacer := NewCompositeWidget(np, np, []Widgeter{w})
+	spacer := NewCompositeWidget(np, []Widgeter{w})
 
 	return spacer
 }
@@ -4781,9 +4796,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 				inputEvent.Pointer.Mapping = []Widgeter{}
 
 				// Recalculate currently hit widgets
-				for _, widget := range widgets {
-					inputEvent.Pointer.Mapping = append(inputEvent.Pointer.Mapping, widget.Hit(LocalPosition)...)
-				}
+				inputEvent.Pointer.Mapping = append(inputEvent.Pointer.Mapping, widget.Hit(LocalPosition)...)
 				for _, widget := range inputEvent.Pointer.Mapping {
 					widget.HoverPointers()[inputEvent.Pointer] = true
 				}
@@ -5047,9 +5060,12 @@ func main() {
 
 	// ---
 
+	var widget *CompositeWidget
+	var widgets []Widgeter
+
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if true {
+	if false {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -5138,7 +5154,7 @@ func main() {
 			// ---
 
 			// DEBUG: Goon widget of typeCheckedPackage
-			nextTool4 := NewCompositeWidget(np, mathgl.Vec2d{100000, 100000}, []Widgeter{NewGoonWidget(mathgl.Vec2d{20, 0}, typeCheckedPackage)})
+			nextTool4 := NewCompositeWidget(np, []Widgeter{NewGoonWidget(mathgl.Vec2d{20, 0}, typeCheckedPackage)})
 			nextTool4Collapsible := NewCollapsibleWidget(np, nextTool4)
 
 			// TEST: Add goto declaration extension to editor
@@ -5214,7 +5230,7 @@ func main() {
 
 	} else if false { // Deleted test widget instances
 		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
-		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150}, mathgl.Vec2d{0, 0},
+		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150},
 			[]Widgeter{
 				&BoxWidget{NewWidget(mathgl.Vec2d{0, 0}, mathgl.Vec2d{16, 16}), "Left of Duo"},
 				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
@@ -5382,7 +5398,7 @@ func main() {
 
 		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
 
-		//widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{160, 30}, np, []Widgeter{NewGoPackageListingPureWidget()}))
+		//widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{160, 30}, []Widgeter{NewGoPackageListingPureWidget()}))
 
 		http.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "Closing.")
@@ -5689,6 +5705,17 @@ func main() {
 
 		// Sample Window widget
 		{
+			newWindowButton := NewButtonWidget(np, func() {
+				w := NewWindowWidget(mathgl.Vec2d{500, 500}, mathgl.Vec2d{200, 140})
+				w.Name = "New Window"
+
+				// HACK: Add new widget to canvas
+				widget.Widgets = append(widget.Widgets, w)
+				w.SetParent(widget)
+				widget.Layout()
+			})
+			widgets = append(widgets, newWindowButton)
+
 			w := NewWindowWidget(mathgl.Vec2d{500, 400}, mathgl.Vec2d{200, 140})
 			w.Name = "Sample Window"
 			widgets = append(widgets, w)
@@ -5711,7 +5738,7 @@ func main() {
 
 	//widget := NewCanvasWidget(np, widgets, nil)
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
-	widget := NewCompositeWidget(mathgl.Vec2d{1, 1}, mathgl.Vec2d{500, 500}, widgets)
+	widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
@@ -5757,15 +5784,13 @@ func main() {
 			//spinner.NotifyChange()
 			fpsWidget.PushTimeToRender(time.Since(frameStartTime).Seconds() * 1000)
 			window.SwapBuffers()
-		} else {
-			time.Sleep(5 * time.Millisecond)
-		}
+			runtime.Gosched()
 
-		runtime.Gosched()
-
-		if redraw && !*headlessFlag {
 			fpsWidget.PushTimeTotal(time.Since(frameStartTime).Seconds() * 1000)
 			redraw = false
+		} else {
+			time.Sleep(5 * time.Millisecond)
+			runtime.Gosched()
 		}
 	}
 
