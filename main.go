@@ -4366,6 +4366,10 @@ func (w *TextBoxValidationWidget) IsValidTEST() bool {
 }
 
 func (w *TextBoxValidationWidget) Render() {
+	// TODO: Move to Layout2()
+	MakeUpdated(&w.layoutDepNode2)
+	MakeUpdated(&w.scrollToCaret)
+
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w.TextBoxWidget == keyboardPointer.OriginMapping[0]
 
