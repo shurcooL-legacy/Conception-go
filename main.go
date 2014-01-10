@@ -2495,7 +2495,7 @@ func NewMultilineContentDepDumper(sources ...DepNode2I) MultilineContentI {
 }
 
 func (this *MultilineContentDepDumper) Update() {
-	content := MustTrimLastNewline(goon.Sdump(this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected()))
+	content := TrimLastNewline(goon.Sdump(this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected()))
 	//content := this.Content() + "+"
 	SetViewGroup(this.MultilineContent, content)
 }
@@ -5446,7 +5446,7 @@ func main() {
 
 				b += "\n---\n\n"
 
-				b += "```\n" + status.Presenter(goPackage) + "\n```\n"
+				b += "```\n" + status.PorcelainPresenter(goPackage) + "\n```\n"
 
 				b += "\n---\n\n"
 
