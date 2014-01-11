@@ -144,6 +144,9 @@ var (
 
 	blackColor     = mathgl.Vec3d{0, 0, 0}
 	highlightColor = mathgl.Vec3d{0.898, 0.765, 0.396}
+
+	selectedTextColor         = mathgl.Vec3d{195 / 255.0, 212 / 255.0, 242 / 255.0}
+	selectedTextInactiveColor = mathgl.Vec3d{240 / 255.0, 240 / 255.0, 240 / 255.0}
 )
 
 // TODO: Remove these
@@ -205,7 +208,7 @@ type OpenGlStream struct {
 	lineStartX float64
 	advance    uint32
 
-	BackgroundColor *mathgl.Vec3d
+	BackgroundColor *mathgl.Vec3d // nil means no background color
 }
 
 func NewOpenGlStream(pos mathgl.Vec2d) *OpenGlStream {
@@ -3550,9 +3553,10 @@ func ExpandedToLogical(s string, expanded uint32) uint32 {
 // ---
 
 type CaretPosition struct {
-	w               MultilineContentI
-	caretPosition   uint32
-	targetExpandedX uint32
+	w                 MultilineContentI
+	caretPosition     uint32
+	selectionPosition uint32
+	targetExpandedX   uint32
 
 	DepNode2Manual
 }
@@ -3573,7 +3577,8 @@ func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 	return expandedCaretPosition, caretLine
 }
 
-func (cp *CaretPosition) Move(amount int8) {
+// HACK: leaveSelection is currently an optional bool parameter
+func (cp *CaretPosition) Move(amount int8, leaveSelection ...bool) {
 	switch amount {
 	case -1:
 		cp.caretPosition--
@@ -3592,6 +3597,11 @@ func (cp *CaretPosition) Move(amount int8) {
 		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
 	}
 
+	// HACK, TODO: Make leaveSelection a required parameter?
+	if len(leaveSelection) == 0 || !leaveSelection[0] {
+		cp.selectionPosition = cp.caretPosition
+	}
+
 	cp.targetExpandedX, _ = cp.ExpandedPosition()
 
 	ExternallyUpdated(&cp.DepNode2Manual)
@@ -3606,6 +3616,7 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 			y--
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+			cp.selectionPosition = cp.caretPosition
 
 			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
@@ -3616,6 +3627,7 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 			y++
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+			cp.selectionPosition = cp.caretPosition
 
 			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
@@ -3624,7 +3636,7 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 	}
 }
 
-func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
+func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelection ...bool) {
 	var y uint32
 	if pos[1] < 0 {
 		y = 0
@@ -3643,11 +3655,17 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d) {
 	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 	cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 
+	// HACK, TODO: Make leaveSelection a required parameter?
+	if len(leaveSelection) == 0 || !leaveSelection[0] {
+		cp.selectionPosition = cp.caretPosition
+	}
+
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
 func (cp *CaretPosition) Set(caretPosition uint32) {
 	cp.caretPosition = caretPosition
+	cp.selectionPosition = cp.caretPosition
 
 	cp.targetExpandedX, _ = cp.ExpandedPosition()
 
@@ -4135,6 +4153,16 @@ func (w *TextBoxWidget) Render() {
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
 			}
 		}
+
+		// Selection test
+		expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
+		glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}))
+		if hasTypingFocus {
+			glt.BackgroundColor = &selectedTextColor
+		} else {
+			glt.BackgroundColor = &selectedTextInactiveColor
+		}
+		glt.PrintText(w.Content.Content()[w.caretPosition.Logical():w.caretPosition.selectionPosition])
 	} else {
 		gl.Color3d(0, 0, 0)
 		glt := NewOpenGlStream(w.pos)
@@ -4216,10 +4244,14 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING &&
+		(inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
+
+		leaveSelection := false // TODO
+
 		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
-		w.caretPosition.SetPositionFromPhysical(localPosition)
+		w.caretPosition.SetPositionFromPhysical(localPosition, leaveSelection)
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
@@ -4243,17 +4275,17 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
 				w.caretPosition.Move(-2)
-			} else if inputEvent.ModifierKey == 0 {
+			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
 				if w.caretPosition.Logical() >= 1 {
-					w.caretPosition.Move(-1)
+					w.caretPosition.Move(-1, inputEvent.ModifierKey&glfw.ModShift != 0)
 				}
 			}
 		case glfw.KeyRight:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				w.caretPosition.Move(+2)
-			} else if inputEvent.ModifierKey == 0 {
+			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
 				if w.caretPosition.Logical() < uint32(len(w.Content.Content())) {
-					w.caretPosition.Move(+1)
+					w.caretPosition.Move(+1, inputEvent.ModifierKey&glfw.ModShift != 0)
 				}
 			}
 		case glfw.KeyUp:
