@@ -4264,14 +4264,13 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 	if inputEvent.Pointer.VirtualCategory == POINTING {
 		if inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 {
-
-			leaveSelection := !inputEvent.Buttons[0]
+			// Leave selection on mouse release, or if shift is held down
+			leaveSelection := inputEvent.Buttons[0] == false || (inputEvent.ModifierKey&glfw.ModShift != 0)
 
 			globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 			localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 			w.caretPosition.SetPositionFromPhysical(localPosition, leaveSelection)
 		} else if inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 && inputEvent.Pointer.State.Button(0) {
-
 			leaveSelection := true
 
 			globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
@@ -4330,24 +4329,29 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			if !w.Private.Get() &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
-				globalWindow.SetClipboardString(w.Content.Content()) // TODO: Don't use globalWindow
-				SetViewGroup(w.Content, "")
+				selStart, selEnd := w.caretPosition.SelectionRange()
+				if selStart != selEnd {
+					globalWindow.SetClipboardString(w.Content.Content()[selStart:selEnd]) // TODO: Don't use globalWindow
+					SetViewGroup(w.Content, w.Content.Content()[:selStart]+w.Content.Content()[selEnd:])
+					w.caretPosition.Set(selStart)
+				}
 			}
 		case glfw.KeyC:
 			if !w.Private.Get() &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
-				globalWindow.SetClipboardString(w.Content.Content()) // TODO: Don't use globalWindow
+				selStart, selEnd := w.caretPosition.SelectionRange()
+				if selStart != selEnd {
+					globalWindow.SetClipboardString(w.Content.Content()[selStart:selEnd]) // TODO: Don't use globalWindow
+				}
 			}
 		case glfw.KeyV:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				// TODO: Don't use globalWindow
 				if clipboard, err := globalWindow.GetClipboardString(); err == nil && clipboard != "" {
-					//EraseSelectionIfAny();
-					SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+clipboard+w.Content.Content()[w.caretPosition.Logical():])
-					for _ = range []byte(clipboard) { // TODO
-						w.caretPosition.Move(+1)
-					}
+					selStart, selEnd := w.caretPosition.SelectionRange()
+					SetViewGroup(w.Content, w.Content.Content()[:selStart]+clipboard+w.Content.Content()[selEnd:])
+					w.caretPosition.Set(selStart + uint32(len(clipboard)))
 				}
 			}
 		case glfw.KeyR:
@@ -4368,8 +4372,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
-		SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+string(byte(inputEvent.InputId))+w.Content.Content()[w.caretPosition.Logical():])
-		w.caretPosition.Move(+1)
+		selStart, selEnd := w.caretPosition.SelectionRange()
+		SetViewGroup(w.Content, w.Content.Content()[:selStart]+string(inputEvent.InputId)+w.Content.Content()[selEnd:])
+		w.caretPosition.Set(selStart + 1)
 	}
 }
 
@@ -5064,14 +5069,15 @@ func main() {
 			redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
 		})
 
-		window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
+		window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 			inputEvent := InputEvent{
-				Pointer:    mousePointer,
-				EventTypes: map[EventType]bool{BUTTON_EVENT: true},
-				InputId:    uint16(button),
-				Buttons:    []bool{action != glfw.Release},
-				Sliders:    nil,
-				Axes:       nil,
+				Pointer:     mousePointer,
+				EventTypes:  map[EventType]bool{BUTTON_EVENT: true},
+				InputId:     uint16(button),
+				Buttons:     []bool{action != glfw.Release},
+				Sliders:     nil,
+				Axes:        nil,
+				ModifierKey: mods,
 			}
 			inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 			redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
