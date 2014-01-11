@@ -39,6 +39,7 @@ import (
 	//"go/token"
 
 	"math"
+	intmath "github.com/pkg/math"
 
 	. "gist.github.com/5504644.git"
 	. "gist.github.com/5639599.git"
@@ -4162,7 +4163,9 @@ func (w *TextBoxWidget) Render() {
 		} else {
 			glt.BackgroundColor = &selectedTextInactiveColor
 		}
-		glt.PrintText(w.Content.Content()[w.caretPosition.Logical():w.caretPosition.selectionPosition])
+		min := intmath.MinUint32(w.caretPosition.Logical(), w.caretPosition.selectionPosition)
+		max := intmath.MaxUint32(w.caretPosition.Logical(), w.caretPosition.selectionPosition)
+		glt.PrintText(w.Content.Content()[min:max])
 	} else {
 		gl.Color3d(0, 0, 0)
 		glt := NewOpenGlStream(w.pos)
@@ -4241,17 +4244,24 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	//hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
-	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING &&
-		(inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
+	if inputEvent.Pointer.VirtualCategory == POINTING {
+		if inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 {
 
-		leaveSelection := false // TODO
+			leaveSelection := !inputEvent.Buttons[0]
 
-		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
-		w.caretPosition.SetPositionFromPhysical(localPosition, leaveSelection)
+			globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+			localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
+			w.caretPosition.SetPositionFromPhysical(localPosition, leaveSelection)
+		} else if inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 && inputEvent.Pointer.State.Button(0) {
+
+			leaveSelection := true
+
+			globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+			localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
+			w.caretPosition.SetPositionFromPhysical(localPosition, leaveSelection)
+		}
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
