@@ -4178,26 +4178,16 @@ func (w *TextBoxWidget) Render() {
 			max = intmath.MaxUint32(max, lines[lineNumber].Start)
 			max = intmath.MinUint32(max, lines[lastLineNumber].Start+lines[lastLineNumber].Length)
 
-			if glfw.Release != globalWindow.GetKey(glfw.KeyLeftAlt) {
-				for ; lineNumber <= lastLineNumber; lineNumber++ {
-					contentLine := lines[lineNumber]
-					PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
-				}
+			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineNumber)}))
+			glt.PrintText(w.Content.Content()[lines[lineNumber].Start:min])
+			if hasTypingFocus {
+				glt.BackgroundColor = &selectedTextColor
 			} else {
-				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineNumber)}))
-				glt.PrintText(w.Content.Content()[lines[lineNumber].Start:min])
-				if hasTypingFocus {
-					glt.BackgroundColor = &selectedTextColor
-				} else {
-					glt.BackgroundColor = &selectedTextInactiveColor
-				}
-				glt.PrintText(w.Content.Content()[min:max])
-				glt.BackgroundColor = nil
-				glt.PrintText(w.Content.Content()[max : lines[lastLineNumber].Start+lines[lastLineNumber].Length])
+				glt.BackgroundColor = &selectedTextInactiveColor
 			}
-			/*for lineNumber, contentLine := range w.Content.Lines() {
-				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
-			}*/
+			glt.PrintText(w.Content.Content()[min:max])
+			glt.BackgroundColor = nil
+			glt.PrintText(w.Content.Content()[max : lines[lastLineNumber].Start+lines[lastLineNumber].Length])
 		} else {
 			for lineNumber, contentLine := range w.Content.Lines() {
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
