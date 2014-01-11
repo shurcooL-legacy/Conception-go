@@ -3566,6 +3566,12 @@ func (cp *CaretPosition) Logical() uint32 {
 	return cp.caretPosition
 }
 
+func (cp *CaretPosition) SelectionRange() (start uint32, end uint32) {
+	min := intmath.MinUint32(cp.caretPosition, cp.selectionPosition)
+	max := intmath.MaxUint32(cp.caretPosition, cp.selectionPosition)
+	return min, max
+}
+
 func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 	caretPosition := cp.caretPosition
 	caretLine := uint32(0)
@@ -4145,8 +4151,7 @@ func (w *TextBoxWidget) Render() {
 
 			// Selection
 			// TODO: Refactor (make this more concise and easier to understand)
-			min := intmath.MinUint32(w.caretPosition.Logical(), w.caretPosition.selectionPosition)
-			max := intmath.MaxUint32(w.caretPosition.Logical(), w.caretPosition.selectionPosition)
+			min, max := w.caretPosition.SelectionRange()
 			min = intmath.MaxUint32(min, lines[lineNumber].Start)
 			min = intmath.MinUint32(min, lines[lastLineNumber].Start+lines[lastLineNumber].Length)
 			max = intmath.MaxUint32(max, lines[lineNumber].Start)
