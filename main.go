@@ -237,7 +237,7 @@ func (o *OpenGlStream) PrintText(s string) {
 		} else {
 			//o.NewLine()
 			o.PrintSegment(" ") // Newline
-			o.pos[1] += 16
+			o.pos[1] += fontHeight
 			o.advance = 0
 			s = s[end+1:]
 		}
