@@ -3585,12 +3585,23 @@ func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 }
 
 // HACK: leaveSelection is currently an optional bool parameter
-func (cp *CaretPosition) Move(amount int8, leaveSelection ...bool) {
+func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
 	switch amount {
 	case -1:
-		cp.caretPosition--
+		if cp.caretPosition != cp.selectionPosition && !leaveSelection {
+			cp.caretPosition = intmath.MinUint32(cp.caretPosition, cp.selectionPosition)
+		} else {
+			cp.caretPosition--
+		}
 	case +1:
-		cp.caretPosition++
+		if cp.caretPosition != cp.selectionPosition && !leaveSelection {
+			cp.caretPosition = intmath.MaxUint32(cp.caretPosition, cp.selectionPosition)
+		} else {
+			cp.caretPosition++
+		}
 	case -2:
 		_, y := cp.ExpandedPosition()
 		cp.caretPosition = cp.w.Lines()[y].Start
@@ -3604,8 +3615,7 @@ func (cp *CaretPosition) Move(amount int8, leaveSelection ...bool) {
 		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
 	}
 
-	// HACK, TODO: Make leaveSelection a required parameter?
-	if len(leaveSelection) == 0 || !leaveSelection[0] {
+	if !leaveSelection {
 		cp.selectionPosition = cp.caretPosition
 	}
 
@@ -3643,7 +3653,10 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 	}
 }
 
-func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelection ...bool) {
+func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectionOptional ...bool) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
 	var y uint32
 	if pos[1] < 0 {
 		y = 0
@@ -3662,8 +3675,7 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectio
 	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 	cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 
-	// HACK, TODO: Make leaveSelection a required parameter?
-	if len(leaveSelection) == 0 || !leaveSelection[0] {
+	if !leaveSelection {
 		cp.selectionPosition = cp.caretPosition
 	}
 
@@ -4324,6 +4336,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.caretPosition.Move(+3)
 			} else if inputEvent.ModifierKey == 0 {
 				w.caretPosition.TryMoveV(+1)
+			}
+		case glfw.KeyA:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				// Select all
+				w.caretPosition.Move(-3)
+				w.caretPosition.Move(+3, true)
 			}
 		case glfw.KeyX:
 			if !w.Private.Get() &&
