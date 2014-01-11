@@ -4142,9 +4142,32 @@ func (w *TextBoxWidget) Render() {
 			if bottomLineNumber := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1] / fontHeight); bottomLineNumber < lastLineNumber {
 				lastLineNumber = bottomLineNumber
 			}
-			for ; lineNumber <= lastLineNumber; lineNumber++ {
-				contentLine := lines[lineNumber]
-				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+
+			// Selection
+			// TODO: Refactor (make this more concise and easier to understand)
+			min := intmath.MinUint32(w.caretPosition.Logical(), w.caretPosition.selectionPosition)
+			max := intmath.MaxUint32(w.caretPosition.Logical(), w.caretPosition.selectionPosition)
+			min = intmath.MaxUint32(min, lines[lineNumber].Start)
+			min = intmath.MinUint32(min, lines[lastLineNumber].Start+lines[lastLineNumber].Length)
+			max = intmath.MaxUint32(max, lines[lineNumber].Start)
+			max = intmath.MinUint32(max, lines[lastLineNumber].Start+lines[lastLineNumber].Length)
+
+			if glfw.Release != globalWindow.GetKey(glfw.KeyLeftAlt) {
+				for ; lineNumber <= lastLineNumber; lineNumber++ {
+					contentLine := lines[lineNumber]
+					PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+				}
+			} else {
+				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineNumber)}))
+				glt.PrintText(w.Content.Content()[lines[lineNumber].Start:min])
+				if hasTypingFocus {
+					glt.BackgroundColor = &selectedTextColor
+				} else {
+					glt.BackgroundColor = &selectedTextInactiveColor
+				}
+				glt.PrintText(w.Content.Content()[min:max])
+				glt.BackgroundColor = nil
+				glt.PrintText(w.Content.Content()[max : lines[lastLineNumber].Start+lines[lastLineNumber].Length])
 			}
 			/*for lineNumber, contentLine := range w.Content.Lines() {
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
@@ -4154,18 +4177,6 @@ func (w *TextBoxWidget) Render() {
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
 			}
 		}
-
-		// Selection test
-		expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
-		glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}))
-		if hasTypingFocus {
-			glt.BackgroundColor = &selectedTextColor
-		} else {
-			glt.BackgroundColor = &selectedTextInactiveColor
-		}
-		min := intmath.MinUint32(w.caretPosition.Logical(), w.caretPosition.selectionPosition)
-		max := intmath.MaxUint32(w.caretPosition.Logical(), w.caretPosition.selectionPosition)
-		glt.PrintText(w.Content.Content()[min:max])
 	} else {
 		gl.Color3d(0, 0, 0)
 		glt := NewOpenGlStream(w.pos)
@@ -5111,7 +5122,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if false {
+	if true {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
