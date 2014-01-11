@@ -3624,7 +3624,10 @@ func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
-func (cp *CaretPosition) TryMoveV(amount int8) {
+func (cp *CaretPosition) TryMoveV(amount int8, leaveSelectionOptional ...bool) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
 	_, y := cp.ExpandedPosition()
 
 	switch amount {
@@ -3633,22 +3636,28 @@ func (cp *CaretPosition) TryMoveV(amount int8) {
 			y--
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
-			cp.selectionPosition = cp.caretPosition
+
+			if !leaveSelection {
+				cp.selectionPosition = cp.caretPosition
+			}
 
 			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
-			cp.Move(-2)
+			cp.Move(-2, leaveSelection)
 		}
 	case +1:
 		if y < uint32(len(cp.w.Lines()))-1 {
 			y++
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
-			cp.selectionPosition = cp.caretPosition
+
+			if !leaveSelection {
+				cp.selectionPosition = cp.caretPosition
+			}
 
 			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
-			cp.Move(+2)
+			cp.Move(+2, leaveSelection)
 		}
 	}
 }
@@ -4328,14 +4337,14 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				w.caretPosition.Move(-3)
-			} else if inputEvent.ModifierKey == 0 {
-				w.caretPosition.TryMoveV(-1)
+			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
+				w.caretPosition.TryMoveV(-1, inputEvent.ModifierKey&glfw.ModShift != 0)
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				w.caretPosition.Move(+3)
-			} else if inputEvent.ModifierKey == 0 {
-				w.caretPosition.TryMoveV(+1)
+			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
+				w.caretPosition.TryMoveV(+1, inputEvent.ModifierKey&glfw.ModShift != 0)
 			}
 		case glfw.KeyA:
 			if inputEvent.ModifierKey == glfw.ModSuper {
