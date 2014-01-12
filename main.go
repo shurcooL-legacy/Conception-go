@@ -167,8 +167,8 @@ func CheckGLError() {
 
 func PrintText(pos mathgl.Vec2d, s string) {
 	lines := GetLines(s)
-	for lineNumber, line := range lines {
-		PrintLine(pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineNumber)}), line)
+	for lineIndex, line := range lines {
+		PrintLine(pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineIndex)}), line)
 	}
 }
 
@@ -572,11 +572,11 @@ func (w *Test1Widget) Render() {
 	//PrintText(w.pos, strings.Join(x.Imports, "\n"))
 
 	/*files, _ := ioutil.ReadDir("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/")
-	for lineNumber, file := range files {
+	for lineIndex, file := range files {
 		if file.IsDir() {
-			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), ">>>> " + file.Name() + "/ (FOLDER)")
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineIndex)}), ">>>> " + file.Name() + "/ (FOLDER)")
 		} else {
-			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), file.Name())
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineIndex)}), file.Name())
 		}
 	}*/
 
@@ -592,8 +592,8 @@ func (w *Test1Widget) Render() {
 	//PrintText(w.pos.Add(mathgl.Vec2d{0, 2 * 16}), GetThisGoPackage().ImportPath)
 
 	/*x := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
-	for lineNumber, y := range x.Vars {
-		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineNumber)}), SprintAstBare(y.Decl))
+	for lineIndex, y := range x.Vars {
+		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineIndex)}), SprintAstBare(y.Decl))
 	}*/
 
 	/*kat := widgets[len(widgets)-2].(*KatWidget)
@@ -1082,8 +1082,8 @@ type GoCompileErrorsTest struct {
 }
 
 type GoErrorMessage struct {
-	LineNumber int
-	Message    string
+	LineIndex int
+	Message   string
 }
 
 type GoCompilerError struct {
@@ -1112,12 +1112,12 @@ func (this *GoCompileErrorsTest) Update() {
 		if err != nil {
 			return nil
 		}
-		lineNumber -= 1 // Convert line number (e.g. 1) to line index (e.g. 0)
+		lineIndex := lineNumber - 1 // Convert line number (e.g. 1) to line index (e.g. 0)
 
 		in = in[x+1:]
 		message := TrimFirstSpace(in)
 
-		return GoCompilerError{FileUri: FileUri("file://" + fileUri), ErrorMessage: GoErrorMessage{LineNumber: lineNumber, Message: message}}
+		return GoCompilerError{FileUri: FileUri("file://" + fileUri), ErrorMessage: GoErrorMessage{LineIndex: lineIndex, Message: message}}
 	}
 
 	source := this.DepNode2.GetSources()[0].(*LiveCmdExpeWidget).Content
@@ -3875,15 +3875,15 @@ func (w *MultilineContent) updateLines() {
 	lines := GetLines(w.content)
 	w.lines = make([]contentLine, len(lines))
 	w.longestLine = 0
-	for lineNumber, line := range lines {
+	for lineIndex, line := range lines {
 		lineLength := ExpandedLength(line)
 		if lineLength > w.longestLine {
 			w.longestLine = lineLength
 		}
-		if lineNumber >= 1 {
-			w.lines[lineNumber].Start = w.lines[lineNumber-1].Start + w.lines[lineNumber-1].Length + 1
+		if lineIndex >= 1 {
+			w.lines[lineIndex].Start = w.lines[lineIndex-1].Start + w.lines[lineIndex-1].Length + 1
 		}
-		w.lines[lineNumber].Length = uint32(len(line))
+		w.lines[lineIndex].Length = uint32(len(line))
 	}
 }
 
@@ -4141,8 +4141,8 @@ func (w *TextLabelWidget) Render() {
 	DrawLGBox(w.pos, w.size)
 
 	gl.Color3d(0, 0, 0)
-	for lineNumber, contentLine := range w.Content.Lines() {
-		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+	for lineIndex, contentLine := range w.Content.Lines() {
+		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
 	isHit := len(w.HoverPointers()) > 0
@@ -4282,25 +4282,25 @@ func (w *TextBoxWidget) Render() {
 		if !w.Private.Get() {
 			// Render only visible lines.
 			// TODO: Generalize this.
-			lineNumber, lastLineNumber := 0, w.Content.LenLines()
-			if topLineNumber := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); topLineNumber > lineNumber {
-				lineNumber = intmath.MinInt(topLineNumber, lastLineNumber)
+			beginLineIndex, endLineIndex := 0, w.Content.LenLines()
+			if topLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); topLineIndex > beginLineIndex {
+				beginLineIndex = intmath.MinInt(topLineIndex, endLineIndex)
 			}
 			_, height := globalWindow.GetSize() // HACK: Should be some viewport
-			if bottomLineNumber := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); bottomLineNumber < lastLineNumber {
-				lastLineNumber = intmath.MaxInt(bottomLineNumber, lineNumber)
+			if bottomLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); bottomLineIndex < endLineIndex {
+				endLineIndex = intmath.MaxInt(bottomLineIndex, beginLineIndex)
 			}
 
 			// Selection
 			// TODO: Refactor (make this more concise and easier to understand)
 			min, max := w.caretPosition.SelectionRange()
-			min = intmath.MaxUint32(min, w.Content.Line(lineNumber).Start)
-			min = intmath.MinUint32(min, w.Content.Line(lastLineNumber).Start)
-			max = intmath.MaxUint32(max, w.Content.Line(lineNumber).Start)
-			max = intmath.MinUint32(max, w.Content.Line(lastLineNumber).Start)
+			min = intmath.MaxUint32(min, w.Content.Line(beginLineIndex).Start)
+			min = intmath.MinUint32(min, w.Content.Line(endLineIndex).Start)
+			max = intmath.MaxUint32(max, w.Content.Line(beginLineIndex).Start)
+			max = intmath.MinUint32(max, w.Content.Line(endLineIndex).Start)
 
-			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineNumber)}))
-			glt.PrintText(w.Content.Content()[w.Content.Line(lineNumber).Start:min])
+			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
+			glt.PrintText(w.Content.Content()[w.Content.Line(beginLineIndex).Start:min])
 			if hasTypingFocus {
 				glt.BackgroundColor = &selectedTextColor
 			} else {
@@ -4308,10 +4308,10 @@ func (w *TextBoxWidget) Render() {
 			}
 			glt.PrintText(w.Content.Content()[min:max])
 			glt.BackgroundColor = nil
-			glt.PrintText(w.Content.Content()[max:w.Content.Line(lastLineNumber).Start])
+			glt.PrintText(w.Content.Content()[max:w.Content.Line(endLineIndex).Start])
 		} else {
-			for lineNumber, contentLine := range w.Content.Lines() {
-				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
+			for lineIndex, contentLine := range w.Content.Lines() {
+				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, strings.Repeat("*", int(contentLine.Length)))
 			}
 		}
 	} else {
@@ -4339,8 +4339,8 @@ func (w *TextBoxWidget) Render() {
 			glt := NewOpenGlStream(np)
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
 			for _, goErrorMessage := range goCompileErrorsManagerTest.All[contentFile.Path()] { // TODO: Path() isn't guaranteed to be absolute, so either change that, or use something else here
-				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
-				glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineNumber)}))
+				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineIndex].Start : w.Content.Lines()[goErrorMessage.LineIndex].Start+w.Content.Lines()[goErrorMessage.LineIndex].Length])
+				glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineIndex)}))
 				glt.PrintLine(goErrorMessage.Message)
 			}
 		}
@@ -4351,9 +4351,9 @@ func (w *TextBoxWidget) Render() {
 			glt := NewOpenGlStream(np)
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
 			for _, goErrorMessage := range goCompileErrorsManagerTest.All[FileUri(uri)] {
-				if goErrorMessage.LineNumber < len(w.Content.Lines()) {
-					expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineNumber].Start : w.Content.Lines()[goErrorMessage.LineNumber].Start+w.Content.Lines()[goErrorMessage.LineNumber].Length])
-					glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineNumber)}))
+				if goErrorMessage.LineIndex < len(w.Content.Lines()) {
+					expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineIndex].Start : w.Content.Lines()[goErrorMessage.LineIndex].Start+w.Content.Lines()[goErrorMessage.LineIndex].Length])
+					glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineIndex)}))
 					glt.PrintLine(goErrorMessage.Message)
 				}
 			}
@@ -4613,8 +4613,8 @@ func (w *TextBoxValidationWidget) Render() {
 	}
 
 	gl.Color3d(0, 0, 0)
-	for lineNumber, contentLine := range w.Content.Lines() {
-		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+	for lineIndex, contentLine := range w.Content.Lines() {
+		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
 	if hasTypingFocus {
@@ -5875,7 +5875,7 @@ func main() {
 				return fmt.Sprintf("%.8f", shuryearNow)
 			}
 			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
-			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{1431, 1}, mc)) // TODO: Stick to top right corner?
+			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{1443, 0}, mc)) // TODO: Stick to top right corner?
 		}
 
 		{
@@ -6026,7 +6026,7 @@ func main() {
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 	}
 
-	widget = NewCanvasWidget(np, widgets, nil)
+	widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
