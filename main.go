@@ -526,12 +526,24 @@ func (w WidgeterS) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mat
 
 type CustomWidget struct {
 	Widget
+	RenderFunc       func()
 	ProcessEventFunc func(inputEvent InputEvent)
 }
 
+func (this *CustomWidget) Render() {
+	if this.RenderFunc != nil {
+		this.RenderFunc()
+	} else {
+		this.Widget.Render()
+	}
+}
+
 func (this *CustomWidget) ProcessEvent(inputEvent InputEvent) {
-	// TODO: Handle nil?
-	this.ProcessEventFunc(inputEvent)
+	if this.RenderFunc != nil {
+		this.ProcessEventFunc(inputEvent)
+	} else {
+		this.Widget.ProcessEvent(inputEvent)
+	}
 }
 
 // ---
@@ -634,7 +646,7 @@ func (t *parsedFile) Update() {
 	}
 }
 
-func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeWidget {
+func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *parsedFile) {
 	parsedFile := &parsedFile{}
 	parsedFile.AddSources(source.Content)
 
@@ -683,7 +695,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) *LiveGoroutineExpeW
 	}
 
 	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{parsedFile, &source.caretPosition}, params, action)
-	return w
+	return w, parsedFile
 }
 
 // ---
@@ -699,7 +711,7 @@ type typeCheckedPackage struct {
 }
 
 func (t *typeCheckedPackage) Update() {
-	goPackage := t.GetSources()[0].(*GoPackageListingPureWidget)
+	goPackage := t.GetSources()[0].(ImportPathFoundSelector)
 
 	importPath := ""
 	if goPackage.GetSelected() != nil {
@@ -761,7 +773,7 @@ func FindFileAst(fset *token.FileSet, file *token.File, fileAsts []*ast.File) *a
 	return nil
 }
 
-func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
+func NewTest4Widget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
 	typeCheckedPackage := &typeCheckedPackage{}
 	typeCheckedPackage.AddSources(goPackage, source.Content)
 
@@ -876,7 +888,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, sou
 
 			if info != nil && info.Objects[ident] != nil {
 				obj := info.Objects[ident]
-				out += TypeChainString(obj.Type())
+				out += ">>> " + TypeChainString(obj.Type())
 				if constObj, ok := obj.(*types.Const); ok {
 					out += fmt.Sprintf(" = %v", constObj.Val())
 				}
@@ -2875,6 +2887,11 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 }
 
 // ---
+
+type ImportPathFoundSelector interface {
+	GetSelected() *ImportPathFound
+	DepNode2I
+}
 
 type GoPackageListingPureWidget struct {
 	Widget
@@ -5027,6 +5044,20 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 	return append(inputEventQueue, inputEvent)
 }
 
+// ---
+
+// HACK
+type goPackageHardcoded struct {
+	DepNode2Manual
+}
+
+func (*goPackageHardcoded) GetSelected() *ImportPathFound {
+	x := NewImportPathFound("gist.github.com/7176504.git", "/Users/Dmitri/Dropbox/Work/2013/GoLand/")
+	return &x
+}
+
+// ---
+
 func main() {
 	//defer profile.Start(profile.CPUProfile).Stop()
 	//defer profile.Start(profile.MemProfile).Stop()
@@ -5518,7 +5549,7 @@ func main() {
 		}
 
 		// git diff
-		{
+		if false {
 			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget)
 			dir, file := filepath.Split(source.Path())
 			if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
@@ -5532,14 +5563,35 @@ func main() {
 			}
 		}
 
-		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
-		/*{
-			//w := NewTest3Widget(np, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
-			w := NewTest4Widget(np, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget))
+		// TEST: Render the AST
+		{
+			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget
+			_, parsedFile := NewTest3Widget(np, source)
+			_ = parsedFile // TODO: Use..
+
+			w := &CustomWidget{
+				Widget: NewWidget(np, mathgl.Vec2d{fontHeight, fontHeight}),
+			}
+			w.RenderFunc = func() {
+				// HACK: Layout in Render()
+				w.size = *source.Size()
+
+				DrawNBox(w.pos, w.size)
+			}
+
 			widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
 			w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
 			widgets[2].(*FlowLayoutWidget).Layout()
-		}*/
+		}
+
+		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
+		{
+			//w, _ := NewTest3Widget(np, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			w, _ := NewTest4Widget(np, &goPackageHardcoded{}, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
+			widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
+			w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
+			widgets[2].(*FlowLayoutWidget).Layout()
+		}
 
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
