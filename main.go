@@ -4293,20 +4293,34 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyBackspace:
-			if w.caretPosition.Logical() >= 1 {
-				w.caretPosition.Move(-1)
-				SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
+			selStart, selEnd := w.caretPosition.SelectionRange()
+			if selStart != selEnd {
+				SetViewGroup(w.Content, w.Content.Content()[:selStart]+w.Content.Content()[selEnd:])
+				w.caretPosition.Set(selStart)
+			} else {
+				if w.caretPosition.Logical() >= 1 {
+					w.caretPosition.Move(-1)
+					SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
+				}
 			}
 		case glfw.KeyDelete:
-			if w.caretPosition.Logical()+1 <= uint32(len(w.Content.Content())) {
-				SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
+			selStart, selEnd := w.caretPosition.SelectionRange()
+			if selStart != selEnd {
+				SetViewGroup(w.Content, w.Content.Content()[:selStart]+w.Content.Content()[selEnd:])
+				w.caretPosition.Set(selStart)
+			} else {
+				if w.caretPosition.Logical()+1 <= uint32(len(w.Content.Content())) {
+					SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
+				}
 			}
 		case glfw.KeyEnter:
-			SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+"\n"+w.Content.Content()[w.caretPosition.Logical():])
-			w.caretPosition.Move(+1)
+			selStart, selEnd := w.caretPosition.SelectionRange()
+			SetViewGroup(w.Content, w.Content.Content()[:selStart]+"\n"+w.Content.Content()[selEnd:])
+			w.caretPosition.Set(selStart + 1)
 		case glfw.KeyTab:
-			SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+"\t"+w.Content.Content()[w.caretPosition.Logical():])
-			w.caretPosition.Move(+1)
+			selStart, selEnd := w.caretPosition.SelectionRange()
+			SetViewGroup(w.Content, w.Content.Content()[:selStart]+"\t"+w.Content.Content()[selEnd:])
+			w.caretPosition.Set(selStart + 1)
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
