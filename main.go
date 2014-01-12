@@ -696,6 +696,10 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) (*LiveGoroutineExpe
 
 		// This is can be huge if ran on root AST node of large Go files, so don't
 		if _, huge := smallestV.(*ast.File); !huge {
+			buf := new(bytes.Buffer)
+			_ = ast.Fprint(buf, fset, smallestV, nil)
+			out += buf.String()
+
 			out += goon.Sdump(smallestV)
 		}
 		return out
@@ -907,6 +911,10 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source 
 
 		// This is can be huge if ran on root AST node of large Go files, so don't
 		if _, huge := smallestV.(*ast.File); !huge {
+			buf := new(bytes.Buffer)
+			_ = ast.Fprint(buf, fset, smallestV, nil)
+			out += buf.String()
+
 			out += goon.Sdump(smallestV)
 		}
 		return out
@@ -1767,6 +1775,12 @@ func (w *KatWidget) NotifyChange() {
 
 // ---
 
+type AddWidgeter interface {
+	AddWidget(Widgeter)
+}
+
+// ---
+
 type CompositeWidget struct {
 	Widget
 	Widgets Widgeters
@@ -1779,6 +1793,12 @@ func NewCompositeWidget(pos mathgl.Vec2d, Widgets Widgeters) *CompositeWidget {
 	}
 	w.Layout() // TODO: Should this be automatic from above SetParent()?
 	return w
+}
+
+func (w *CompositeWidget) AddWidget(widget Widgeter) {
+	w.Widgets = append(w.Widgets, widget)
+	widget.SetParent(w)
+	w.Layout()
 }
 
 func (w *CompositeWidget) Layout() {
@@ -1896,6 +1916,12 @@ func NewCanvasWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *CanvasWidget
 		widget.SetParent(w)
 	}
 	return w
+}
+
+func (w *CanvasWidget) AddWidget(widget Widgeter) {
+	w.Widgets = append(w.Widgets, widget)
+	widget.SetParent(w)
+	w.Layout()
 }
 
 func (w *CanvasWidget) Layout() {
@@ -3784,8 +3810,11 @@ func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...boo
 
 type MultilineContentI interface {
 	Content() string
-	Lines() []contentLine
-	LongestLine() uint32
+	Lines() []contentLine // DEPRECATED
+	LongestLine() uint32  // Line length
+
+	Line(lineIndex int) contentLine
+	LenLines() int
 
 	ViewGroupI
 }
@@ -3801,8 +3830,8 @@ type contentLine struct {
 
 type MultilineContent struct {
 	content     string
-	lines       []contentLine
-	longestLine uint32 // Line length
+	lines       []contentLine // TODO: Can be replaced by line starts only, calculate length in Line()
+	longestLine uint32        // Line length
 
 	ViewGroup
 }
@@ -3823,6 +3852,19 @@ func NewMultilineContentString(content string) *MultilineContent {
 func (c *MultilineContent) Content() string      { return c.content }
 func (c *MultilineContent) Lines() []contentLine { return c.lines }
 func (c *MultilineContent) LongestLine() uint32  { return c.longestLine }
+
+func (c *MultilineContent) Line(lineIndex int) contentLine {
+	if lineIndex < 0 {
+		return contentLine{0, 0}
+	} else if lineIndex >= len(c.lines) {
+		return contentLine{uint32(len(c.content)), 0}
+	} else {
+		return c.lines[lineIndex]
+	}
+}
+func (c *MultilineContent) LenLines() int {
+	return len(c.lines)
+}
 
 func (mc *MultilineContent) SetSelf(content string) {
 	mc.content = content
@@ -4240,26 +4282,25 @@ func (w *TextBoxWidget) Render() {
 		if !w.Private.Get() {
 			// Render only visible lines.
 			// TODO: Generalize this.
-			lines := w.Content.Lines()
-			lineNumber, lastLineNumber := 0, len(lines)-1
+			lineNumber, lastLineNumber := 0, w.Content.LenLines()
 			if topLineNumber := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); topLineNumber > lineNumber {
-				lineNumber = topLineNumber
+				lineNumber = intmath.MinInt(topLineNumber, lastLineNumber)
 			}
-			_, height := globalWindow.GetSize() // HACK
-			if bottomLineNumber := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1] / fontHeight); bottomLineNumber < lastLineNumber {
-				lastLineNumber = bottomLineNumber
+			_, height := globalWindow.GetSize() // HACK: Should be some viewport
+			if bottomLineNumber := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); bottomLineNumber < lastLineNumber {
+				lastLineNumber = intmath.MaxInt(bottomLineNumber, lineNumber)
 			}
 
 			// Selection
 			// TODO: Refactor (make this more concise and easier to understand)
 			min, max := w.caretPosition.SelectionRange()
-			min = intmath.MaxUint32(min, lines[lineNumber].Start)
-			min = intmath.MinUint32(min, lines[lastLineNumber].Start+lines[lastLineNumber].Length)
-			max = intmath.MaxUint32(max, lines[lineNumber].Start)
-			max = intmath.MinUint32(max, lines[lastLineNumber].Start+lines[lastLineNumber].Length)
+			min = intmath.MaxUint32(min, w.Content.Line(lineNumber).Start)
+			min = intmath.MinUint32(min, w.Content.Line(lastLineNumber).Start)
+			max = intmath.MaxUint32(max, w.Content.Line(lineNumber).Start)
+			max = intmath.MinUint32(max, w.Content.Line(lastLineNumber).Start)
 
 			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineNumber)}))
-			glt.PrintText(w.Content.Content()[lines[lineNumber].Start:min])
+			glt.PrintText(w.Content.Content()[w.Content.Line(lineNumber).Start:min])
 			if hasTypingFocus {
 				glt.BackgroundColor = &selectedTextColor
 			} else {
@@ -4267,7 +4308,7 @@ func (w *TextBoxWidget) Render() {
 			}
 			glt.PrintText(w.Content.Content()[min:max])
 			glt.BackgroundColor = nil
-			glt.PrintText(w.Content.Content()[max : lines[lastLineNumber].Start+lines[lastLineNumber].Length])
+			glt.PrintText(w.Content.Content()[max:w.Content.Line(lastLineNumber).Start])
 		} else {
 			for lineNumber, contentLine := range w.Content.Lines() {
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineNumber)}, strings.Repeat("*", int(contentLine.Length)))
@@ -5249,7 +5290,7 @@ func main() {
 
 	// ---
 
-	var widget *CompositeWidget
+	var widget Widgeter
 	var widgets []Widgeter
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
@@ -5960,10 +6001,8 @@ func main() {
 				w := NewWindowWidget(mathgl.Vec2d{500, 500}, mathgl.Vec2d{200, 140})
 				w.Name = "New Window"
 
-				// HACK: Add new widget to canvas
-				widget.Widgets = append(widget.Widgets, w)
-				w.SetParent(widget)
-				widget.Layout()
+				// Add new widget to canvas
+				widget.(AddWidgeter).AddWidget(w)
 			})
 			widgets = append(widgets, newWindowButton)
 
@@ -5987,9 +6026,9 @@ func main() {
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 	}
 
-	//widget := NewCanvasWidget(np, widgets, nil)
+	widget = NewCanvasWidget(np, widgets, nil)
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
-	widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
+	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
