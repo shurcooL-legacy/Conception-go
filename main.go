@@ -4141,7 +4141,8 @@ func (w *TextLabelWidget) Render() {
 	DrawLGBox(w.pos, w.size)
 
 	gl.Color3d(0, 0, 0)
-	for lineIndex, contentLine := range w.Content.Lines() {
+	for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
+		contentLine := w.Content.Line(lineIndex)
 		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
@@ -4310,7 +4311,8 @@ func (w *TextBoxWidget) Render() {
 			glt.BackgroundColor = nil
 			glt.PrintText(w.Content.Content()[max:w.Content.Line(endLineIndex).Start])
 		} else {
-			for lineIndex, contentLine := range w.Content.Lines() {
+			for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
+				contentLine := w.Content.Line(lineIndex)
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, strings.Repeat("*", int(contentLine.Length)))
 			}
 		}
@@ -4613,7 +4615,8 @@ func (w *TextBoxValidationWidget) Render() {
 	}
 
 	gl.Color3d(0, 0, 0)
-	for lineIndex, contentLine := range w.Content.Lines() {
+	for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
+		contentLine := w.Content.Line(lineIndex)
 		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
