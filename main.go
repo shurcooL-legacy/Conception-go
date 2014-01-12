@@ -3711,7 +3711,7 @@ func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
 	case -3:
 		cp.caretPosition = 0
 	case +3:
-		y := len(cp.w.Lines()) - 1
+		y := cp.w.LenLines() - 1
 		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
 	}
 
@@ -3746,7 +3746,7 @@ func (cp *CaretPosition) TryMoveV(amount int8, leaveSelectionOptional ...bool) {
 			cp.Move(-2, leaveSelection)
 		}
 	case +1:
-		if y < uint32(len(cp.w.Lines()))-1 {
+		if y < uint32(cp.w.LenLines())-1 {
 			y++
 			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
@@ -3769,8 +3769,8 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectio
 	var y uint32
 	if pos[1] < 0 {
 		y = 0
-	} else if pos[1] >= float64(len(cp.w.Lines())*fontHeight) {
-		y = uint32(len(cp.w.Lines()) - 1)
+	} else if pos[1] >= float64(cp.w.LenLines()*fontHeight) {
+		y = uint32(cp.w.LenLines() - 1)
 	} else {
 		y = uint32(pos[1] / fontHeight)
 	}
@@ -4131,7 +4131,7 @@ func (w *TextLabelWidget) Layout() {
 	} else {
 		w.size[0] = float64(fontWidth * w.Content.LongestLine())
 	}
-	w.size[1] = float64(fontHeight * len(w.Content.Lines()))
+	w.size[1] = float64(fontHeight * w.Content.LenLines())
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
@@ -4230,7 +4230,7 @@ func (w *TextBoxWidget) Layout() {
 	} else {
 		w.size[0] = float64(fontWidth * w.Content.LongestLine())
 	}
-	w.size[1] = float64(fontHeight * len(w.Content.Lines()))
+	w.size[1] = float64(fontHeight * w.Content.LenLines())
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
@@ -4351,7 +4351,7 @@ func (w *TextBoxWidget) Render() {
 			glt := NewOpenGlStream(np)
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
 			for _, goErrorMessage := range goCompileErrorsManagerTest.All[FileUri(uri)] {
-				if goErrorMessage.LineIndex < len(w.Content.Lines()) {
+				if goErrorMessage.LineIndex < w.Content.LenLines() {
 					expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineIndex].Start : w.Content.Lines()[goErrorMessage.LineIndex].Start+w.Content.Lines()[goErrorMessage.LineIndex].Length])
 					glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineIndex)}))
 					glt.PrintLine(goErrorMessage.Message)
@@ -5295,7 +5295,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if false {
+	if true {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -5623,7 +5623,7 @@ func main() {
 			w.RenderFunc = func() {
 				// HACK: Layout in Render()
 				w.size[0] = float64(fontWidth * source.Content.LongestLine())
-				w.size[1] = float64(fontHeight * len(source.Content.Lines()))
+				w.size[1] = float64(fontHeight * source.Content.LenLines())
 
 				DrawNBox(w.pos, w.size)
 
@@ -6026,9 +6026,9 @@ func main() {
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 	}
 
-	widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, nil)
+	//widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
-	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
+	widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
