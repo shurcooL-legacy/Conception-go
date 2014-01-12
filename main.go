@@ -5581,7 +5581,8 @@ func main() {
 			}
 			w.RenderFunc = func() {
 				// HACK: Layout in Render()
-				w.size = *source.Size()
+				w.size[0] = float64(fontWidth * source.Content.LongestLine())
+				w.size[1] = float64(fontHeight * len(source.Content.Lines()))
 
 				DrawNBox(w.pos, w.size)
 
@@ -5612,7 +5613,7 @@ func main() {
 						gl.Color3d(0.004, 0, 0.714)
 					case tok.IsLiteral() && tok != token.IDENT:
 						gl.Color3d(0.804, 0, 0)
-					case false:
+					case lit == "true" || lit == "false":
 						gl.Color3d(0.008, 0.024, 1)
 					case tok == token.COMMENT:
 						gl.Color3d(0, 0.706, 0.094)
