@@ -3584,7 +3584,13 @@ func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 	return expandedCaretPosition, caretLine
 }
 
-// TODO: Support jumpWords
+func isCoreCharacter(character byte) bool {
+	return (('a' <= character && character <= 'z') ||
+		('A' <= character && character <= 'Z') ||
+		('0' <= character && character <= '9') ||
+		'_' == character)
+}
+
 func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
 	switch amount {
 	case -1:
@@ -3592,7 +3598,21 @@ func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
 			cp.Set(intmath.MinUint32(cp.caretPosition, cp.selectionPosition))
 		} else {
 			if cp.caretPosition >= 1 {
-				cp.Move(-1, leaveSelection)
+				if jumpWords {
+					// Skip spaces to the left
+					LookAt := cp.caretPosition
+					for LookAt > 0 && !isCoreCharacter(cp.w.Content()[LookAt-1]) {
+						LookAt--
+					}
+					// Skip non-spaces to the left
+					for LookAt > 0 && isCoreCharacter(cp.w.Content()[LookAt-1]) {
+						LookAt--
+					}
+
+					cp.Set(LookAt, leaveSelection)
+				} else {
+					cp.Move(-1, leaveSelection)
+				}
 			}
 		}
 	case +1:
@@ -3600,7 +3620,21 @@ func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
 			cp.Set(intmath.MaxUint32(cp.caretPosition, cp.selectionPosition))
 		} else {
 			if cp.caretPosition < uint32(len(cp.w.Content())) {
-				cp.Move(+1, leaveSelection)
+				if jumpWords {
+					// Skip spaces to the right
+					LookAt := cp.caretPosition
+					for LookAt < uint32(len(cp.w.Content())) && !isCoreCharacter(cp.w.Content()[LookAt]) {
+						LookAt++
+					}
+					// Skip non-spaces to the right
+					for LookAt < uint32(len(cp.w.Content())) && isCoreCharacter(cp.w.Content()[LookAt]) {
+						LookAt++
+					}
+
+					cp.Set(LookAt, leaveSelection)
+				} else {
+					cp.Move(+1, leaveSelection)
+				}
 			}
 		}
 	}
@@ -3705,9 +3739,15 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectio
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
-func (cp *CaretPosition) Set(caretPosition uint32) {
+func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...bool) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
 	cp.caretPosition = caretPosition
-	cp.selectionPosition = cp.caretPosition
+
+	if !leaveSelection {
+		cp.selectionPosition = cp.caretPosition
+	}
 
 	cp.targetExpandedX, _ = cp.ExpandedPosition()
 
@@ -4336,27 +4376,27 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			SetViewGroup(w.Content, w.Content.Content()[:selStart]+"\t"+w.Content.Content()[selEnd:])
 			w.caretPosition.Set(selStart + 1)
 		case glfw.KeyLeft:
-			if inputEvent.ModifierKey == glfw.ModSuper {
+			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
 				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
-				w.caretPosition.Move(-2)
-			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
+				w.caretPosition.Move(-2, inputEvent.ModifierKey&glfw.ModShift != 0)
+			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
 				w.caretPosition.TryMoveH(-1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
 			}
 		case glfw.KeyRight:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.caretPosition.Move(+2)
-			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
+			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
+				w.caretPosition.Move(+2, inputEvent.ModifierKey&glfw.ModShift != 0)
+			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
 				w.caretPosition.TryMoveH(+1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
 			}
 		case glfw.KeyUp:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.caretPosition.Move(-3)
+			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
+				w.caretPosition.Move(-3, inputEvent.ModifierKey&glfw.ModShift != 0)
 			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
 				w.caretPosition.TryMoveV(-1, inputEvent.ModifierKey&glfw.ModShift != 0)
 			}
 		case glfw.KeyDown:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.caretPosition.Move(+3)
+			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
+				w.caretPosition.Move(+3, inputEvent.ModifierKey&glfw.ModShift != 0)
 			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
 				w.caretPosition.TryMoveV(+1, inputEvent.ModifierKey&glfw.ModShift != 0)
 			}
