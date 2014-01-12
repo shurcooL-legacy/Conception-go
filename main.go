@@ -62,6 +62,7 @@ import (
 	"go/ast"
 	"go/doc"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	. "gist.github.com/6445065.git"
 
@@ -220,6 +221,12 @@ func (o *OpenGlStream) SetPos(pos mathgl.Vec2d) {
 	o.pos = pos
 	o.lineStartX = pos[0]
 	o.advance = 0
+}
+
+func (o *OpenGlStream) SetPosWithExpandedPosition(pos mathgl.Vec2d, x, y uint32) {
+	o.pos = pos.Add(mathgl.Vec2d{float64(x * fontWidth), float64(y * fontHeight)})
+	o.lineStartX = pos[0]
+	o.advance = x
 }
 
 func (o *OpenGlStream) PrintText(s string) {
@@ -3589,6 +3596,8 @@ func (cp *CaretPosition) SelectionRange() (start uint32, end uint32) {
 	return min, max
 }
 
+// ExpandedPosition returns logical character units.
+// Multiply by (fontWidth, fontHeight) to get physical coords.
 func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 	caretPosition := cp.caretPosition
 	caretLine := uint32(0)
@@ -5563,11 +5572,9 @@ func main() {
 			}
 		}
 
-		// TEST: Render the AST
+		// TEST: Render the Go code tokens with color highlighting
 		{
 			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget
-			_, parsedFile := NewTest3Widget(np, source)
-			_ = parsedFile // TODO: Use..
 
 			w := &CustomWidget{
 				Widget: NewWidget(np, mathgl.Vec2d{fontHeight, fontHeight}),
@@ -5577,6 +5584,48 @@ func main() {
 				w.size = *source.Size()
 
 				DrawNBox(w.pos, w.size)
+
+				glt := NewOpenGlStream(w.pos)
+
+				// TODO: Cache results of scanning
+				src := []byte(source.Content.Content())
+
+				var s scanner.Scanner
+				fset := token.NewFileSet()
+				file := fset.AddFile("", fset.Base(), len(src))
+				s.Init(file, src, nil /* no error handler */, scanner.ScanComments)
+
+				// Repeated calls to Scan yield the token sequence found in the input.
+				for {
+					pos, tok, lit := s.Scan()
+					if tok == token.EOF {
+						break
+					}
+
+					tempCaretPosition := &CaretPosition{w: source.Content}
+					tempCaretPosition.Set(uint32(fset.Position(pos).Offset))
+					x, y := tempCaretPosition.ExpandedPosition()
+					glt.SetPosWithExpandedPosition(w.pos, x, y)
+
+					switch {
+					case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
+						gl.Color3d(0.004, 0, 0.714)
+					case tok.IsLiteral() && tok != token.IDENT:
+						gl.Color3d(0.804, 0, 0)
+					case false:
+						gl.Color3d(0.008, 0.024, 1)
+					case tok == token.COMMENT:
+						gl.Color3d(0, 0.706, 0.094)
+					default:
+						gl.Color3d(0, 0, 0)
+					}
+
+					if lit != "" {
+						glt.PrintText(lit)
+					} else {
+						glt.PrintText(tok.String())
+					}
+				}
 			}
 
 			widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
@@ -5917,7 +5966,7 @@ func main() {
 			})
 			widgets = append(widgets, newWindowButton)
 
-			w := NewWindowWidget(mathgl.Vec2d{500, 400}, mathgl.Vec2d{200, 140})
+			w := NewWindowWidget(mathgl.Vec2d{1000, 40}, mathgl.Vec2d{200, 140})
 			w.Name = "Sample Window"
 			widgets = append(widgets, w)
 		}
