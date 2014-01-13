@@ -78,6 +78,7 @@ import (
 
 	"github.com/davecheney/profile"
 
+	"path"
 	"path/filepath"
 	. "gist.github.com/5953185.git"
 
@@ -3118,7 +3119,7 @@ func (w *FolderListingWidget) GetSelectedPath() string {
 		if pure := widget.(*FolderListingPureWidget); pure.selected != 0 {
 			out = filepath.Join(pure.path, pure.entries[pure.selected-1].Name())
 			if pure.entries[pure.selected-1].IsDir() {
-				out += "/"
+				out += string(filepath.Separator)
 			}
 		}
 	}
@@ -3294,7 +3295,7 @@ func (w *FolderListingPureWidget) Render() {
 		}
 
 		if v.IsDir() {
-			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name()+"/")
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name()+string(filepath.Separator))
 		} else {
 			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name())
 		}
@@ -5201,7 +5202,7 @@ func initHttpHandlers() {
 		fmt.Fprintf(w, "%#v\n", widgets)
 	})*/
 	http.Handle("/favicon.ico", http.NotFoundHandler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/status/", http.StripPrefix("/status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// HACK: Handle .go files specially, just assume they're in "./GoLand"
 		if strings.HasSuffix(r.URL.Path, ".go") {
@@ -5271,7 +5272,7 @@ func initHttpHandlers() {
 			b += "```\n" + goPackage.Bpkg.Dir + "\n```\n"
 			x := newFolderListingPureWidget(goPackage.Bpkg.Dir)
 			for _, v := range x.entries {
-				b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
+				b += fmt.Sprintf("[%s](%s)  \n", v.Name(), path.Join("/status/", importPath, v.Name()))
 			}
 		} else {
 			fmt.Fprintf(w, "Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
@@ -5295,7 +5296,7 @@ func initHttpHandlers() {
 
 			io.WriteString(w, `</article></body></html>`)
 		}
-	})
+	})))
 }
 
 // ---
