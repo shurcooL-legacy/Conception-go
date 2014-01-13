@@ -4290,24 +4290,79 @@ func (w *TextBoxWidget) Render() {
 				endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 			}
 
-			// Selection
-			// TODO: Refactor (make this more concise and easier to understand)
-			min, max := w.caretPosition.SelectionRange()
-			min = intmath.MaxUint32(min, w.Content.Line(beginLineIndex).Start)
-			min = intmath.MinUint32(min, w.Content.Line(endLineIndex).Start)
-			max = intmath.MaxUint32(max, w.Content.Line(beginLineIndex).Start)
-			max = intmath.MinUint32(max, w.Content.Line(endLineIndex).Start)
+			// TEST: Apply highlighting for ".go" files
+			if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
 
-			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
-			glt.PrintText(w.Content.Content()[w.Content.Line(beginLineIndex).Start:min])
-			if hasTypingFocus {
-				glt.BackgroundColor = &selectedTextColor
+				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
+
+				// TODO: Cache results of scanning
+				src := []byte(w.Content.Content())
+
+				var s scanner.Scanner
+				fset := token.NewFileSet()
+				file := fset.AddFile("", fset.Base(), len(src))
+				s.Init(file, src, nil /* no error handler */, scanner.ScanComments)
+
+				// Repeated calls to Scan yield the token sequence found in the input.
+				for {
+					pos, tok, lit := s.Scan()
+					if tok == token.EOF {
+						break
+					}
+
+					if uint32(fset.Position(pos).Offset) < w.Content.Line(beginLineIndex).Start {
+						continue
+					} else if uint32(fset.Position(pos).Offset) >= w.Content.Line(endLineIndex).Start {
+						break
+					}
+
+					tempCaretPosition := &CaretPosition{w: w.Content}
+					tempCaretPosition.Set(uint32(fset.Position(pos).Offset))
+					x, y := tempCaretPosition.ExpandedPosition()
+					glt.SetPosWithExpandedPosition(w.pos, x, y)
+
+					switch {
+					case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
+						gl.Color3d(0.004, 0, 0.714)
+					case tok.IsLiteral() && tok != token.IDENT:
+						gl.Color3d(0.804, 0, 0)
+					case lit == "false" || lit == "true":
+						gl.Color3d(0.008, 0.024, 1)
+					case tok == token.COMMENT:
+						gl.Color3d(0, 0.706, 0.094)
+					default:
+						gl.Color3d(0, 0, 0)
+					}
+
+					if lit != "" {
+						glt.PrintText(lit)
+					} else {
+						glt.PrintText(tok.String())
+					}
+				}
+
+				//glt.PrintText(w.Content.Content()[w.Content.Line(beginLineIndex).Start:w.Content.Line(endLineIndex).Start])
+
 			} else {
-				glt.BackgroundColor = &selectedTextInactiveColor
+				// Selection
+				// TODO: Refactor (make this more concise and easier to understand)
+				min, max := w.caretPosition.SelectionRange()
+				min = intmath.MaxUint32(min, w.Content.Line(beginLineIndex).Start)
+				min = intmath.MinUint32(min, w.Content.Line(endLineIndex).Start)
+				max = intmath.MaxUint32(max, w.Content.Line(beginLineIndex).Start)
+				max = intmath.MinUint32(max, w.Content.Line(endLineIndex).Start)
+
+				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
+				glt.PrintText(w.Content.Content()[w.Content.Line(beginLineIndex).Start:min])
+				if hasTypingFocus {
+					glt.BackgroundColor = &selectedTextColor
+				} else {
+					glt.BackgroundColor = &selectedTextInactiveColor
+				}
+				glt.PrintText(w.Content.Content()[min:max])
+				glt.BackgroundColor = nil
+				glt.PrintText(w.Content.Content()[max:w.Content.Line(endLineIndex).Start])
 			}
-			glt.PrintText(w.Content.Content()[min:max])
-			glt.BackgroundColor = nil
-			glt.PrintText(w.Content.Content()[max:w.Content.Line(endLineIndex).Start])
 		} else {
 			for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
 				contentLine := w.Content.Line(lineIndex)
@@ -5296,7 +5351,8 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if false {
+	if true {
+		//if false {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -5655,7 +5711,7 @@ func main() {
 						gl.Color3d(0.004, 0, 0.714)
 					case tok.IsLiteral() && tok != token.IDENT:
 						gl.Color3d(0.804, 0, 0)
-					case lit == "true" || lit == "false":
+					case lit == "false" || lit == "true":
 						gl.Color3d(0.008, 0.024, 1)
 					case tok == token.COMMENT:
 						gl.Color3d(0, 0.706, 0.094)
