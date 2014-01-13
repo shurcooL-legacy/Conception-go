@@ -801,7 +801,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source 
 
 	action := func(params interface{}) string {
 		index := params.([]interface{})[0].(uint32)
-		fileUri := params.([]interface{})[1].(string)
+		fileUri := params.([]interface{})[1].(FileUri)
 		fset := params.([]interface{})[2].(*token.FileSet)
 		files := params.([]interface{})[3].([]*ast.File)
 		//tpkg := typeCheckedPackage.tpkg
@@ -815,7 +815,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source 
 		var fileAst *ast.File
 		var caretPos token.Pos
 		fset.Iterate(func(file *token.File) bool {
-			if fileUri == "file://"+file.Name() {
+			if fileUri == FileUri("file://"+file.Name()) {
 				fileAst = FindFileAst(fset, file, files)
 				caretPos = file.Pos(int(index))
 				return false
@@ -1051,8 +1051,6 @@ func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) *
 }
 
 // ---
-
-type FileUri string
 
 type GoCompileErrorsManagerTest struct {
 	//Sources []*GoCompileErrorsTest // TODO: Migrate to using DepNode2
@@ -3899,7 +3897,7 @@ func NewMultilineContentFile(path string) *MultilineContentFile {
 	this := &MultilineContentFile{MultilineContent: NewMultilineContent(), path: path}
 	absPath, err := filepath.Abs(path)
 	CheckError(err)
-	this.InitViewGroup(this, "file://"+absPath)
+	this.InitViewGroup(this, FileUri("file://"+absPath))
 	this.AddAndSetViewGroup(this.MultilineContent, TryReadFile(this.path))
 	UniversalClock.AddChangeListener(this)
 	return this
@@ -3936,7 +3934,7 @@ func NewFileView(path string) *FileView {
 	this := &FileView{path: path}
 	absPath, err := filepath.Abs(path)
 	CheckError(err)
-	this.InitViewGroup(this, "file://"+absPath)
+	this.InitViewGroup(this, FileUri("file://"+absPath))
 	UniversalClock.AddChangeListener(this) // TODO: Closing, etc.
 	return this
 }
@@ -4001,7 +3999,7 @@ type WebSocketView struct {
 
 func NewWebSocketView(c *websocket.Conn) *WebSocketView {
 	this := &WebSocketView{c: c, WsReadChan: make(chan string)}
-	this.InitViewGroup(this, c.LocalAddr().String())
+	this.InitViewGroup(this, FileUri(c.LocalAddr().String()))
 	UniversalClock.AddChangeListener(this)
 	return this
 }
@@ -4348,11 +4346,11 @@ func (w *TextBoxWidget) Render() {
 		}
 	}*/
 	for _, uri := range w.Content.GetAllUris() {
-		if _, ok := goCompileErrorsManagerTest.All[FileUri(uri)]; ok {
+		if _, ok := goCompileErrorsManagerTest.All[uri]; ok {
 			gl.Color3d(0, 0, 0)
 			glt := NewOpenGlStream(np)
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
-			for _, goErrorMessage := range goCompileErrorsManagerTest.All[FileUri(uri)] {
+			for _, goErrorMessage := range goCompileErrorsManagerTest.All[uri] {
 				if goErrorMessage.LineIndex < w.Content.LenLines() {
 					expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineIndex].Start : w.Content.Lines()[goErrorMessage.LineIndex].Start+w.Content.Lines()[goErrorMessage.LineIndex].Length])
 					glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineIndex)}))
@@ -5298,7 +5296,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if true {
+	if false {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -5772,7 +5770,7 @@ func main() {
 
 				b += "\n---\n\n"
 
-				b += "`" + goPackage.Bpkg.Dir + "`  \n"
+				b += "```\n" + goPackage.Bpkg.Dir + "\n```\n"
 				x := newFolderListingPureWidget(goPackage.Bpkg.Dir)
 				for _, v := range x.entries {
 					b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
