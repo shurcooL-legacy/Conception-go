@@ -4282,12 +4282,12 @@ func (w *TextBoxWidget) Render() {
 			// Render only visible lines.
 			// TODO: Generalize this.
 			beginLineIndex, endLineIndex := 0, w.Content.LenLines()
-			if topLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); topLineIndex > beginLineIndex {
-				beginLineIndex = intmath.MinInt(topLineIndex, endLineIndex)
+			if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+				beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 			}
 			_, height := globalWindow.GetSize() // HACK: Should be some viewport
-			if bottomLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); bottomLineIndex < endLineIndex {
-				endLineIndex = intmath.MaxInt(bottomLineIndex, beginLineIndex)
+			if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
+				endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 			}
 
 			// Selection
