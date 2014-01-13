@@ -546,7 +546,7 @@ func (this *CustomWidget) Render() {
 }
 
 func (this *CustomWidget) ProcessEvent(inputEvent InputEvent) {
-	if this.RenderFunc != nil {
+	if this.ProcessEventFunc != nil {
 		this.ProcessEventFunc(inputEvent)
 	} else {
 		this.Widget.ProcessEvent(inputEvent)
@@ -2487,7 +2487,7 @@ func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
 	w.FlowLayoutWidget = NewFlowLayoutWidget(pos,
 		[]Widgeter{
 			NewTriButtonExternalStateWidget(np, func() bool { return w.started }, action),
-			NewTextLabelWidgetString(np, "pprof"),
+			NewTextLabelWidgetString(np, "http"),
 		}, nil)
 
 	return w
@@ -5190,6 +5190,116 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 
 // ---
 
+func initHttpHandlers() {
+	http.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Closing.")
+		keepRunning = false
+	})
+	/*http.HandleFunc("/widgets", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(goon.SdumpExpr(len(widgets))))
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "%#v\n", widgets)
+	})*/
+	http.Handle("/favicon.ico", http.NotFoundHandler())
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+
+		// HACK: Handle .go files specially, just assume they're in "./GoLand"
+		if strings.HasSuffix(r.URL.Path, ".go") {
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write(MustReadFileB(filepath.Join("../../../", r.URL.Path)))
+			return
+		}
+
+		_, plain := r.URL.Query()["plain"]
+		switch plain {
+		case true:
+			w.Header().Set("Content-Type", "text/plain")
+		case false:
+			w.Header().Set("Content-Type", "text/html")
+		}
+
+		var b string
+
+		importPath := r.URL.Path[1:]
+		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
+			// TODO: Cache this via DepNode2I
+			goPackage.UpdateVcs()
+			goPackage.UpdateVcsFields()
+
+			// TODO: Cache this via DepNode2I
+			dpkg := GetDocPackageAll(goPackage.Bpkg, nil)
+
+			b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
+			var buf bytes.Buffer
+			FprintPackageFullSummary(&buf, dpkg)
+			b += buf.String()
+			b += "\n```\n"
+
+			b += "\n---\n\n"
+
+			b += "```\n" + status.PorcelainPresenter(goPackage) + "\n```\n"
+
+			b += "\n---\n\n"
+
+			if goPackage.Vcs != nil {
+				b += "```\n"
+				if goPackage.Status == "" {
+					b += "nothing to commit, working directory clean\n\n"
+				} else {
+					b += goPackage.Status + "\n"
+				}
+				b += "Branch: " + goPackage.LocalBranch + "\n"
+				b += "Local:  " + goPackage.Local + "\n"
+				b += "Remote: " + goPackage.Remote + "\n"
+				b += "```\n"
+
+				// git diff
+				if goPackage.Status != "" {
+					if goPackage.Vcs.Type() == vcs.Git {
+						cmd := exec.Command("git", "diff", "--no-ext-diff")
+						cmd.Dir = goPackage.Bpkg.Dir
+						if outputBytes, err := cmd.CombinedOutput(); err == nil {
+							b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
+							b += "\n```diff\n" + string(outputBytes) + "\n```\n"
+						}
+					}
+				}
+			}
+
+			b += "\n---\n\n"
+
+			b += "```\n" + goPackage.Bpkg.Dir + "\n```\n"
+			x := newFolderListingPureWidget(goPackage.Bpkg.Dir)
+			for _, v := range x.entries {
+				b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
+			}
+		} else {
+			fmt.Fprintf(w, "Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
+		}
+
+		if plain {
+			w.Write([]byte(b))
+		} else {
+			//w.Write(blackfriday.MarkdownCommon([]byte(b)))
+
+			// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
+			io.WriteString(w, `<html><head><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
+
+			// TODO: Do this locally via a native Go library... That's not too much to ask for, is it?
+			// Convert GitHub-Flavored-Markdown to HTML (includes syntax highlighting for diff, Go, etc.)
+			resp, err := http.Post("https://api.github.com/markdown/raw", "text/x-markdown", strings.NewReader(b))
+			CheckError(err)
+			defer resp.Body.Close()
+			_, err = io.Copy(w, resp.Body)
+			CheckError(err)
+
+			io.WriteString(w, `</article></body></html>`)
+		}
+	})
+}
+
+// ---
+
 // HACK
 type goPackageHardcoded struct {
 	DepNode2Manual
@@ -5787,111 +5897,6 @@ func main() {
 
 		//widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{160, 30}, []Widgeter{NewGoPackageListingPureWidget()}))
 
-		http.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintln(w, "Closing.")
-			keepRunning = false
-		})
-		http.HandleFunc("/widgets", func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(goon.SdumpExpr(len(widgets))))
-			fmt.Fprintln(w)
-			fmt.Fprintf(w, "%#v\n", widgets)
-		})
-		http.Handle("/favicon.ico", http.NotFoundHandler())
-		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-
-			// HACK: Handle .go files specially, just assume they're in "./GoLand"
-			if strings.HasSuffix(r.URL.Path, ".go") {
-				w.Header().Set("Content-Type", "text/plain")
-				w.Write(MustReadFileB(filepath.Join("../../../", r.URL.Path)))
-				return
-			}
-
-			_, plain := r.URL.Query()["plain"]
-			switch plain {
-			case true:
-				w.Header().Set("Content-Type", "text/plain")
-			case false:
-				w.Header().Set("Content-Type", "text/html")
-			}
-
-			var b string
-
-			importPath := r.URL.Path[1:]
-			if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
-				// TODO: Cache this via DepNode2I
-				goPackage.UpdateVcs()
-				goPackage.UpdateVcsFields()
-
-				// TODO: Cache this via DepNode2I
-				dpkg := GetDocPackageAll(goPackage.Bpkg, nil)
-
-				b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
-				var buf bytes.Buffer
-				FprintPackageFullSummary(&buf, dpkg)
-				b += buf.String()
-				b += "\n```\n"
-
-				b += "\n---\n\n"
-
-				b += "```\n" + status.PorcelainPresenter(goPackage) + "\n```\n"
-
-				b += "\n---\n\n"
-
-				if goPackage.Vcs != nil {
-					b += "```\n"
-					if goPackage.Status == "" {
-						b += "nothing to commit, working directory clean\n\n"
-					} else {
-						b += goPackage.Status + "\n"
-					}
-					b += "Branch: " + goPackage.LocalBranch + "\n"
-					b += "Local:  " + goPackage.Local + "\n"
-					b += "Remote: " + goPackage.Remote + "\n"
-					b += "```\n"
-
-					// git diff
-					if goPackage.Status != "" {
-						if goPackage.Vcs.Type() == vcs.Git {
-							cmd := exec.Command("git", "diff", "--no-ext-diff")
-							cmd.Dir = goPackage.Bpkg.Dir
-							if outputBytes, err := cmd.CombinedOutput(); err == nil {
-								b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
-								b += "\n```diff\n" + string(outputBytes) + "\n```\n"
-							}
-						}
-					}
-				}
-
-				b += "\n---\n\n"
-
-				b += "```\n" + goPackage.Bpkg.Dir + "\n```\n"
-				x := newFolderListingPureWidget(goPackage.Bpkg.Dir)
-				for _, v := range x.entries {
-					b += fmt.Sprintf("[%s](%s)  \n", v.Name(), filepath.Join(r.URL.Path, v.Name()))
-				}
-			} else {
-				fmt.Fprintf(w, "Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
-			}
-
-			if plain {
-				w.Write([]byte(b))
-			} else {
-				//w.Write(blackfriday.MarkdownCommon([]byte(b)))
-
-				// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
-				io.WriteString(w, `<html><head><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
-
-				// TODO: Do this locally via a native Go library... That's not too much to ask for, is it?
-				// Convert GitHub-Flavored-Markdown to HTML (includes syntax highlighting for diff, Go, etc.)
-				resp, err := http.Post("https://api.github.com/markdown/raw", "text/x-markdown", strings.NewReader(b))
-				CheckError(err)
-				defer resp.Body.Close()
-				_, err = io.Copy(w, resp.Body)
-				CheckError(err)
-
-				io.WriteString(w, `</article></body></html>`)
-			}
-		})
 		contentWs := NewMultilineContent()
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800 - 50, 30}, contentWs))
 		http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
@@ -5961,7 +5966,6 @@ func main() {
 
 			contentWs.RemoveView(wsView) // TODO: Fix race condition
 		}))
-		widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 
 		// Shuryear Clock
 		{
@@ -6120,6 +6124,10 @@ func main() {
 		mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 	}
+
+	// Http Server
+	initHttpHandlers()
+	widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 
 	//widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
