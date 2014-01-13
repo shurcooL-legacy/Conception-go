@@ -3603,8 +3603,8 @@ func ExpandedToLogical(s string, expanded uint32) uint32 {
 
 type CaretPosition struct {
 	w                 MultilineContentI
-	caretPosition     uint32
-	selectionPosition uint32
+	caretPosition     uint32 // TODO: Store as (lineIndex, positionWithinLine) for better performance
+	selectionPosition uint32 // TODO: Turn current struct into higher-level CaretWithSelection; move each of caret and selection positions into sub-struct CaretPosition
 	targetExpandedX   uint32
 
 	DepNode2Manual
@@ -3624,14 +3624,27 @@ func (cp *CaretPosition) SelectionRange() (start uint32, end uint32) {
 // Multiply by (fontWidth, fontHeight) to get physical coords.
 func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
 	caretPosition := cp.caretPosition
-	caretLine := uint32(0)
-	for caretPosition > cp.w.Lines()[caretLine].Length {
-		caretPosition -= cp.w.Lines()[caretLine].Length + 1
+	caretLine := 0
+	for caretPosition > cp.w.Line(caretLine).Length {
+		caretPosition -= cp.w.Line(caretLine).Length + 1
 		caretLine++
 	}
-	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Lines()[caretLine].Start : cp.w.Lines()[caretLine].Start+caretPosition])
+	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
 
-	return expandedCaretPosition, caretLine
+	return expandedCaretPosition, uint32(caretLine)
+}
+
+// HACK
+func (cp *CaretPosition) ExpandedPositionHint(beginLineIndex int) (x uint32, y uint32) {
+	caretPosition := cp.caretPosition - cp.w.Line(beginLineIndex).Start
+	caretLine := beginLineIndex
+	for caretPosition > cp.w.Line(caretLine).Length {
+		caretPosition -= cp.w.Line(caretLine).Length + 1
+		caretLine++
+	}
+	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
+
+	return expandedCaretPosition, uint32(caretLine)
 }
 
 func isCoreCharacter(character byte) bool {
@@ -3802,6 +3815,24 @@ func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...boo
 	cp.targetExpandedX, _ = cp.ExpandedPosition()
 
 	ExternallyUpdated(&cp.DepNode2Manual)
+}
+
+// HACK
+func (cp *CaretPosition) SetHint(caretPosition uint32, beginLineIndex int, leaveSelectionOptional ...bool) (x uint32, y uint32) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
+	cp.caretPosition = caretPosition
+
+	if !leaveSelection {
+		cp.selectionPosition = cp.caretPosition
+	}
+
+	cp.targetExpandedX, y = cp.ExpandedPositionHint(beginLineIndex)
+
+	ExternallyUpdated(&cp.DepNode2Manual)
+
+	return cp.targetExpandedX, y
 }
 
 // ---
@@ -4296,7 +4327,8 @@ func (w *TextBoxWidget) Render() {
 				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
 
 				// TODO: Cache results of scanning
-				src := []byte(w.Content.Content())
+				//src := []byte(w.Content.Content())
+				src := []byte(w.Content.Content()[w.Content.Line(beginLineIndex).Start:w.Content.Line(endLineIndex).Start])
 
 				var s scanner.Scanner
 				fset := token.NewFileSet()
@@ -4310,15 +4342,16 @@ func (w *TextBoxWidget) Render() {
 						break
 					}
 
-					if uint32(fset.Position(pos).Offset) < w.Content.Line(beginLineIndex).Start {
+					offset := uint32(fset.Position(pos).Offset) + w.Content.Line(beginLineIndex).Start
+
+					if offset < w.Content.Line(beginLineIndex).Start {
 						continue
-					} else if uint32(fset.Position(pos).Offset) >= w.Content.Line(endLineIndex).Start {
+					} else if offset >= w.Content.Line(endLineIndex).Start {
 						break
 					}
 
 					tempCaretPosition := &CaretPosition{w: w.Content}
-					tempCaretPosition.Set(uint32(fset.Position(pos).Offset))
-					x, y := tempCaretPosition.ExpandedPosition()
+					x, y := tempCaretPosition.SetHint(offset, beginLineIndex)
 					glt.SetPosWithExpandedPosition(w.pos, x, y)
 
 					switch {
