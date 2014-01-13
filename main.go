@@ -2160,6 +2160,10 @@ func (w *ScrollPaneWidget) ProcessEvent(inputEvent InputEvent) {
 		w.child.Pos()[0] += inputEvent.Sliders[1] * 10
 		w.child.Pos()[1] += inputEvent.Sliders[0] * 10
 
+		// HACK: Snap to nearest point. This prevents smaller scroll increments from being possible.
+		w.child.Pos()[0] = float64(NearInt64(w.child.Pos()[0]))
+		w.child.Pos()[1] = float64(NearInt64(w.child.Pos()[1]))
+
 		w.Layout()
 	}
 }
@@ -4350,6 +4354,7 @@ func (w *TextBoxWidget) Render() {
 						break
 					}
 
+					// HACK
 					tempCaretPosition := &CaretPosition{w: w.Content}
 					x, y := tempCaretPosition.SetHint(offset, beginLineIndex)
 					glt.SetPosWithExpandedPosition(w.pos, x, y)
