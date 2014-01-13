@@ -19,8 +19,10 @@ import (
 	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3"
 	//"github.com/go-gl/glu"
-	"github.com/shurcooL/go/vcs"
 	glu "github.com/shurcooL/goglu/glu21"
+
+	"github.com/shurcooL/go/exp/11"
+	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/gostatus/status"
 
 	"github.com/Jragonmiris/mathgl"
@@ -2707,7 +2709,7 @@ func (this *FilterableStrings2) Update() {
 		entry := source.Get(index).String()
 
 		if filter.Content != "" {
-			if !strings.Contains(strings.ToLower(entry), strings.ToLower(filter.Content)) {
+			if !strings.Contains(strings.ToLower(entry), strings.ToLower(filter.Content)) { // TODO: Do case folding correctly
 				continue
 			}
 		}
@@ -5283,20 +5285,35 @@ func initHttpHandlers() {
 		} else {
 			//w.Write(blackfriday.MarkdownCommon([]byte(b)))
 
-			// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
-			io.WriteString(w, `<html><head><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
-
-			// TODO: Do this locally via a native Go library... That's not too much to ask for, is it?
-			// Convert GitHub-Flavored-Markdown to HTML (includes syntax highlighting for diff, Go, etc.)
-			resp, err := http.Post("https://api.github.com/markdown/raw", "text/x-markdown", strings.NewReader(b))
-			CheckError(err)
-			defer resp.Body.Close()
-			_, err = io.Copy(w, resp.Body)
-			CheckError(err)
-
-			io.WriteString(w, `</article></body></html>`)
+			WriteGitHubFlavoredMarkdown(w, strings.NewReader(b))
 		}
 	})))
+	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		importPath := r.URL.Path[1:]
+
+		// TODO: Cache this via DepNode2I
+		buf := new(bytes.Buffer)
+		buf.WriteString("```go\n")
+		exp11.InlineDotImports(buf, importPath)
+		buf.WriteString("\n```")
+
+		WriteGitHubFlavoredMarkdown(w, buf)
+	})))
+}
+
+func WriteGitHubFlavoredMarkdown(w io.Writer, body io.Reader) {
+	// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
+	io.WriteString(w, `<html><head><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
+
+	// TODO: Do this locally via a native Go library... That's not too much to ask for, is it?
+	// Convert GitHub-Flavored-Markdown to HTML (includes syntax highlighting for diff, Go, etc.)
+	resp, err := http.Post("https://api.github.com/markdown/raw", "text/x-markdown", body)
+	CheckError(err)
+	defer resp.Body.Close()
+	_, err = io.Copy(w, resp.Body)
+	CheckError(err)
+
+	io.WriteString(w, `</article></body></html>`)
 }
 
 // ---
