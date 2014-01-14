@@ -3611,24 +3611,32 @@ func ExpandedToLogical(s string, expanded uint32) uint32 {
 // DOING: Turn current struct into higher-level CaretWithSelection; move each of caret and selection positions into sub-struct CaretPosition
 // TODO: Rename
 type caretPositionInternal struct {
-	w               MultilineContentI
-	caretPosition   uint32 // TODO: Store as (lineIndex, positionWithinLine) for better performance
-	targetExpandedX uint32
+	w                  MultilineContentI
+	lineIndex          int
+	positionWithinLine uint32
+	targetExpandedX    uint32
 
 	DepNode2Manual
 }
 
+func (cp *caretPositionInternal) NotifyContentChanged() {
+	if cp.Logical() > uint32(len(cp.w.Content())) {
+		cp.Move(+3)
+	}
+}
+
 func (cp *caretPositionInternal) Logical() uint32 {
-	return cp.caretPosition
+	return cp.w.Line(cp.lineIndex).Start + cp.positionWithinLine
 }
 
 func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 	switch amount {
 	case -1:
-		if cp.caretPosition >= 1 {
+		if cp.Logical() >= 1 {
 			if jumpWords {
-				// Skip spaces to the left
-				LookAt := cp.caretPosition
+				// TODO: Redo without Set()
+				/*// Skip spaces to the left
+				LookAt := cp.Logical()
 				for LookAt > 0 && !isCoreCharacter(cp.w.Content()[LookAt-1]) {
 					LookAt--
 				}
@@ -3637,16 +3645,22 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 					LookAt--
 				}
 
-				cp.Set(LookAt)
+				cp.Set(LookAt)*/
 			} else {
-				cp.Move(-1)
+				if cp.positionWithinLine > 0 {
+					cp.positionWithinLine--
+				} else { //if cp.lineIndex > 0
+					cp.lineIndex--
+					cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
+				}
 			}
 		}
 	case +1:
-		if cp.caretPosition < uint32(len(cp.w.Content())) {
+		if cp.Logical() < uint32(len(cp.w.Content())) {
 			if jumpWords {
-				// Skip spaces to the right
-				LookAt := cp.caretPosition
+				// TODO: Redo without Set()
+				/*// Skip spaces to the right
+				LookAt := cp.Logical()
 				for LookAt < uint32(len(cp.w.Content())) && !isCoreCharacter(cp.w.Content()[LookAt]) {
 					LookAt++
 				}
@@ -3655,33 +3669,36 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 					LookAt++
 				}
 
-				cp.Set(LookAt)
+				cp.Set(LookAt)*/
 			} else {
-				cp.Move(+1)
+				if cp.positionWithinLine < cp.w.Line(cp.lineIndex).Length {
+					cp.positionWithinLine++
+				} else { //if cp.lineIndex < some_max
+					cp.lineIndex++
+					cp.positionWithinLine = 0
+				}
 			}
 		}
 	}
 }
 
 func (cp *caretPositionInternal) TryMoveV(amount int8) {
-	_, y := cp.ExpandedPosition()
-
 	switch amount {
 	case -1:
-		if y > 0 {
-			y--
-			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
-			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+		if cp.lineIndex > 0 {
+			cp.lineIndex--
+			line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start : cp.w.Line(cp.lineIndex).Start+cp.w.Line(cp.lineIndex).Length]
+			cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
 
 			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
 			cp.Move(-2)
 		}
 	case +1:
-		if y < uint32(cp.w.LenLines())-1 {
-			y++
-			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
-			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+		if cp.lineIndex < cp.w.LenLines()-1 {
+			cp.lineIndex++
+			line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start : cp.w.Line(cp.lineIndex).Start+cp.w.Line(cp.lineIndex).Length]
+			cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
 
 			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
@@ -3691,27 +3708,25 @@ func (cp *caretPositionInternal) TryMoveV(amount int8) {
 }
 
 func (cp *caretPositionInternal) MoveTo(other *caretPositionInternal) {
-	cp.caretPosition = other.caretPosition
+	cp.lineIndex = other.lineIndex
+	cp.positionWithinLine = other.positionWithinLine
 	cp.targetExpandedX = other.targetExpandedX
 }
 
 func (cp *caretPositionInternal) Move(amount int8) {
 	switch amount {
-	case -1:
-		cp.caretPosition--
-	case +1:
-		cp.caretPosition++
+	case -1, +1:
+		panic("Move(+-1)")
 	case -2:
-		_, y := cp.ExpandedPosition()
-		cp.caretPosition = cp.w.Lines()[y].Start
+		cp.positionWithinLine = 0
 	case +2:
-		_, y := cp.ExpandedPosition()
-		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
+		cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
 	case -3:
-		cp.caretPosition = 0
+		cp.lineIndex = 0
+		cp.positionWithinLine = 0
 	case +3:
-		y := cp.w.LenLines() - 1
-		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
+		cp.lineIndex = cp.w.LenLines() - 1
+		cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
 	}
 
 	cp.targetExpandedX, _ = cp.ExpandedPosition()
@@ -3720,13 +3735,12 @@ func (cp *caretPositionInternal) Move(amount int8) {
 }
 
 func (cp *caretPositionInternal) SetPositionFromPhysical(pos mathgl.Vec2d) {
-	var y uint32
 	if pos[1] < 0 {
-		y = 0
+		cp.lineIndex = 0
 	} else if pos[1] >= float64(cp.w.LenLines()*fontHeight) {
-		y = uint32(cp.w.LenLines() - 1)
+		cp.lineIndex = cp.w.LenLines() - 1
 	} else {
-		y = uint32(pos[1] / fontHeight)
+		cp.lineIndex = int(pos[1] / fontHeight)
 	}
 
 	if pos[0] < 0 {
@@ -3735,35 +3749,29 @@ func (cp *caretPositionInternal) SetPositionFromPhysical(pos mathgl.Vec2d) {
 		cp.targetExpandedX = uint32((pos[0] + fontWidth/2) / fontWidth)
 	}
 
-	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
-	cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+	line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start : cp.w.Line(cp.lineIndex).Start+cp.w.Line(cp.lineIndex).Length]
+	cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
 
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
-func (cp *caretPositionInternal) Set(position uint32) {
+/*func (cp *caretPositionInternal) Set(position uint32) {
 	cp.caretPosition = position
 
 	ExternallyUpdated(&cp.DepNode2Manual)
-}
+}*/
 
 // ExpandedPosition returns logical character units.
 // Multiply by (fontWidth, fontHeight) to get physical coords.
 func (cp *caretPositionInternal) ExpandedPosition() (x uint32, y uint32) {
-	caretPosition := cp.caretPosition
-	caretLine := 0
-	for caretPosition > cp.w.Line(caretLine).Length {
-		caretPosition -= cp.w.Line(caretLine).Length + 1
-		caretLine++
-	}
-	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
+	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(cp.lineIndex).Start : cp.w.Line(cp.lineIndex).Start+cp.positionWithinLine])
 
-	return expandedCaretPosition, uint32(caretLine)
+	return expandedCaretPosition, uint32(cp.lineIndex)
 }
 
 // HACK
-func (cp *caretPositionInternal) ExpandedPositionHint(beginLineIndex int) (x uint32, y uint32) {
-	caretPosition := cp.caretPosition - cp.w.Line(beginLineIndex).Start
+func (cp *caretPositionInternal) SetHint(caretPosition uint32, beginLineIndex int) (x uint32, y uint32) {
+	caretPosition -= cp.w.Line(beginLineIndex).Start
 	caretLine := beginLineIndex
 	for caretPosition > cp.w.Line(caretLine).Length {
 		caretPosition -= cp.w.Line(caretLine).Length + 1
@@ -3771,16 +3779,7 @@ func (cp *caretPositionInternal) ExpandedPositionHint(beginLineIndex int) (x uin
 	}
 	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
 
-	return expandedCaretPosition, uint32(caretLine)
-}
-
-// HACK
-func (cp *caretPositionInternal) SetHint(caretPosition uint32, beginLineIndex int) (x uint32, y uint32) {
-	cp.caretPosition = caretPosition
-
-	cp.targetExpandedX, y = cp.ExpandedPositionHint(beginLineIndex)
-
-	ExternallyUpdated(&cp.DepNode2Manual)
+	cp.targetExpandedX, y = expandedCaretPosition, uint32(caretLine)
 
 	return cp.targetExpandedX, y
 }
@@ -3798,7 +3797,6 @@ type CaretPosition struct {
 	w                 MultilineContentI
 	caretPosition     *caretPositionInternal
 	selectionPosition *caretPositionInternal
-	targetExpandedX   uint32
 
 	DepNode2
 }
@@ -3815,6 +3813,12 @@ func NewCaretPosition(mc MultilineContentI) *CaretPosition {
 
 func (cp *CaretPosition) Update() {}
 
+// TODO: Should DepNode2 be used instead of this custom func?
+func (cp *CaretPosition) NotifyContentChanged() {
+	cp.caretPosition.NotifyContentChanged()
+	cp.selectionPosition.NotifyContentChanged()
+}
+
 func (cp *CaretPosition) Logical() uint32 {
 	return cp.caretPosition.Logical()
 }
@@ -3825,11 +3829,25 @@ func (cp *CaretPosition) SelectionRange() (start uint32, end uint32) {
 	return min, max
 }
 
+func (cp *CaretPosition) SelectionRange2() (start, end *caretPositionInternal) {
+	if cp.caretPosition.Logical() <= cp.selectionPosition.Logical() {
+		return cp.caretPosition, cp.selectionPosition
+	} else {
+		return cp.selectionPosition, cp.caretPosition
+	}
+}
+
+func (cp *CaretPosition) anySelection() bool {
+	return cp.caretPosition.Logical() != cp.selectionPosition.Logical()
+}
+
 func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
+	min, max := cp.SelectionRange2()
+
 	switch amount {
 	case -1:
-		if cp.caretPosition != cp.selectionPosition && !leaveSelection {
-			cp.Set(intmath.MinUint32(cp.caretPosition.Logical(), cp.selectionPosition.Logical()))
+		if cp.anySelection() && !leaveSelection {
+			max.MoveTo(min)
 		} else {
 			if cp.caretPosition.Logical() >= 1 { // TODO: Where should this check happen
 				cp.caretPosition.TryMoveH(amount, jumpWords)
@@ -3840,8 +3858,8 @@ func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
 			}
 		}
 	case +1:
-		if cp.caretPosition != cp.selectionPosition && !leaveSelection {
-			cp.Set(intmath.MaxUint32(cp.caretPosition.Logical(), cp.selectionPosition.Logical()))
+		if cp.anySelection() && !leaveSelection {
+			min.MoveTo(max)
 		} else {
 			if cp.caretPosition.Logical() < uint32(len(cp.w.Content())) { // TODO: Where should this check happen
 				cp.caretPosition.TryMoveH(amount, jumpWords)
@@ -3866,6 +3884,11 @@ func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
 	}
 }
 
+func (cp *CaretPosition) MoveTo(target *caretPositionInternal) {
+	cp.caretPosition.MoveTo(target)
+	cp.selectionPosition.MoveTo(target)
+}
+
 func (cp *CaretPosition) TryMoveV(amount int8, leaveSelectionOptional ...bool) {
 	// HACK, TODO: Make leaveSelection a required parameter?
 	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
@@ -3888,7 +3911,8 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectio
 	}
 }
 
-func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...bool) {
+// DEPRECATED
+/*func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...bool) {
 	// HACK, TODO: Make leaveSelection a required parameter?
 	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
 
@@ -3897,7 +3921,7 @@ func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...boo
 	if !leaveSelection {
 		cp.selectionPosition.MoveTo(cp.caretPosition)
 	}
-}
+}*/
 
 // ---
 
@@ -4295,20 +4319,19 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 }
 
 func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
-	w.caretPosition.Set(caretPosition)
+	// TODO: Restore functionality, change to use new API
+	/*w.caretPosition.Set(caretPosition)
 
 	// HACK: This kinda conflicts with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
 	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
 		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		scrollPane.CenterOnArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
-	}
+	}*/
 }
 
 func (w *TextBoxWidget) NotifyChange() {
-	if w.caretPosition.caretPosition.Logical() > uint32(len(w.Content.Content())) {
-		w.caretPosition.Move(+3)
-	}
+	w.caretPosition.NotifyContentChanged()
 
 	w.Layout()
 
@@ -4567,10 +4590,10 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyBackspace:
-			selStart, selEnd := w.caretPosition.SelectionRange()
-			if selStart != selEnd {
-				SetViewGroup(w.Content, w.Content.Content()[:selStart]+w.Content.Content()[selEnd:])
-				w.caretPosition.Set(selStart)
+			selStart, selEnd := w.caretPosition.SelectionRange2()
+			if selStart.Logical() != selEnd.Logical() {
+				SetViewGroup(w.Content, w.Content.Content()[:selStart.Logical()]+w.Content.Content()[selEnd.Logical():])
+				w.caretPosition.MoveTo(selStart)
 			} else {
 				if w.caretPosition.Logical() >= 1 {
 					w.caretPosition.Move(-1)
@@ -4578,23 +4601,23 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 			}
 		case glfw.KeyDelete:
-			selStart, selEnd := w.caretPosition.SelectionRange()
-			if selStart != selEnd {
-				SetViewGroup(w.Content, w.Content.Content()[:selStart]+w.Content.Content()[selEnd:])
-				w.caretPosition.Set(selStart)
+			selStart, selEnd := w.caretPosition.SelectionRange2()
+			if selStart.Logical() != selEnd.Logical() {
+				SetViewGroup(w.Content, w.Content.Content()[:selStart.Logical()]+w.Content.Content()[selEnd.Logical():])
+				w.caretPosition.MoveTo(selStart)
 			} else {
 				if w.caretPosition.Logical()+1 <= uint32(len(w.Content.Content())) {
 					SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
 				}
 			}
-		case glfw.KeyEnter:
+		/*case glfw.KeyEnter:
 			selStart, selEnd := w.caretPosition.SelectionRange()
 			SetViewGroup(w.Content, w.Content.Content()[:selStart]+"\n"+w.Content.Content()[selEnd:])
 			w.caretPosition.Set(selStart + 1)
 		case glfw.KeyTab:
 			selStart, selEnd := w.caretPosition.SelectionRange()
 			SetViewGroup(w.Content, w.Content.Content()[:selStart]+"\t"+w.Content.Content()[selEnd:])
-			w.caretPosition.Set(selStart + 1)
+			w.caretPosition.Set(selStart + 1)*/
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
 				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
@@ -4626,7 +4649,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.caretPosition.Move(-3)
 				w.caretPosition.Move(+3, true)
 			}
-		case glfw.KeyX:
+		/*case glfw.KeyX:
 			if !w.Private.Get() &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
@@ -4654,7 +4677,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					SetViewGroup(w.Content, w.Content.Content()[:selStart]+clipboard+w.Content.Content()[selEnd:])
 					w.caretPosition.Set(selStart + uint32(len(clipboard)))
 				}
-			}
+			}*/
 		case glfw.KeyR:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				ExternallyUpdated(w.Content) // TODO: Need to make this apply only for event-based things; no point in forcibly updating pure data structures
@@ -4675,7 +4698,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
 		selStart, selEnd := w.caretPosition.SelectionRange()
 		SetViewGroup(w.Content, w.Content.Content()[:selStart]+string(inputEvent.InputId)+w.Content.Content()[selEnd:])
-		w.caretPosition.Set(selStart + 1)
+		w.caretPosition.TryMoveH(+1, false, false) // HACK
 	}
 }
 
@@ -5925,8 +5948,7 @@ func main() {
 					}
 
 					tempCaretPosition := &caretPositionInternal{w: source.Content}
-					tempCaretPosition.Set(uint32(fset.Position(pos).Offset))
-					x, y := tempCaretPosition.ExpandedPosition()
+					x, y := tempCaretPosition.SetHint(uint32(fset.Position(pos).Offset), 0)
 					glt.SetPosWithExpandedPosition(w.pos, x, y)
 
 					switch {
