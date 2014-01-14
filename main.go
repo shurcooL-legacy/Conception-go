@@ -708,7 +708,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) (*LiveGoroutineExpe
 		return out
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{parsedFile, &source.caretPosition}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{parsedFile, source.caretPosition}, params, action)
 	return w, parsedFile
 }
 
@@ -923,7 +923,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source 
 		return out
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{typeCheckedPackage, &source.caretPosition}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{typeCheckedPackage, source.caretPosition}, params, action)
 	return w, typeCheckedPackage
 }
 
@@ -3608,113 +3608,94 @@ func ExpandedToLogical(s string, expanded uint32) uint32 {
 
 // ---
 
-type CaretPosition struct {
-	w                 MultilineContentI
-	caretPosition     uint32 // TODO: Store as (lineIndex, positionWithinLine) for better performance
-	selectionPosition uint32 // TODO: Turn current struct into higher-level CaretWithSelection; move each of caret and selection positions into sub-struct CaretPosition
-	targetExpandedX   uint32
+// DOING: Turn current struct into higher-level CaretWithSelection; move each of caret and selection positions into sub-struct CaretPosition
+// TODO: Rename
+type caretPositionInternal struct {
+	w               MultilineContentI
+	caretPosition   uint32 // TODO: Store as (lineIndex, positionWithinLine) for better performance
+	targetExpandedX uint32
 
 	DepNode2Manual
 }
 
-func (cp *CaretPosition) Logical() uint32 {
+func (cp *caretPositionInternal) Logical() uint32 {
 	return cp.caretPosition
 }
 
-func (cp *CaretPosition) SelectionRange() (start uint32, end uint32) {
-	min := intmath.MinUint32(cp.caretPosition, cp.selectionPosition)
-	max := intmath.MaxUint32(cp.caretPosition, cp.selectionPosition)
-	return min, max
-}
-
-// ExpandedPosition returns logical character units.
-// Multiply by (fontWidth, fontHeight) to get physical coords.
-func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
-	caretPosition := cp.caretPosition
-	caretLine := 0
-	for caretPosition > cp.w.Line(caretLine).Length {
-		caretPosition -= cp.w.Line(caretLine).Length + 1
-		caretLine++
-	}
-	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
-
-	return expandedCaretPosition, uint32(caretLine)
-}
-
-// HACK
-func (cp *CaretPosition) ExpandedPositionHint(beginLineIndex int) (x uint32, y uint32) {
-	caretPosition := cp.caretPosition - cp.w.Line(beginLineIndex).Start
-	caretLine := beginLineIndex
-	for caretPosition > cp.w.Line(caretLine).Length {
-		caretPosition -= cp.w.Line(caretLine).Length + 1
-		caretLine++
-	}
-	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
-
-	return expandedCaretPosition, uint32(caretLine)
-}
-
-func isCoreCharacter(character byte) bool {
-	return (('a' <= character && character <= 'z') ||
-		('A' <= character && character <= 'Z') ||
-		('0' <= character && character <= '9') ||
-		'_' == character)
-}
-
-func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
+func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 	switch amount {
 	case -1:
-		if cp.caretPosition != cp.selectionPosition && !leaveSelection {
-			cp.Set(intmath.MinUint32(cp.caretPosition, cp.selectionPosition))
-		} else {
-			if cp.caretPosition >= 1 {
-				if jumpWords {
-					// Skip spaces to the left
-					LookAt := cp.caretPosition
-					for LookAt > 0 && !isCoreCharacter(cp.w.Content()[LookAt-1]) {
-						LookAt--
-					}
-					// Skip non-spaces to the left
-					for LookAt > 0 && isCoreCharacter(cp.w.Content()[LookAt-1]) {
-						LookAt--
-					}
-
-					cp.Set(LookAt, leaveSelection)
-				} else {
-					cp.Move(-1, leaveSelection)
+		if cp.caretPosition >= 1 {
+			if jumpWords {
+				// Skip spaces to the left
+				LookAt := cp.caretPosition
+				for LookAt > 0 && !isCoreCharacter(cp.w.Content()[LookAt-1]) {
+					LookAt--
 				}
+				// Skip non-spaces to the left
+				for LookAt > 0 && isCoreCharacter(cp.w.Content()[LookAt-1]) {
+					LookAt--
+				}
+
+				cp.Set(LookAt)
+			} else {
+				cp.Move(-1)
 			}
 		}
 	case +1:
-		if cp.caretPosition != cp.selectionPosition && !leaveSelection {
-			cp.Set(intmath.MaxUint32(cp.caretPosition, cp.selectionPosition))
-		} else {
-			if cp.caretPosition < uint32(len(cp.w.Content())) {
-				if jumpWords {
-					// Skip spaces to the right
-					LookAt := cp.caretPosition
-					for LookAt < uint32(len(cp.w.Content())) && !isCoreCharacter(cp.w.Content()[LookAt]) {
-						LookAt++
-					}
-					// Skip non-spaces to the right
-					for LookAt < uint32(len(cp.w.Content())) && isCoreCharacter(cp.w.Content()[LookAt]) {
-						LookAt++
-					}
-
-					cp.Set(LookAt, leaveSelection)
-				} else {
-					cp.Move(+1, leaveSelection)
+		if cp.caretPosition < uint32(len(cp.w.Content())) {
+			if jumpWords {
+				// Skip spaces to the right
+				LookAt := cp.caretPosition
+				for LookAt < uint32(len(cp.w.Content())) && !isCoreCharacter(cp.w.Content()[LookAt]) {
+					LookAt++
 				}
+				// Skip non-spaces to the right
+				for LookAt < uint32(len(cp.w.Content())) && isCoreCharacter(cp.w.Content()[LookAt]) {
+					LookAt++
+				}
+
+				cp.Set(LookAt)
+			} else {
+				cp.Move(+1)
 			}
 		}
 	}
 }
 
-// HACK: leaveSelection is currently an optional bool parameter
-func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
-	// HACK, TODO: Make leaveSelection a required parameter?
-	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+func (cp *caretPositionInternal) TryMoveV(amount int8) {
+	_, y := cp.ExpandedPosition()
 
+	switch amount {
+	case -1:
+		if y > 0 {
+			y--
+			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
+			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+
+			ExternallyUpdated(&cp.DepNode2Manual)
+		} else {
+			cp.Move(-2)
+		}
+	case +1:
+		if y < uint32(cp.w.LenLines())-1 {
+			y++
+			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
+			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
+
+			ExternallyUpdated(&cp.DepNode2Manual)
+		} else {
+			cp.Move(+2)
+		}
+	}
+}
+
+func (cp *caretPositionInternal) MoveTo(other *caretPositionInternal) {
+	cp.caretPosition = other.caretPosition
+	cp.targetExpandedX = other.targetExpandedX
+}
+
+func (cp *caretPositionInternal) Move(amount int8) {
 	switch amount {
 	case -1:
 		cp.caretPosition--
@@ -3733,57 +3714,12 @@ func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
 		cp.caretPosition = cp.w.Lines()[y].Start + cp.w.Lines()[y].Length
 	}
 
-	if !leaveSelection {
-		cp.selectionPosition = cp.caretPosition
-	}
-
 	cp.targetExpandedX, _ = cp.ExpandedPosition()
 
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
-func (cp *CaretPosition) TryMoveV(amount int8, leaveSelectionOptional ...bool) {
-	// HACK, TODO: Make leaveSelection a required parameter?
-	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
-
-	_, y := cp.ExpandedPosition()
-
-	switch amount {
-	case -1:
-		if y > 0 {
-			y--
-			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
-			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
-
-			if !leaveSelection {
-				cp.selectionPosition = cp.caretPosition
-			}
-
-			ExternallyUpdated(&cp.DepNode2Manual)
-		} else {
-			cp.Move(-2, leaveSelection)
-		}
-	case +1:
-		if y < uint32(cp.w.LenLines())-1 {
-			y++
-			line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
-			cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
-
-			if !leaveSelection {
-				cp.selectionPosition = cp.caretPosition
-			}
-
-			ExternallyUpdated(&cp.DepNode2Manual)
-		} else {
-			cp.Move(+2, leaveSelection)
-		}
-	}
-}
-
-func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectionOptional ...bool) {
-	// HACK, TODO: Make leaveSelection a required parameter?
-	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
-
+func (cp *caretPositionInternal) SetPositionFromPhysical(pos mathgl.Vec2d) {
 	var y uint32
 	if pos[1] < 0 {
 		y = 0
@@ -3802,44 +3738,165 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectio
 	line := cp.w.Content()[cp.w.Lines()[y].Start : cp.w.Lines()[y].Start+cp.w.Lines()[y].Length]
 	cp.caretPosition = cp.w.Lines()[y].Start + ExpandedToLogical(line, cp.targetExpandedX)
 
-	if !leaveSelection {
-		cp.selectionPosition = cp.caretPosition
-	}
+	ExternallyUpdated(&cp.DepNode2Manual)
+}
+
+func (cp *caretPositionInternal) Set(position uint32) {
+	cp.caretPosition = position
 
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
-func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...bool) {
-	// HACK, TODO: Make leaveSelection a required parameter?
-	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
-
-	cp.caretPosition = caretPosition
-
-	if !leaveSelection {
-		cp.selectionPosition = cp.caretPosition
+// ExpandedPosition returns logical character units.
+// Multiply by (fontWidth, fontHeight) to get physical coords.
+func (cp *caretPositionInternal) ExpandedPosition() (x uint32, y uint32) {
+	caretPosition := cp.caretPosition
+	caretLine := 0
+	for caretPosition > cp.w.Line(caretLine).Length {
+		caretPosition -= cp.w.Line(caretLine).Length + 1
+		caretLine++
 	}
+	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
 
-	cp.targetExpandedX, _ = cp.ExpandedPosition()
-
-	ExternallyUpdated(&cp.DepNode2Manual)
+	return expandedCaretPosition, uint32(caretLine)
 }
 
 // HACK
-func (cp *CaretPosition) SetHint(caretPosition uint32, beginLineIndex int, leaveSelectionOptional ...bool) (x uint32, y uint32) {
-	// HACK, TODO: Make leaveSelection a required parameter?
-	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
-
-	cp.caretPosition = caretPosition
-
-	if !leaveSelection {
-		cp.selectionPosition = cp.caretPosition
+func (cp *caretPositionInternal) ExpandedPositionHint(beginLineIndex int) (x uint32, y uint32) {
+	caretPosition := cp.caretPosition - cp.w.Line(beginLineIndex).Start
+	caretLine := beginLineIndex
+	for caretPosition > cp.w.Line(caretLine).Length {
+		caretPosition -= cp.w.Line(caretLine).Length + 1
+		caretLine++
 	}
+	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
+
+	return expandedCaretPosition, uint32(caretLine)
+}
+
+// HACK
+func (cp *caretPositionInternal) SetHint(caretPosition uint32, beginLineIndex int) (x uint32, y uint32) {
+	cp.caretPosition = caretPosition
 
 	cp.targetExpandedX, y = cp.ExpandedPositionHint(beginLineIndex)
 
 	ExternallyUpdated(&cp.DepNode2Manual)
 
 	return cp.targetExpandedX, y
+}
+
+func isCoreCharacter(character byte) bool {
+	return (('a' <= character && character <= 'z') ||
+		('A' <= character && character <= 'Z') ||
+		('0' <= character && character <= '9') ||
+		'_' == character)
+}
+
+// ---
+
+type CaretPosition struct {
+	w                 MultilineContentI
+	caretPosition     *caretPositionInternal
+	selectionPosition *caretPositionInternal
+	targetExpandedX   uint32
+
+	DepNode2
+}
+
+func NewCaretPosition(mc MultilineContentI) *CaretPosition {
+	cp := &CaretPosition{
+		w:                 mc,
+		caretPosition:     &caretPositionInternal{w: mc},
+		selectionPosition: &caretPositionInternal{w: mc},
+	}
+	cp.AddSources(cp.caretPosition, cp.selectionPosition)
+	return cp
+}
+
+func (cp *CaretPosition) Update() {}
+
+func (cp *CaretPosition) Logical() uint32 {
+	return cp.caretPosition.Logical()
+}
+
+func (cp *CaretPosition) SelectionRange() (start uint32, end uint32) {
+	min := intmath.MinUint32(cp.caretPosition.Logical(), cp.selectionPosition.Logical())
+	max := intmath.MaxUint32(cp.caretPosition.Logical(), cp.selectionPosition.Logical())
+	return min, max
+}
+
+func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
+	switch amount {
+	case -1:
+		if cp.caretPosition != cp.selectionPosition && !leaveSelection {
+			cp.Set(intmath.MinUint32(cp.caretPosition.Logical(), cp.selectionPosition.Logical()))
+		} else {
+			if cp.caretPosition.Logical() >= 1 { // TODO: Where should this check happen
+				cp.caretPosition.TryMoveH(amount, jumpWords)
+
+				if !leaveSelection {
+					cp.selectionPosition.MoveTo(cp.caretPosition)
+				}
+			}
+		}
+	case +1:
+		if cp.caretPosition != cp.selectionPosition && !leaveSelection {
+			cp.Set(intmath.MaxUint32(cp.caretPosition.Logical(), cp.selectionPosition.Logical()))
+		} else {
+			if cp.caretPosition.Logical() < uint32(len(cp.w.Content())) { // TODO: Where should this check happen
+				cp.caretPosition.TryMoveH(amount, jumpWords)
+
+				if !leaveSelection {
+					cp.selectionPosition.MoveTo(cp.caretPosition)
+				}
+			}
+		}
+	}
+}
+
+// HACK: leaveSelection is currently an optional bool parameter
+func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
+	cp.caretPosition.Move(amount)
+
+	if !leaveSelection {
+		cp.selectionPosition.MoveTo(cp.caretPosition)
+	}
+}
+
+func (cp *CaretPosition) TryMoveV(amount int8, leaveSelectionOptional ...bool) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
+	cp.caretPosition.TryMoveV(amount)
+
+	if !leaveSelection {
+		cp.selectionPosition.MoveTo(cp.caretPosition)
+	}
+}
+
+func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectionOptional ...bool) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
+	cp.caretPosition.SetPositionFromPhysical(pos)
+
+	if !leaveSelection {
+		cp.selectionPosition.MoveTo(cp.caretPosition)
+	}
+}
+
+func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...bool) {
+	// HACK, TODO: Make leaveSelection a required parameter?
+	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
+
+	cp.caretPosition.Set(caretPosition)
+
+	if !leaveSelection {
+		cp.selectionPosition.MoveTo(cp.caretPosition)
+	}
 }
 
 // ---
@@ -4198,7 +4255,7 @@ func (w *TextLabelWidget) Render() {
 type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
-	caretPosition  CaretPosition
+	caretPosition  *CaretPosition
 	Private        Bool
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
@@ -4219,7 +4276,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 	w := &TextBoxWidget{
 		Widget:        NewWidget(pos, mathgl.Vec2d{0, 0}),
 		Content:       mc,
-		caretPosition: CaretPosition{w: mc},
+		caretPosition: NewCaretPosition(mc),
 	}
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
@@ -4227,12 +4284,12 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 	// TEST
 	w.scrollToCaret.UpdateFunc = func(DepNode2I) {
 		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
-			expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
+			expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 			scrollPane.ScrollToArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
 		}
 	}
-	w.scrollToCaret.AddSources(&w.caretPosition)
+	w.scrollToCaret.AddSources(w.caretPosition)
 
 	return w
 }
@@ -4242,14 +4299,14 @@ func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
 
 	// HACK: This kinda conflicts with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
 	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
-		expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
+		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		scrollPane.CenterOnArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
 	}
 }
 
 func (w *TextBoxWidget) NotifyChange() {
-	if w.caretPosition.caretPosition > uint32(len(w.Content.Content())) {
+	if w.caretPosition.caretPosition.Logical() > uint32(len(w.Content.Content())) {
 		w.caretPosition.Move(+3)
 	}
 
@@ -4304,7 +4361,7 @@ func (w *TextBoxWidget) Render() {
 
 	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
 	if !hasTypingFocus {
-		_, caretLine := w.caretPosition.ExpandedPosition()
+		_, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Highlight line
 		gl.PushMatrix()
@@ -4358,7 +4415,7 @@ func (w *TextBoxWidget) Render() {
 					}
 
 					// HACK
-					tempCaretPosition := &CaretPosition{w: w.Content}
+					tempCaretPosition := &caretPositionInternal{w: w.Content}
 					x, y := tempCaretPosition.SetHint(offset, beginLineIndex)
 					glt.SetPosWithExpandedPosition(w.pos, x, y)
 
@@ -4457,7 +4514,7 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	if hasTypingFocus {
-		expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
+		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Draw caret
 		gl.PushMatrix()
@@ -4715,7 +4772,7 @@ func (w *TextBoxValidationWidget) Render() {
 	}
 
 	if hasTypingFocus {
-		expandedCaretPosition, caretLine := w.caretPosition.ExpandedPosition()
+		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Draw caret
 		gl.PushMatrix()
@@ -5517,8 +5574,8 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if true {
-		//if false {
+	//if true {
+	if false {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -5867,7 +5924,7 @@ func main() {
 						break
 					}
 
-					tempCaretPosition := &CaretPosition{w: source.Content}
+					tempCaretPosition := &caretPositionInternal{w: source.Content}
 					tempCaretPosition.Set(uint32(fset.Position(pos).Offset))
 					x, y := tempCaretPosition.ExpandedPosition()
 					glt.SetPosWithExpandedPosition(w.pos, x, y)
