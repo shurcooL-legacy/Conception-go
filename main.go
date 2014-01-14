@@ -3647,12 +3647,7 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 
 				cp.Set(LookAt)*/
 			} else {
-				if cp.positionWithinLine > 0 {
-					cp.positionWithinLine--
-				} else { //if cp.lineIndex > 0
-					cp.lineIndex--
-					cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
-				}
+				cp.willMove(-1)
 			}
 		}
 	case +1:
@@ -3671,13 +3666,27 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 
 				cp.Set(LookAt)*/
 			} else {
-				if cp.positionWithinLine < cp.w.Line(cp.lineIndex).Length {
-					cp.positionWithinLine++
-				} else { //if cp.lineIndex < some_max
-					cp.lineIndex++
-					cp.positionWithinLine = 0
-				}
+				cp.willMove(+1)
 			}
+		}
+	}
+}
+
+func (cp *caretPositionInternal) willMove(amount int8) {
+	switch amount {
+	case -1:
+		if cp.positionWithinLine > 0 {
+			cp.positionWithinLine--
+		} else { //if cp.lineIndex > 0
+			cp.lineIndex--
+			cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
+		}
+	case +1:
+		if cp.positionWithinLine < cp.w.Line(cp.lineIndex).Length {
+			cp.positionWithinLine++
+		} else { //if cp.lineIndex < some_max
+			cp.lineIndex++
+			cp.positionWithinLine = 0
 		}
 	}
 }
@@ -3711,6 +3720,10 @@ func (cp *caretPositionInternal) MoveTo(other *caretPositionInternal) {
 	cp.lineIndex = other.lineIndex
 	cp.positionWithinLine = other.positionWithinLine
 	cp.targetExpandedX = other.targetExpandedX
+}
+
+func (cp *caretPositionInternal) EqualPosition(other *caretPositionInternal) bool {
+	return cp.lineIndex == other.lineIndex && cp.positionWithinLine == other.positionWithinLine
 }
 
 func (cp *caretPositionInternal) Move(amount int8) {
@@ -3838,7 +3851,7 @@ func (cp *CaretPosition) SelectionRange2() (start, end *caretPositionInternal) {
 }
 
 func (cp *CaretPosition) anySelection() bool {
-	return cp.caretPosition.Logical() != cp.selectionPosition.Logical()
+	return !cp.caretPosition.EqualPosition(cp.selectionPosition)
 }
 
 func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
@@ -3908,6 +3921,20 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectio
 
 	if !leaveSelection {
 		cp.selectionPosition.MoveTo(cp.caretPosition)
+	}
+}
+
+func (cp *CaretPosition) Backspace() {
+	if cp.anySelection() {
+		selStart, selEnd := cp.SelectionRange2()
+		SetViewGroup(cp.w, cp.w.Content()[:selStart.Logical()]+cp.w.Content()[selEnd.Logical():])
+		cp.MoveTo(selStart)
+	} else {
+		if cp.caretPosition.Logical() >= 1 {
+			cp.caretPosition.willMove(-1)
+			cp.selectionPosition.willMove(-1)
+			SetViewGroup(cp.w, cp.w.Content()[:cp.caretPosition.Logical()]+cp.w.Content()[cp.caretPosition.Logical()+1:])
+		}
 	}
 }
 
@@ -4590,16 +4617,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyBackspace:
-			selStart, selEnd := w.caretPosition.SelectionRange2()
-			if selStart.Logical() != selEnd.Logical() {
-				SetViewGroup(w.Content, w.Content.Content()[:selStart.Logical()]+w.Content.Content()[selEnd.Logical():])
-				w.caretPosition.MoveTo(selStart)
-			} else {
-				if w.caretPosition.Logical() >= 1 {
-					w.caretPosition.Move(-1)
-					SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
-				}
-			}
+			w.caretPosition.Backspace()
 		case glfw.KeyDelete:
 			selStart, selEnd := w.caretPosition.SelectionRange2()
 			if selStart.Logical() != selEnd.Logical() {
@@ -5597,7 +5615,6 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	//if true {
 	if false {
 
 		windowSize0, windowSize1 := window.GetSize()
