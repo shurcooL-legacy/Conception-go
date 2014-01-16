@@ -3115,17 +3115,17 @@ func NewFolderListingWidget(pos mathgl.Vec2d, path string) *FolderListingWidget 
 	return w
 }
 
-func (w *FolderListingWidget) GetSelectedPath() string {
-	out := ""
+// TODO: Use a custom path type instead of a string?
+func (w *FolderListingWidget) GetSelectedPath() (path string) {
 	for _, widget := range w.flow.Widgets {
 		if pure := widget.(*FolderListingPureWidget); pure.selected != 0 {
-			out = filepath.Join(pure.path, pure.entries[pure.selected-1].Name())
+			path = filepath.Join(pure.path, pure.entries[pure.selected-1].Name())
 			if pure.entries[pure.selected-1].IsDir() {
-				out += string(filepath.Separator)
+				path += string(filepath.Separator)
 			}
 		}
 	}
-	return out
+	return path
 }
 
 func (w *FolderListingWidget) ProcessEvent(inputEvent InputEvent) {
@@ -3277,6 +3277,8 @@ func (w *FolderListingPureWidget) Layout() {
 	w.Widget.Layout()
 }
 
+const PathSeparator = "/"
+
 func (w *FolderListingPureWidget) Render() {
 	DrawNBox(w.pos, w.size)
 
@@ -3297,7 +3299,7 @@ func (w *FolderListingPureWidget) Render() {
 		}
 
 		if v.IsDir() {
-			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name()+string(filepath.Separator))
+			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name()+PathSeparator)
 		} else {
 			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name())
 		}
@@ -6301,5 +6303,5 @@ func main() {
 		}
 	}
 
-	os.Remove("./Con2RunBin") // TODO: Generalize this
+	goon.DumpExpr(os.Remove("./Con2RunBin")) // TODO: Generalize this
 }
