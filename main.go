@@ -21,7 +21,7 @@ import (
 	//"github.com/go-gl/glu"
 	glu "github.com/shurcooL/goglu/glu21"
 
-	"github.com/shurcooL/go/exp/11"
+	//"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/gostatus/status"
 
@@ -74,9 +74,8 @@ import (
 
 	"code.google.com/p/go.tools/go/exact"
 	"code.google.com/p/go.tools/go/types"
-	"code.google.com/p/go.tools/importer"
 	. "gist.github.com/7576804.git"
-	importer2 "honnef.co/go/importer"
+	"honnef.co/go/importer"
 
 	"github.com/davecheney/profile"
 
@@ -742,7 +741,7 @@ func (t *typeCheckedPackage) Update() {
 	}
 
 	fset := token.NewFileSet()
-	files, err := importer.ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
+	files, err := ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
 	if err != nil {
 		t.fset = nil
 		t.files = nil
@@ -754,7 +753,7 @@ func (t *typeCheckedPackage) Update() {
 	t.fset = fset
 	t.files = files
 
-	imp := importer2.New()
+	imp := importer.New()
 	imp.Config.UseGcFallback = true
 	cfg := &types.Config{Import: imp.Import}
 	info := &types.Info{
@@ -950,7 +949,13 @@ func (this *docPackage) Update() {
 		return
 	}
 
-	this.dpkg = GetDocPackageAll(bpkg, nil)
+	dpkg, err := GetDocPackageAll(bpkg, nil)
+	if err != nil {
+		this.dpkg = nil
+		return
+	}
+
+	this.dpkg = dpkg
 }
 
 // ---
@@ -1589,7 +1594,7 @@ const (
 
 func (mode KatMode) String() string {
 	//fmt.Printf("%T %T\n", AutoAttack, Shunpo)
-	x := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
+	x, _ := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
 	for _, y := range x.Types {
 		if y.Name == "KatMode" {
 			for _, c := range y.Consts {
@@ -3691,6 +3696,8 @@ func (cp *caretPositionInternal) willMove(amount int8) {
 			cp.positionWithinLine = 0
 		}
 	}
+
+	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
 }
 
 func (cp *caretPositionInternal) TryMoveV(amount int8) {
@@ -3744,7 +3751,7 @@ func (cp *caretPositionInternal) Move(amount int8) {
 		cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
 	}
 
-	cp.targetExpandedX, _ = cp.ExpandedPosition()
+	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
 
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
@@ -4348,6 +4355,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 }
 
 func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
+	panic("TODO: Restore functionality, change to use new API")
 	// TODO: Restore functionality, change to use new API
 	/*w.caretPosition.Set(caretPosition)
 
@@ -5330,13 +5338,18 @@ func initHttpHandlers() {
 			goPackage.UpdateVcsFields()
 
 			// TODO: Cache this via DepNode2I
-			dpkg := GetDocPackageAll(goPackage.Bpkg, nil)
-
-			b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
-			var buf bytes.Buffer
-			FprintPackageFullSummary(&buf, dpkg)
-			b += buf.String()
-			b += "\n```\n"
+			dpkg, err := GetDocPackageAll(goPackage.Bpkg, nil)
+			if err == nil {
+				b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
+				var buf bytes.Buffer
+				FprintPackageFullSummary(&buf, dpkg)
+				b += buf.String()
+				b += "\n```\n"
+			} else {
+				b += Underline(`import "`+importPath+`"`) + "\n```\n"
+				b += err.Error()
+				b += "\n```\n"
+			}
 
 			b += "\n---\n\n"
 
@@ -5389,7 +5402,8 @@ func initHttpHandlers() {
 		}
 	})))
 	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		importPath := r.URL.Path[1:]
+		io.WriteString(w, "importer api changed, exp11 needs to be updated")
+		/*importPath := r.URL.Path[1:]
 
 		// TODO: Cache this via DepNode2I
 		buf := new(bytes.Buffer)
@@ -5397,7 +5411,7 @@ func initHttpHandlers() {
 		exp11.InlineDotImports(buf, importPath)
 		buf.WriteString("\n```")
 
-		WriteGitHubFlavoredMarkdown(w, buf)
+		WriteGitHubFlavoredMarkdown(w, buf)*/
 	})))
 }
 
