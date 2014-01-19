@@ -3709,7 +3709,7 @@ func (cp *caretPositionInternal) willMoveH(amount int32) {
 				cp.positionWithinLine -= absAmount
 				absAmount = 0
 			} else { //if cp.lineIndex > 0
-				absAmount -= cp.positionWithinLine
+				absAmount -= 1 + cp.positionWithinLine
 				cp.lineIndex--
 				cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
 			}
@@ -3721,7 +3721,7 @@ func (cp *caretPositionInternal) willMoveH(amount int32) {
 				cp.positionWithinLine += absAmount
 				absAmount = 0
 			} else { //if cp.lineIndex < some_max
-				absAmount -= cp.w.Line(cp.lineIndex).Length - cp.positionWithinLine
+				absAmount -= 1 + cp.w.Line(cp.lineIndex).Length - cp.positionWithinLine
 				cp.lineIndex++
 				cp.positionWithinLine = 0
 			}
@@ -3997,6 +3997,12 @@ func (cp *CaretPosition) ReplaceSelectionWith(s string) {
 	SetViewGroup(cp.w, cp.w.Content()[:selStart.Logical()]+s+cp.w.Content()[selEnd.Logical():])
 	selStart.willMoveH(int32(len(s)))
 	selEnd.MoveTo(selStart)
+}
+
+// Gets the selection content.
+func (cp *CaretPosition) GetSelectionContent() (selectionContent string) {
+	selStart, selEnd := cp.SelectionRange2()
+	return cp.w.Content()[selStart.Logical():selEnd.Logical()]
 }
 
 // DEPRECATED
@@ -4684,23 +4690,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyBackspace:
 			w.caretPosition.Backspace()
 		case glfw.KeyDelete:
-			selStart, selEnd := w.caretPosition.SelectionRange2()
-			if selStart.Logical() != selEnd.Logical() {
-				SetViewGroup(w.Content, w.Content.Content()[:selStart.Logical()]+w.Content.Content()[selEnd.Logical():])
-				w.caretPosition.MoveTo(selStart)
-			} else {
-				if w.caretPosition.Logical()+1 <= uint32(len(w.Content.Content())) {
-					SetViewGroup(w.Content, w.Content.Content()[:w.caretPosition.Logical()]+w.Content.Content()[w.caretPosition.Logical()+1:])
-				}
-			}
-		/*case glfw.KeyEnter:
-			selStart, selEnd := w.caretPosition.SelectionRange()
-			SetViewGroup(w.Content, w.Content.Content()[:selStart]+"\n"+w.Content.Content()[selEnd:])
-			w.caretPosition.Set(selStart + 1)
+			w.caretPosition.CreateSelectionIfNone(+1)
+			w.caretPosition.ReplaceSelectionWith("")
+		case glfw.KeyEnter:
+			w.caretPosition.ReplaceSelectionWith("\n")
 		case glfw.KeyTab:
-			selStart, selEnd := w.caretPosition.SelectionRange()
-			SetViewGroup(w.Content, w.Content.Content()[:selStart]+"\t"+w.Content.Content()[selEnd:])
-			w.caretPosition.Set(selStart + 1)*/
+			w.caretPosition.ReplaceSelectionWith("\t")
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
 				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
@@ -4732,35 +4727,29 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.caretPosition.Move(-3)
 				w.caretPosition.Move(+3, true)
 			}
-		/*case glfw.KeyX:
+		case glfw.KeyX:
 			if !w.Private.Get() &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
-				selStart, selEnd := w.caretPosition.SelectionRange()
-				if selStart != selEnd {
-					globalWindow.SetClipboardString(w.Content.Content()[selStart:selEnd]) // TODO: Don't use globalWindow
-					SetViewGroup(w.Content, w.Content.Content()[:selStart]+w.Content.Content()[selEnd:])
-					w.caretPosition.Set(selStart)
+				if w.caretPosition.anySelection() {
+					globalWindow.SetClipboardString(w.caretPosition.GetSelectionContent()) // TODO: Don't use globalWindow
+					w.caretPosition.ReplaceSelectionWith("")
 				}
 			}
 		case glfw.KeyC:
 			if !w.Private.Get() &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
-				selStart, selEnd := w.caretPosition.SelectionRange()
-				if selStart != selEnd {
-					globalWindow.SetClipboardString(w.Content.Content()[selStart:selEnd]) // TODO: Don't use globalWindow
+				if w.caretPosition.anySelection() {
+					globalWindow.SetClipboardString(w.caretPosition.GetSelectionContent()) // TODO: Don't use globalWindow
 				}
 			}
 		case glfw.KeyV:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				// TODO: Don't use globalWindow
-				if clipboard, err := globalWindow.GetClipboardString(); err == nil && clipboard != "" {
-					selStart, selEnd := w.caretPosition.SelectionRange()
-					SetViewGroup(w.Content, w.Content.Content()[:selStart]+clipboard+w.Content.Content()[selEnd:])
-					w.caretPosition.Set(selStart + uint32(len(clipboard)))
+				if clipboard, err := globalWindow.GetClipboardString(); err == nil && clipboard != "" { // TODO: Don't use globalWindow
+					w.caretPosition.ReplaceSelectionWith(clipboard)
 				}
-			}*/
+			}
 		case glfw.KeyR:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				ExternallyUpdated(w.Content) // TODO: Need to make this apply only for event-based things; no point in forcibly updating pure data structures
@@ -4779,9 +4768,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
-		selStart, selEnd := w.caretPosition.SelectionRange()
-		SetViewGroup(w.Content, w.Content.Content()[:selStart]+string(inputEvent.InputId)+w.Content.Content()[selEnd:])
-		w.caretPosition.TryMoveH(+1, false, false) // HACK
+		w.caretPosition.ReplaceSelectionWith(string(inputEvent.InputId))
 	}
 }
 
