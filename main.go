@@ -3628,7 +3628,7 @@ type caretPositionInternal struct {
 }
 
 func (cp *caretPositionInternal) NotifyContentChanged() {
-	if cp.Logical() > uint32(len(cp.w.Content())) {
+	if cp.Logical() > uint32(cp.w.LenContent()) {
 		cp.Move(+3)
 	}
 }
@@ -3659,15 +3659,15 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 			}
 		}
 	case +1:
-		if cp.Logical() < uint32(len(cp.w.Content())) {
+		if cp.Logical() < uint32(cp.w.LenContent()) {
 			if jumpWords {
 				// Skip spaces to the right
 				LookAt := cp.Logical()
-				for LookAt < uint32(len(cp.w.Content())) && !isCoreCharacter(cp.w.Content()[LookAt]) {
+				for LookAt < uint32(cp.w.LenContent()) && !isCoreCharacter(cp.w.Content()[LookAt]) {
 					LookAt++
 				}
 				// Skip non-spaces to the right
-				for LookAt < uint32(len(cp.w.Content())) && isCoreCharacter(cp.w.Content()[LookAt]) {
+				for LookAt < uint32(cp.w.LenContent()) && isCoreCharacter(cp.w.Content()[LookAt]) {
 					LookAt++
 				}
 
@@ -3780,6 +3780,7 @@ func (cp *caretPositionInternal) Compare(other *caretPositionInternal) int8 {
 }
 
 // TODO: Change amount to a proper type with 4 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
+// TOOD: Rename to JumpTo or something to indicate it's a method that can never fail.
 func (cp *caretPositionInternal) Move(amount int8) {
 	switch amount {
 	case -1, +1:
@@ -3938,7 +3939,7 @@ func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
 		if cp.anySelection() && !leaveSelection {
 			min.MoveTo(max)
 		} else {
-			if cp.caretPosition.Logical() < uint32(len(cp.w.Content())) { // TODO: Where should this check happen
+			if cp.caretPosition.Logical() < uint32(cp.w.LenContent()) { // TODO: Where should this check happen
 				cp.caretPosition.TryMoveH(amount, jumpWords)
 
 				if !leaveSelection {
@@ -3950,6 +3951,8 @@ func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
 }
 
 // HACK: leaveSelection is currently an optional bool parameter
+// TODO: Change amount to a proper type with 4 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
+// TOOD: Rename to JumpTo or something to indicate it's a method that can never fail.
 func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
 	// HACK, TODO: Make leaveSelection a required parameter?
 	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
