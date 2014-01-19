@@ -1528,16 +1528,16 @@ func DrawGradientBox(pos, size mathgl.Vec2d, borderColor, topColor, bottomColor 
 	DrawBorderlessGradientBox(pos, size, topColor, bottomColor)
 }
 
-func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
-	const TwoPi = math.Pi * 2
+const Tau = 2 * math.Pi
 
+func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
 	const x = 64
 
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Begin(gl.TRIANGLE_FAN)
 	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
 	for i := 0; i <= x; i++ {
-		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), gl.Double(pos[1]+math.Cos(TwoPi*float64(i)/x)*size[1]/2))
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), gl.Double(pos[1]+math.Cos(Tau*float64(i)/x)*size[1]/2))
 	}
 	gl.End()
 
@@ -1545,7 +1545,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor, backgroundColo
 	gl.Begin(gl.TRIANGLE_FAN)
 	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
 	for i := 0; i <= x; i++ {
-		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*(size[0]/2-1)), gl.Double(pos[1]+math.Cos(TwoPi*float64(i)/x)*(size[1]/2-1)))
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*(size[0]/2-1)), gl.Double(pos[1]+math.Cos(Tau*float64(i)/x)*(size[1]/2-1)))
 	}
 	gl.End()
 }
@@ -1555,15 +1555,13 @@ func DrawCircleBorder(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor mathgl.Ve
 }
 
 func DrawCircleBorderCustom(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor mathgl.Vec3d, borderWidth float64, totalSlices, startSlice, endSlice int32) {
-	const TwoPi = math.Pi * 2
-
 	var x = float64(totalSlices)
 
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Begin(gl.TRIANGLE_STRIP)
 	for i := startSlice; i <= endSlice; i++ {
-		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), gl.Double(pos[1]-math.Cos(TwoPi*float64(i)/x)*size[1]/2))
-		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*(size[0]/2-borderWidth)), gl.Double(pos[1]-math.Cos(TwoPi*float64(i)/x)*(size[1]/2-borderWidth)))
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), gl.Double(pos[1]-math.Cos(Tau*float64(i)/x)*size[1]/2))
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*(size[0]/2-borderWidth)), gl.Double(pos[1]-math.Cos(Tau*float64(i)/x)*(size[1]/2-borderWidth)))
 	}
 	gl.End()
 }
@@ -1638,7 +1636,7 @@ func (w *KatWidget) Render() {
 			PLAYER_HALF_WIDTH := 7.74597
 			dShadowRadius := PLAYER_HALF_WIDTH * 1.75
 			for nSlice := 0; nSlice <= nSlices; nSlice++ {
-				gl.Vertex2d(gl.Double(math.Cos(2*math.Pi*float64(nSlice)/float64(nSlices))*dShadowRadius), gl.Double(math.Sin(2*math.Pi*float64(nSlice)/float64(nSlices))*dShadowRadius))
+				gl.Vertex2d(gl.Double(math.Cos(Tau*float64(nSlice)/float64(nSlices))*dShadowRadius), gl.Double(math.Sin(Tau*float64(nSlice)/float64(nSlices))*dShadowRadius))
 			}
 		}
 		gl.End()
