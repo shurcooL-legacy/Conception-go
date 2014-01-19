@@ -1908,6 +1908,7 @@ type CanvasWidget struct {
 }
 
 type CanvasWidgetOptions struct {
+	Scrollable bool
 }
 
 func NewCanvasWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *CanvasWidgetOptions) *CanvasWidget {
@@ -1943,9 +1944,11 @@ func (w *CanvasWidget) Render() {
 }
 
 func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2 {
-		w.offset[1] += inputEvent.Sliders[0] * 10
-		w.offset[0] += inputEvent.Sliders[1] * 10
+	if w.options.Scrollable {
+		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2 {
+			w.offset[1] += inputEvent.Sliders[0] * 10
+			w.offset[0] += inputEvent.Sliders[1] * 10
+		}
 	}
 
 	// TODO: Make this happen as a PostProcessEvent if it hasn't been processed by an earlier widget, etc.
@@ -4375,6 +4378,56 @@ func (w *TextLabelWidget) Render() {
 
 // ---
 
+type tokenSomething struct {
+	offset uint32
+	color  mathgl.Vec3d
+}
+
+type tokenizedGoContent struct {
+	blah []tokenSomething
+
+	DepNode2
+}
+
+func (this *tokenizedGoContent) Update() {
+	content := this.GetSources()[0].(MultilineContentI)
+
+	this.blah = nil
+
+	src := []byte(content.Content())
+	//src := []byte(w.Content.Content()[w.Content.Line(beginLineIndex).Start:w.Content.Line(endLineIndex).Start])
+
+	var s scanner.Scanner
+	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(src))
+	s.Init(file, src, nil, scanner.ScanComments)
+
+	// Repeated calls to Scan yield the token sequence found in the input.
+	for {
+		pos, tok, lit := s.Scan()
+		if tok == token.EOF {
+			break
+		}
+
+		offset := uint32(fset.Position(pos).Offset)
+
+		switch {
+		case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
+			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0.004, 0, 0.714}})
+		case tok.IsLiteral() && tok != token.IDENT:
+			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0.804, 0, 0}})
+		case lit == "false" || lit == "true":
+			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0.008, 0.024, 1}})
+		case tok == token.COMMENT:
+			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0, 0.706, 0.094}})
+		default:
+			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
+		}
+	}
+}
+
+// ---
+
 type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
@@ -4387,7 +4440,8 @@ type TextBoxWidget struct {
 	DiffsTest []diffmatchpatch.Diff
 	Side      int8
 
-	ExtensionsTest []Widgeter
+	ExtensionsTest   []Widgeter
+	HighlightersTest []DepNode2I
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -4414,8 +4468,12 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 	}
 	w.scrollToCaret.AddSources(w.caretPosition)
 
-	if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
-		println("this is a go file need to add a highligher")
+	//if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
+	{
+		tokenizedGoContent := &tokenizedGoContent{}
+		tokenizedGoContent.AddSources(mc)
+
+		w.HighlightersTest = append(w.HighlightersTest, tokenizedGoContent)
 	}
 
 	return w
@@ -4459,6 +4517,10 @@ func (w *TextBoxWidget) Render() {
 	// TODO: Move to Layout2()
 	MakeUpdated(&w.layoutDepNode2)
 	MakeUpdated(&w.scrollToCaret)
+
+	for _, highlighter := range w.HighlightersTest {
+		MakeUpdated(highlighter)
+	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
@@ -4510,8 +4572,41 @@ func (w *TextBoxWidget) Render() {
 				endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 			}
 
-			// TEST: Apply highlighting for ".go" files
-			if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
+			if len(w.HighlightersTest) == 1 {
+
+				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
+				blah := w.HighlightersTest[0].(*tokenizedGoContent).blah
+
+				// Binary search for the first entry that ends past the beginning of visible text
+				index := sort.Search(len(blah)-1, func(i int) bool {
+					return blah[i+1].offset > w.Content.Line(beginLineIndex).Start
+				})
+
+				for ; index < len(blah); index++ {
+					offset := blah[index].offset
+					var end uint32
+					if index+1 < len(blah) {
+						end = blah[index+1].offset
+					} else {
+						end = uint32(w.Content.LenContent())
+					}
+
+					if end < w.Content.Line(beginLineIndex).Start {
+						continue
+					} else if offset >= w.Content.Line(endLineIndex).Start {
+						break
+					}
+
+					offset = intmath.MaxUint32(offset, w.Content.Line(beginLineIndex).Start)
+					end = intmath.MinUint32(end, w.Content.Line(endLineIndex).Start)
+
+					color := blah[index].color
+					gl.Color3dv((*gl.Double)(&color[0]))
+					glt.PrintText(w.Content.Content()[offset:end])
+				}
+
+				// TEST: Apply highlighting for ".go" files
+			} else if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
 
 				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
 
@@ -5683,7 +5778,9 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	if false {
+	const sublimeMode = false
+
+	if sublimeMode {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -6344,7 +6441,11 @@ func main() {
 	initHttpHandlers()
 	widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 
-	widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, nil)
+	if sublimeMode {
+		widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: false})
+	} else {
+		widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: true})
+	}
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
