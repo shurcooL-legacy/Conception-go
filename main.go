@@ -3731,6 +3731,7 @@ func (cp *caretPositionInternal) willMoveH(amount int32) {
 	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
 }
 
+// TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
 func (cp *caretPositionInternal) TryMoveV(amount int8) {
 	switch amount {
 	case -1:
@@ -3778,10 +3779,11 @@ func (cp *caretPositionInternal) Compare(other *caretPositionInternal) int8 {
 	}
 }
 
+// TODO: Change amount to a proper type with 4 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
 func (cp *caretPositionInternal) Move(amount int8) {
 	switch amount {
 	case -1, +1:
-		panic("Move(+-1)")
+		panic("Move(+-1) deprecated, should use TryMoveH")
 	case -2:
 		cp.positionWithinLine = 0
 	case +2:
@@ -3915,6 +3917,7 @@ func (cp *CaretPosition) anySelection() bool {
 	return cp.caretPosition.Compare(cp.selectionPosition) != 0
 }
 
+// TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
 func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
 	min, max := cp.SelectionRange2()
 
@@ -3963,6 +3966,7 @@ func (cp *CaretPosition) MoveTo(target *caretPositionInternal) {
 	cp.selectionPosition.MoveTo(target)
 }
 
+// TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
 func (cp *CaretPosition) TryMoveV(amount int8, leaveSelectionOptional ...bool) {
 	// HACK, TODO: Make leaveSelection a required parameter?
 	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
