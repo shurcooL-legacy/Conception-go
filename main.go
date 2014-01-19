@@ -3655,7 +3655,7 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 
 				cp.willMoveH(int32(LookAt) - int32(cp.Logical()))
 			} else {
-				cp.willMove(-1)
+				cp.willMoveH(-1)
 			}
 		}
 	case +1:
@@ -3673,33 +3673,16 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 
 				cp.willMoveH(int32(LookAt) - int32(cp.Logical()))
 			} else {
-				cp.willMove(+1)
+				cp.willMoveH(+1)
 			}
 		}
 	}
 }
 
-func (cp *caretPositionInternal) willMove(amount int8) {
-	switch amount {
-	case -1:
-		if cp.positionWithinLine > 0 {
-			cp.positionWithinLine--
-		} else { //if cp.lineIndex > 0
-			cp.lineIndex--
-			cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
-		}
-	case +1:
-		if cp.positionWithinLine < cp.w.Line(cp.lineIndex).Length {
-			cp.positionWithinLine++
-		} else { //if cp.lineIndex < some_max
-			cp.lineIndex++
-			cp.positionWithinLine = 0
-		}
-	}
-
-	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
-}
-
+// Moves caret horizontally by amount. It doesn't do bounds checking, so it's
+// the caller's responsibility to ensure it's a legal amount to move by.
+//
+// Pre-condition: moving caret by amount should result in a valid position.
 func (cp *caretPositionInternal) willMoveH(amount int32) {
 	switch {
 	case amount < 0:
