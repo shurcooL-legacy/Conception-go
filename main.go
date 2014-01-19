@@ -4742,8 +4742,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			if !w.Private.Get() &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
-				if w.caretPosition.anySelection() {
-					globalWindow.SetClipboardString(w.caretPosition.GetSelectionContent()) // TODO: Don't use globalWindow
+				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
+					globalWindow.SetClipboardString(selectionContent) // TODO: Don't use globalWindow
 					w.caretPosition.ReplaceSelectionWith("")
 				}
 			}
@@ -4751,8 +4751,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			if !w.Private.Get() &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
-				if w.caretPosition.anySelection() {
-					globalWindow.SetClipboardString(w.caretPosition.GetSelectionContent()) // TODO: Don't use globalWindow
+				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
+					globalWindow.SetClipboardString(selectionContent) // TODO: Don't use globalWindow
 				}
 			}
 		case glfw.KeyV:
