@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -3636,13 +3637,13 @@ func (cp *caretPositionInternal) Logical() uint32 {
 	return cp.w.Line(cp.lineIndex).Start + cp.positionWithinLine
 }
 
+// TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
 func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 	switch amount {
 	case -1:
 		if cp.Logical() >= 1 {
 			if jumpWords {
-				// TODO: Redo without Set()
-				/*// Skip spaces to the left
+				// Skip spaces to the left
 				LookAt := cp.Logical()
 				for LookAt > 0 && !isCoreCharacter(cp.w.Content()[LookAt-1]) {
 					LookAt--
@@ -3652,7 +3653,7 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 					LookAt--
 				}
 
-				cp.Set(LookAt)*/
+				cp.willMoveH(int32(LookAt) - int32(cp.Logical()))
 			} else {
 				cp.willMove(-1)
 			}
@@ -3660,8 +3661,7 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 	case +1:
 		if cp.Logical() < uint32(len(cp.w.Content())) {
 			if jumpWords {
-				// TODO: Redo without Set()
-				/*// Skip spaces to the right
+				// Skip spaces to the right
 				LookAt := cp.Logical()
 				for LookAt < uint32(len(cp.w.Content())) && !isCoreCharacter(cp.w.Content()[LookAt]) {
 					LookAt++
@@ -3671,7 +3671,7 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 					LookAt++
 				}
 
-				cp.Set(LookAt)*/
+				cp.willMoveH(int32(LookAt) - int32(cp.Logical()))
 			} else {
 				cp.willMove(+1)
 			}
@@ -3820,11 +3820,20 @@ func (cp *caretPositionInternal) SetPositionFromPhysical(pos mathgl.Vec2d) {
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
-/*func (cp *caretPositionInternal) Set(position uint32) {
-	cp.caretPosition = position
+func (cp *caretPositionInternal) TrySet(position uint32) {
+	if position > uint32(cp.w.LenContent()) {
+		position = uint32(cp.w.LenContent())
+	}
+
+	cp.lineIndex = sort.Search(cp.w.LenLines(), func(lineIndex int) bool {
+		return cp.w.Line(lineIndex).Start >= position
+	})
+	cp.positionWithinLine = position - cp.w.Line(cp.lineIndex).Start
+
+	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
 
 	ExternallyUpdated(&cp.DepNode2Manual)
-}*/
+}
 
 // ExpandedPosition returns logical character units.
 // Multiply by (fontWidth, fontHeight) to get physical coords.
@@ -4005,17 +4014,17 @@ func (cp *CaretPosition) GetSelectionContent() (selectionContent string) {
 	return cp.w.Content()[selStart.Logical():selEnd.Logical()]
 }
 
-// DEPRECATED
-/*func (cp *CaretPosition) Set(caretPosition uint32, leaveSelectionOptional ...bool) {
+// TODO: Change api to ask for an caretPositionInternal instance?
+func (cp *CaretPosition) TrySet(position uint32, leaveSelectionOptional ...bool) {
 	// HACK, TODO: Make leaveSelection a required parameter?
 	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
 
-	cp.caretPosition.Set(caretPosition)
+	cp.caretPosition.TrySet(position)
 
 	if !leaveSelection {
 		cp.selectionPosition.MoveTo(cp.caretPosition)
 	}
-}*/
+}
 
 // ---
 
@@ -4416,16 +4425,14 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 }
 
 func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
-	panic("TODO: Restore functionality, change to use new API")
-	// TODO: Restore functionality, change to use new API
-	/*w.caretPosition.Set(caretPosition)
+	w.caretPosition.TrySet(caretPosition)
 
-	// HACK: This kinda conflicts with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
+	// HACK: This kinda conflicts/overlaps with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
 	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
 		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		scrollPane.CenterOnArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
-	}*/
+	}
 }
 
 func (w *TextBoxWidget) NotifyChange() {
