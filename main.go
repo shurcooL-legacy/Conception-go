@@ -5834,64 +5834,6 @@ func main() {
 		}
 
 	} else if false { // Deleted test widget instances
-		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
-		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150},
-			[]Widgeter{
-				&BoxWidget{NewWidget(mathgl.Vec2d{0, 0}, mathgl.Vec2d{16, 16}), "Left of Duo"},
-				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
-			}))
-		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mathgl.Vec2d{50, 180}, mathgl.Vec2d{0, 0}), window})
-		widgets = append(widgets, NewTextFieldWidget(mathgl.Vec2d{50, 50}))
-		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
-		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
-		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
-		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{90, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
-		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
-
-		if false {
-			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
-			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, -1525}, contentFunc, []DepNodeI{&UniversalClock}))
-		}
-		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{240, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
-
-		type Inner struct {
-			Field1 string
-			Field2 int
-		}
-		type Lang struct {
-			Name  string
-			Year  int
-			URLs  [2]string
-			Inner Inner
-		}
-		x := Lang{
-			Name: "Go",
-			Year: 2009,
-			URLs: [2]string{"http", "https"},
-			Inner: Inner{
-				Field1: "Secret!",
-				Field2: 123367,
-			},
-		}
-
-		/*Lang{
-			Name: "Go",
-			Year: 2009,
-			URL:  "http",
-			Inner: Inner{...},
-		}*/
-
-		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
-		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{380, 10}, &x))
-		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 10}, &y))
-	} else if true {
-		widgets = append(widgets, &spinner)
-
-		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 15}))
-
 		{
 			src := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
 			//src := NewTextFileWidget(mathgl.Vec2d{}, "./GoLand/src/simple.go")
@@ -5913,9 +5855,9 @@ func main() {
 				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
 			}
 
-			//run := NewLiveCmdExpeWidget(np, []DepNodeI{&build.FinishedDepNode}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
+			run := NewLiveCmdExpeWidget(np, []DepNode2I{build}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build /*, run*/}, nil))
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build, run}, nil))
 		}
 
 		// DEBUG: Testing out new DepNode2 system
@@ -5929,52 +5871,8 @@ func main() {
 			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 732 + 4}, &goCompileErrorsManagerTest.All))
 		}
 
-		// GoForcedUseWidget
-		{
-			src := NewTextBoxWidget(np)
-			label := NewTextLabelWidgetString(np, "go Forced Use")
-
-			params := func() interface{} { return src.Content.Content() }
-			action := func(params interface{}) string {
-				if strings.TrimSpace(params.(string)) != "" {
-					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
-					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
-				} else {
-					return ""
-				}
-			}
-			dst := NewLiveGoroutineExpeWidget(np, []DepNode2I{src.Content}, params, action)
-
-			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}, nil)
-			widgets = append(widgets, w)
-		}
-		// GoForcedUseWidget2
-		{
-			src := NewTextBoxWidget(np)
-			label := NewTextLabelWidgetString(np, "go Forced Use")
-
-			params := func() interface{} { return src.Content.Content() }
-			action := func(params interface{}) string {
-				if strings.TrimSpace(params.(string)) != "" {
-					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
-					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
-					//cmd := exec.Command("cat")
-					cmd.Stdin = strings.NewReader(strings.TrimSpace(src.Content.Content()))
-					out, err := cmd.CombinedOutput()
-					CheckError(err)
-					return string(out)
-				} else {
-					return ""
-				}
-			}
-			dst := NewLiveGoroutineExpeWidget(np, []DepNode2I{src.Content}, params, action)
-
-			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
-			widgets = append(widgets, w)
-		}
-
 		// git diff
-		if false {
+		if true {
 			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget)
 			dir, file := filepath.Split(source.Path())
 			if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
@@ -6056,6 +5954,108 @@ func main() {
 			widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
 			w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
 			widgets[2].(*FlowLayoutWidget).Layout()
+		}
+
+		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
+		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150},
+			[]Widgeter{
+				&BoxWidget{NewWidget(mathgl.Vec2d{0, 0}, mathgl.Vec2d{16, 16}), "Left of Duo"},
+				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
+			}))
+		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mathgl.Vec2d{50, 180}, mathgl.Vec2d{0, 0}), window})
+		widgets = append(widgets, NewTextFieldWidget(mathgl.Vec2d{50, 50}))
+		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
+		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
+		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
+		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{90, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
+		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
+
+		if false {
+			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
+			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, -1525}, contentFunc, []DepNodeI{&UniversalClock}))
+		}
+		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{240, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
+
+		type Inner struct {
+			Field1 string
+			Field2 int
+		}
+		type Lang struct {
+			Name  string
+			Year  int
+			URLs  [2]string
+			Inner Inner
+		}
+		x := Lang{
+			Name: "Go",
+			Year: 2009,
+			URLs: [2]string{"http", "https"},
+			Inner: Inner{
+				Field1: "Secret!",
+				Field2: 123367,
+			},
+		}
+
+		/*Lang{
+			Name: "Go",
+			Year: 2009,
+			URL:  "http",
+			Inner: Inner{...},
+		}*/
+
+		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
+		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{380, 10}, &x))
+		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
+		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 10}, &y))
+	} else if true {
+		widgets = append(widgets, &spinner)
+
+		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 15}))
+
+		// GoForcedUseWidget
+		{
+			src := NewTextBoxWidget(np)
+			label := NewTextLabelWidgetString(np, "go Forced Use")
+
+			params := func() interface{} { return src.Content.Content() }
+			action := func(params interface{}) string {
+				if strings.TrimSpace(params.(string)) != "" {
+					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
+					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
+				} else {
+					return ""
+				}
+			}
+			dst := NewLiveGoroutineExpeWidget(np, []DepNode2I{src.Content}, params, action)
+
+			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}, nil)
+			widgets = append(widgets, w)
+		}
+		// GoForcedUseWidget2
+		{
+			src := NewTextBoxWidget(np)
+			label := NewTextLabelWidgetString(np, "go Forced Use")
+
+			params := func() interface{} { return src.Content.Content() }
+			action := func(params interface{}) string {
+				if strings.TrimSpace(params.(string)) != "" {
+					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
+					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
+					//cmd := exec.Command("cat")
+					cmd.Stdin = strings.NewReader(strings.TrimSpace(src.Content.Content()))
+					out, err := cmd.CombinedOutput()
+					CheckError(err)
+					return string(out)
+				} else {
+					return ""
+				}
+			}
+			dst := NewLiveGoroutineExpeWidget(np, []DepNode2I{src.Content}, params, action)
+
+			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
+			widgets = append(widgets, w)
 		}
 
 		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
