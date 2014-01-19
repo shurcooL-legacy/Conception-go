@@ -128,8 +128,6 @@ var _ = UnsafeReflectValue
 var _ = profile.Start
 var _ = http.ListenAndServe
 
-const katOnly = false
-
 var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
 var keepRunning = true
@@ -1950,6 +1948,13 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2 {
 		w.offset[1] += inputEvent.Sliders[0] * 10
 		w.offset[0] += inputEvent.Sliders[1] * 10
+	}
+
+	// TODO: Make this happen as a PostProcessEvent if it hasn't been processed by an earlier widget, etc.
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == false {
+		if glfw.Key(inputEvent.InputId) == glfw.KeyEscape {
+			keepRunning = false
+		}
 	}
 }
 
@@ -5234,6 +5239,8 @@ type InputEvent struct {
 	ModifierKey glfw.ModifierKey // HACK
 }
 
+const katOnly = false
+
 func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []InputEvent {
 	for len(inputEventQueue) > 0 {
 		inputEvent := inputEventQueue[0]
@@ -6012,7 +6019,12 @@ func main() {
 	} else if true {
 		widgets = append(widgets, &spinner)
 
-		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 15}))
+		katWidget := NewKatWidget(mathgl.Vec2d{370, 15})
+		widgets = append(widgets, katWidget)
+		if katOnly {
+			// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+			keyboardPointer.OriginMapping = []Widgeter{katWidget}
+		}
 
 		// GoForcedUseWidget
 		{
@@ -6298,9 +6310,9 @@ func main() {
 	initHttpHandlers()
 	widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 
-	//widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, nil)
+	widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
-	widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
+	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
@@ -6312,12 +6324,6 @@ func main() {
 		if !*headlessFlag {
 			//glfw.WaitEvents()
 			glfw.PollEvents()
-
-			// HACK: Close window check
-			if glfw.Release != window.GetKey(glfw.KeyEscape) {
-				keepRunning = false
-				break
-			}
 		}
 
 		// Input
