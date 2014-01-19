@@ -3700,6 +3700,37 @@ func (cp *caretPositionInternal) willMove(amount int8) {
 	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
 }
 
+func (cp *caretPositionInternal) willMoveH(amount int32) {
+	switch {
+	case amount < 0:
+		absAmount := uint32(-amount)
+		for absAmount != 0 {
+			if cp.positionWithinLine >= absAmount {
+				cp.positionWithinLine -= absAmount
+				absAmount = 0
+			} else { //if cp.lineIndex > 0
+				absAmount -= cp.positionWithinLine
+				cp.lineIndex--
+				cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
+			}
+		}
+	case amount > 0:
+		absAmount := uint32(amount)
+		for absAmount != 0 {
+			if cp.positionWithinLine+absAmount <= cp.w.Line(cp.lineIndex).Length {
+				cp.positionWithinLine += absAmount
+				absAmount = 0
+			} else { //if cp.lineIndex < some_max
+				absAmount -= cp.w.Line(cp.lineIndex).Length - cp.positionWithinLine
+				cp.lineIndex++
+				cp.positionWithinLine = 0
+			}
+		}
+	}
+
+	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
+}
+
 func (cp *caretPositionInternal) TryMoveV(amount int8) {
 	switch amount {
 	case -1:
@@ -3731,8 +3762,20 @@ func (cp *caretPositionInternal) MoveTo(other *caretPositionInternal) {
 	cp.targetExpandedX = other.targetExpandedX
 }
 
-func (cp *caretPositionInternal) EqualPosition(other *caretPositionInternal) bool {
-	return cp.lineIndex == other.lineIndex && cp.positionWithinLine == other.positionWithinLine
+func (cp *caretPositionInternal) Compare(other *caretPositionInternal) int8 {
+	if cp.lineIndex < other.lineIndex {
+		return -1
+	} else if cp.lineIndex > other.lineIndex {
+		return +1
+	} else {
+		if cp.positionWithinLine < other.positionWithinLine {
+			return -1
+		} else if cp.positionWithinLine > other.positionWithinLine {
+			return +1
+		} else {
+			return 0
+		}
+	}
 }
 
 func (cp *caretPositionInternal) Move(amount int8) {
@@ -3852,7 +3895,7 @@ func (cp *CaretPosition) SelectionRange() (start uint32, end uint32) {
 }
 
 func (cp *CaretPosition) SelectionRange2() (start, end *caretPositionInternal) {
-	if cp.caretPosition.Logical() <= cp.selectionPosition.Logical() {
+	if cp.caretPosition.Compare(cp.selectionPosition) <= 0 {
 		return cp.caretPosition, cp.selectionPosition
 	} else {
 		return cp.selectionPosition, cp.caretPosition
@@ -3860,7 +3903,7 @@ func (cp *CaretPosition) SelectionRange2() (start, end *caretPositionInternal) {
 }
 
 func (cp *CaretPosition) anySelection() bool {
-	return !cp.caretPosition.EqualPosition(cp.selectionPosition)
+	return cp.caretPosition.Compare(cp.selectionPosition) != 0
 }
 
 func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
@@ -3934,17 +3977,26 @@ func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectio
 }
 
 func (cp *CaretPosition) Backspace() {
-	if cp.anySelection() {
-		selStart, selEnd := cp.SelectionRange2()
-		SetViewGroup(cp.w, cp.w.Content()[:selStart.Logical()]+cp.w.Content()[selEnd.Logical():])
-		cp.MoveTo(selStart)
-	} else {
-		if cp.caretPosition.Logical() >= 1 {
-			cp.caretPosition.willMove(-1)
-			cp.selectionPosition.willMove(-1)
-			SetViewGroup(cp.w, cp.w.Content()[:cp.caretPosition.Logical()]+cp.w.Content()[cp.caretPosition.Logical()+1:])
+	cp.CreateSelectionIfNone(-1)
+	cp.ReplaceSelectionWith("")
+}
+
+func (cp *CaretPosition) CreateSelectionIfNone(amount int32) {
+	if !cp.anySelection() {
+		if (amount < 0 && cp.caretPosition.Logical() >= uint32(-amount)) ||
+			(amount > 0 && cp.caretPosition.Logical()+uint32(amount) <= uint32(cp.w.LenContent())) {
+
+			cp.caretPosition.willMoveH(amount)
 		}
 	}
+}
+
+// Replaces selection with string s and moves caret to end of s.
+func (cp *CaretPosition) ReplaceSelectionWith(s string) {
+	selStart, selEnd := cp.SelectionRange2()
+	SetViewGroup(cp.w, cp.w.Content()[:selStart.Logical()]+s+cp.w.Content()[selEnd.Logical():])
+	selStart.willMoveH(int32(len(s)))
+	selEnd.MoveTo(selStart)
 }
 
 // DEPRECATED
@@ -3963,6 +4015,7 @@ func (cp *CaretPosition) Backspace() {
 
 type MultilineContentI interface {
 	Content() string
+	LenContent() int
 	Lines() []contentLine // DEPRECATED
 	LongestLine() uint32  // Line length
 
@@ -4005,6 +4058,8 @@ func NewMultilineContentString(content string) *MultilineContent {
 func (c *MultilineContent) Content() string      { return c.content }
 func (c *MultilineContent) Lines() []contentLine { return c.lines }
 func (c *MultilineContent) LongestLine() uint32  { return c.longestLine }
+
+func (c *MultilineContent) LenContent() int { return len(c.content) }
 
 func (c *MultilineContent) Line(lineIndex int) contentLine {
 	if lineIndex < 0 {
