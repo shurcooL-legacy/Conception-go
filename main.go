@@ -1951,7 +1951,7 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// TODO: Make this happen as a PostProcessEvent if it hasn't been processed by an earlier widget, etc.
-	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == false {
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		if glfw.Key(inputEvent.InputId) == glfw.KeyEscape {
 			keepRunning = false
 		}
