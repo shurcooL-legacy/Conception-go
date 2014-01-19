@@ -4416,6 +4416,10 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 	}
 	w.scrollToCaret.AddSources(w.caretPosition)
 
+	if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
+		println("this is a go file need to add a highligher")
+	}
+
 	return w
 }
 
@@ -4560,6 +4564,10 @@ func (w *TextBoxWidget) Render() {
 					} else {
 						glt.PrintText(tok.String())
 					}
+
+					//globalWindow.SwapBuffers()
+					//time.Sleep(time.Second)
+					//globalWindow.SwapBuffers()
 				}
 
 				//glt.PrintText(w.Content.Content()[w.Content.Line(beginLineIndex).Start:w.Content.Line(endLineIndex).Start])
@@ -6289,6 +6297,34 @@ func main() {
 			w := NewWindowWidget(mathgl.Vec2d{1000, 40}, mathgl.Vec2d{200, 140})
 			w.Name = "Sample Window"
 			widgets = append(widgets, w)
+		}
+
+		// TODO: Highlighting Go code + selection at a time
+		{
+			widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{20, 240}))
+			widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 240}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go"))
+		}
+
+		// Diff experiment
+		{
+			box1 := NewTextBoxWidget(np)
+			box2 := NewTextBoxWidget(np)
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 240}, []Widgeter{box1, box2}, nil))
+
+			doDiff := DepNode2Func{}
+			doDiff.UpdateFunc = func(this DepNode2I) {
+				left := this.GetSources()[0].(MultilineContentI)
+				right := this.GetSources()[1].(MultilineContentI)
+
+				dmp := diffmatchpatch.New()
+				diffs := dmp.DiffMain(left.Content(), right.Content(), true)
+				box1.DiffsTest = diffs
+				box1.Side = -1
+				box2.DiffsTest = diffs
+				box2.Side = +1
+			}
+			doDiff.AddSources(box1.Content, box2.Content)
+			keepUpdatedTEST = append(keepUpdatedTEST, &doDiff)
 		}
 
 	} else if false {
