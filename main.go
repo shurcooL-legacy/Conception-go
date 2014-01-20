@@ -4719,11 +4719,6 @@ func (w *TextBoxWidget) Render() {
 				hlIters := []HighlighterIterator{NewHighlightedGoContentIterator(hl, w.Content.Line(beginLineIndex).Start)}
 				{
 					min, max := w.caretPosition.SelectionRange()
-					min = intmath.MaxUint32(min, w.Content.Line(beginLineIndex).Start)
-					min = intmath.MinUint32(min, w.Content.Line(endLineIndex).Start)
-					max = intmath.MaxUint32(max, w.Content.Line(beginLineIndex).Start)
-					max = intmath.MinUint32(max, w.Content.Line(endLineIndex).Start)
-
 					hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max))
 				}
 
@@ -4735,27 +4730,6 @@ func (w *TextBoxWidget) Render() {
 				}
 
 				for contentOffset, contentSpan := w.Content.Line(beginLineIndex).Start, uint32(0); contentOffset < w.Content.Line(endLineIndex).Start; contentOffset += contentSpan {
-					/*offset := blah[index].offset
-					var end uint32
-					if index+1 < len(blah) {
-						end = blah[index+1].offset
-					} else {
-						end = uint32(w.Content.LenContent())
-					}
-
-					if end < w.Content.Line(beginLineIndex).Start {
-						continue
-					} else if offset >= w.Content.Line(endLineIndex).Start {
-						break
-					}
-
-					offset = intmath.MaxUint32(offset, w.Content.Line(beginLineIndex).Start)
-					end = intmath.MinUint32(end, w.Content.Line(endLineIndex).Start)
-
-					color := blah[index].color
-					gl.Color3dv((*gl.Double)(&color[0]))
-					glt.PrintText(w.Content.Content()[offset:end])*/
-
 					contentSpan = w.Content.Line(endLineIndex).Start - contentOffset
 					for _, hlIter := range hlIters {
 						contentSpan = intmath.MinUint32(contentSpan, hlIter.Next())
