@@ -4795,10 +4795,6 @@ func (w *TextBoxWidget) Render() {
 					} else {
 						glt.PrintText(tok.String())
 					}
-
-					//globalWindow.SwapBuffers()
-					//time.Sleep(time.Second)
-					//globalWindow.SwapBuffers()
 				}
 
 				//glt.PrintText(w.Content.Content()[w.Content.Line(beginLineIndex).Start:w.Content.Line(endLineIndex).Start])
@@ -4847,19 +4843,7 @@ func (w *TextBoxWidget) Render() {
 		}
 	}
 
-	// Go Errors Test
-	/*if goCompileErrorsEnabledTest != nil && goCompileErrorsEnabledTest.state() {
-		if contentFile, ok := w.Content.(*MultilineContentFile); ok && strings.HasSuffix(contentFile.Path(), ".go") {
-			gl.Color3d(0, 0, 0)
-			glt := NewOpenGlStream(np)
-			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
-			for _, goErrorMessage := range goCompileErrorsManagerTest.All[contentFile.Path()] { // TODO: Path() isn't guaranteed to be absolute, so either change that, or use something else here
-				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineIndex].Start : w.Content.Lines()[goErrorMessage.LineIndex].Start+w.Content.Lines()[goErrorMessage.LineIndex].Length])
-				glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineIndex)}))
-				glt.PrintLine(goErrorMessage.Message)
-			}
-		}
-	}*/
+	// Go Errors
 	for _, uri := range w.Content.GetAllUris() {
 		if _, ok := goCompileErrorsManagerTest.All[uri]; ok {
 			gl.Color3d(0, 0, 0)
