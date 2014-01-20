@@ -4378,21 +4378,141 @@ func (w *TextLabelWidget) Render() {
 
 // ---
 
-type tokenSomething struct {
+type TextStyle struct {
+	TextColor       *mathgl.Vec3d
+	BackgroundColor **mathgl.Vec3d
+}
+
+func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
+	if textStyle != nil {
+		if textStyle.TextColor != nil {
+			color := *textStyle.TextColor
+			gl.Color3dv((*gl.Double)(&color[0]))
+		}
+		if textStyle.BackgroundColor != nil {
+			color := *textStyle.BackgroundColor
+			glt.BackgroundColor = color
+		}
+	}
+}
+
+// ---
+
+type HighlighterIterator interface {
+	Next() uint32
+	Current() *TextStyle
+	Advance(uint32) *TextStyle
+}
+
+// ---
+
+type highlightedGoContentIterator struct {
+	hl     *highlightedGoContent
+	offset uint32
+	index  uint32
+}
+
+func NewHighlightedGoContentIterator(hl *highlightedGoContent, offset uint32) *highlightedGoContentIterator {
+	return &highlightedGoContentIterator{
+		hl:     hl,
+		offset: offset,
+		// Binary search for the first entry that ends past the beginning of visible text
+		index: uint32(sort.Search(hl.LenSegments()-1, func(i int) bool {
+			return hl.Segment(uint32(i)+1).offset > offset
+		})),
+	}
+}
+
+func (this *highlightedGoContentIterator) Next() uint32 {
+	return this.hl.Segment(this.index+1).offset - this.offset
+}
+
+func (this *highlightedGoContentIterator) Current() *TextStyle {
+	color := this.hl.Segment(this.index).color
+	return &TextStyle{
+		TextColor: &color,
+	}
+}
+
+func (this *highlightedGoContentIterator) Advance(span uint32) *TextStyle {
+	if span < this.Next() {
+		this.offset += span
+		return nil
+	} else {
+		this.offset += span
+		this.index++
+		return this.Current()
+	}
+}
+
+// ---
+
+type selectionHighlighterIterator struct {
+	offset   uint32
+	min, max uint32
+}
+
+func NewSelectionHighlighterIterator(offset, min, max uint32) *selectionHighlighterIterator {
+	return &selectionHighlighterIterator{
+		offset: offset,
+		min:    min,
+		max:    max,
+	}
+}
+
+func (this *selectionHighlighterIterator) Next() uint32 {
+	if this.min == this.max { // HACK
+		return 500000000 // TODO, HACK
+	} else if this.offset < this.min {
+		return this.min - this.offset
+	} else if this.offset < this.max {
+		return this.max - this.offset
+	} else {
+		return 500000000 // TODO, HACK
+	}
+}
+
+func (this *selectionHighlighterIterator) Current() *TextStyle {
+	if this.min == this.max { // HACK: Return nil if no selection at all
+		return nil
+	}
+
+	color := &selectedTextColor
+	if this.offset < this.min || this.offset >= this.max {
+		color = nil
+	}
+	return &TextStyle{
+		BackgroundColor: &color,
+	}
+}
+
+func (this *selectionHighlighterIterator) Advance(span uint32) *TextStyle {
+	if span < this.Next() {
+		this.offset += span
+		return nil
+	} else {
+		this.offset += span
+		return this.Current()
+	}
+}
+
+// ---
+
+type highlightSegment struct {
 	offset uint32
 	color  mathgl.Vec3d
 }
 
-type tokenizedGoContent struct {
-	blah []tokenSomething
+type highlightedGoContent struct {
+	segments []highlightSegment
 
 	DepNode2
 }
 
-func (this *tokenizedGoContent) Update() {
+func (this *highlightedGoContent) Update() {
 	content := this.GetSources()[0].(MultilineContentI)
 
-	this.blah = nil
+	this.segments = nil
 
 	src := []byte(content.Content())
 	//src := []byte(w.Content.Content()[w.Content.Line(beginLineIndex).Start:w.Content.Line(endLineIndex).Start])
@@ -4413,17 +4533,35 @@ func (this *tokenizedGoContent) Update() {
 
 		switch {
 		case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
-			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0.004, 0, 0.714}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.004, 0, 0.714}})
 		case tok.IsLiteral() && tok != token.IDENT:
-			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0.804, 0, 0}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.804, 0, 0}})
 		case lit == "false" || lit == "true":
-			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0.008, 0.024, 1}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.008, 0.024, 1}})
 		case tok == token.COMMENT:
-			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0, 0.706, 0.094}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.706, 0.094}})
 		default:
-			this.blah = append(this.blah, tokenSomething{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
 		}
 	}
+
+	// Fake last element
+	this.segments = append(this.segments, highlightSegment{offset: uint32(content.LenContent())})
+}
+
+func (this *highlightedGoContent) Segment(index uint32) highlightSegment {
+	if index < 0 {
+		panic("Segment < 0")
+		return highlightSegment{offset: 0}
+	} else if index >= uint32(len(this.segments)) {
+		panic("Segment index >= max")
+		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+	} else {
+		return this.segments[index]
+	}
+}
+func (this *highlightedGoContent) LenSegments() int {
+	return len(this.segments)
 }
 
 // ---
@@ -4470,10 +4608,10 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 
 	//if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
 	{
-		tokenizedGoContent := &tokenizedGoContent{}
-		tokenizedGoContent.AddSources(mc)
+		highlightedGoContent := &highlightedGoContent{}
+		highlightedGoContent.AddSources(mc)
 
-		w.HighlightersTest = append(w.HighlightersTest, tokenizedGoContent)
+		w.HighlightersTest = append(w.HighlightersTest, highlightedGoContent)
 	}
 
 	return w
@@ -4563,27 +4701,41 @@ func (w *TextBoxWidget) Render() {
 		if !w.Private.Get() {
 			// Render only visible lines.
 			// TODO: Generalize this.
+			const debugSmallerViewport = fontHeight
 			beginLineIndex, endLineIndex := 0, w.Content.LenLines()
-			if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+			if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
 				beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 			}
 			_, height := globalWindow.GetSize() // HACK: Should be some viewport
+			height -= debugSmallerViewport
 			if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
 				endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 			}
 
-			if len(w.HighlightersTest) == 1 {
+			if len(w.HighlightersTest) > 0 {
+
+				hl := w.HighlightersTest[0].(*highlightedGoContent)
+
+				hlIters := []HighlighterIterator{NewHighlightedGoContentIterator(hl, w.Content.Line(beginLineIndex).Start)}
+				{
+					min, max := w.caretPosition.SelectionRange()
+					min = intmath.MaxUint32(min, w.Content.Line(beginLineIndex).Start)
+					min = intmath.MinUint32(min, w.Content.Line(endLineIndex).Start)
+					max = intmath.MaxUint32(max, w.Content.Line(beginLineIndex).Start)
+					max = intmath.MinUint32(max, w.Content.Line(endLineIndex).Start)
+
+					hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max))
+				}
 
 				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
-				blah := w.HighlightersTest[0].(*tokenizedGoContent).blah
 
-				// Binary search for the first entry that ends past the beginning of visible text
-				index := sort.Search(len(blah)-1, func(i int) bool {
-					return blah[i+1].offset > w.Content.Line(beginLineIndex).Start
-				})
+				for _, hlIter := range hlIters {
+					textStyle := hlIter.Current()
+					textStyle.Apply(glt)
+				}
 
-				for ; index < len(blah); index++ {
-					offset := blah[index].offset
+				for contentOffset, contentSpan := w.Content.Line(beginLineIndex).Start, uint32(0); contentOffset < w.Content.Line(endLineIndex).Start; contentOffset += contentSpan {
+					/*offset := blah[index].offset
 					var end uint32
 					if index+1 < len(blah) {
 						end = blah[index+1].offset
@@ -4602,7 +4754,19 @@ func (w *TextBoxWidget) Render() {
 
 					color := blah[index].color
 					gl.Color3dv((*gl.Double)(&color[0]))
-					glt.PrintText(w.Content.Content()[offset:end])
+					glt.PrintText(w.Content.Content()[offset:end])*/
+
+					contentSpan = w.Content.Line(endLineIndex).Start - contentOffset
+					for _, hlIter := range hlIters {
+						contentSpan = intmath.MinUint32(contentSpan, hlIter.Next())
+					}
+
+					glt.PrintText(w.Content.Content()[contentOffset : contentOffset+contentSpan])
+
+					for _, hlIter := range hlIters {
+						textStyle := hlIter.Advance(contentSpan)
+						textStyle.Apply(glt)
+					}
 				}
 
 				// TEST: Apply highlighting for ".go" files
