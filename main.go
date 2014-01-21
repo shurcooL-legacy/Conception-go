@@ -4400,6 +4400,12 @@ func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
 
 // ---
 
+type Highlighter interface {
+	NewIterator(offset uint32) HighlighterIterator
+
+	DepNode2I
+}
+
 type HighlighterIterator interface {
 	Next() uint32
 	Current() *TextStyle
@@ -4511,6 +4517,10 @@ type highlightedGoContent struct {
 	DepNode2
 }
 
+func (this *highlightedGoContent) NewIterator(offset uint32) HighlighterIterator {
+	return NewHighlightedGoContentIterator(this, offset)
+}
+
 func (this *highlightedGoContent) Update() {
 	content := this.GetSources()[0].(MultilineContentI)
 
@@ -4568,6 +4578,107 @@ func (this *highlightedGoContent) LenSegments() int {
 
 // ---
 
+type highlightedDiff struct {
+	segments []highlightSegment
+
+	DepNode2
+}
+
+func (this *highlightedDiff) NewIterator(offset uint32) HighlighterIterator {
+	return NewHighlightedDiffIterator(this, offset)
+}
+
+func (this *highlightedDiff) Update() {
+	left := this.GetSources()[0].(MultilineContentI)
+	right := this.GetSources()[1].(MultilineContentI)
+
+	this.segments = nil
+
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(left.Content(), right.Content(), true)
+
+	offset := uint32(0)
+
+	for _, diff := range diffs {
+		//if diff.Type == w.Side && diff.Type == -1 {
+		//	glt.BackgroundColor = &mathgl.Vec3d{1, 0.8, 0.8}
+		//} else if diff.Type == w.Side && diff.Type == +1 {
+		if diff.Type == +1 {
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.8, 1, 0.8}})
+		} else if diff.Type == 0 {
+			this.segments = append(this.segments, highlightSegment{offset: offset})
+		} else {
+			continue
+		}
+		offset += uint32(len(diff.Text))
+	}
+
+	// Fake last element
+	this.segments = append(this.segments, highlightSegment{offset: uint32(right.LenContent())})
+}
+
+func (this *highlightedDiff) Segment(index uint32) highlightSegment {
+	if index < 0 {
+		panic("Segment < 0")
+		return highlightSegment{offset: 0}
+	} else if index >= uint32(len(this.segments)) {
+		panic("Segment index >= max")
+		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+	} else {
+		return this.segments[index]
+	}
+}
+func (this *highlightedDiff) LenSegments() int {
+	return len(this.segments)
+}
+
+// ---
+
+type highlightedDiffIterator struct {
+	hl     *highlightedDiff
+	offset uint32
+	index  uint32
+}
+
+func NewHighlightedDiffIterator(hl *highlightedDiff, offset uint32) *highlightedDiffIterator {
+	return &highlightedDiffIterator{
+		hl:     hl,
+		offset: offset,
+		// Binary search for the first entry that ends past the beginning of visible text
+		index: uint32(sort.Search(hl.LenSegments()-1, func(i int) bool {
+			return hl.Segment(uint32(i)+1).offset > offset
+		})),
+	}
+}
+
+func (this *highlightedDiffIterator) Next() uint32 {
+	return this.hl.Segment(this.index+1).offset - this.offset
+}
+
+func (this *highlightedDiffIterator) Current() *TextStyle {
+	color := this.hl.Segment(this.index).color
+	colorPtr := &color
+	if color.ApproxEqual(mathgl.Vec3d{}) {
+		colorPtr = nil
+	}
+	return &TextStyle{
+		BackgroundColor: &colorPtr,
+	}
+}
+
+func (this *highlightedDiffIterator) Advance(span uint32) *TextStyle {
+	if span < this.Next() {
+		this.offset += span
+		return nil
+	} else {
+		this.offset += span
+		this.index++
+		return this.Current()
+	}
+}
+
+// ---
+
 type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
@@ -4581,7 +4692,7 @@ type TextBoxWidget struct {
 	Side      int8
 
 	ExtensionsTest   []Widgeter
-	HighlightersTest []DepNode2I
+	HighlightersTest []Highlighter
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -4698,7 +4809,7 @@ func (w *TextBoxWidget) Render() {
 		gl.PopMatrix()
 	}
 
-	if w.DiffsTest == nil {
+	if w.DiffsTest == nil || glfw.Release != globalWindow.GetKey(glfw.KeyLeftSuper) {
 		gl.Color3d(0, 0, 0)
 		if !w.Private.Get() {
 			// Render only visible lines.
@@ -4716,9 +4827,13 @@ func (w *TextBoxWidget) Render() {
 
 			if len(w.HighlightersTest) > 0 {
 
-				hl := w.HighlightersTest[0].(*highlightedGoContent)
+				hlIters := []HighlighterIterator{}
 
-				hlIters := []HighlighterIterator{NewHighlightedGoContentIterator(hl, w.Content.Line(beginLineIndex).Start)}
+				for _, highlighter := range w.HighlightersTest {
+					hlIters = append(hlIters, highlighter.NewIterator(w.Content.Line(beginLineIndex).Start))
+				}
+
+				// HACK, TODO: Manually add NewSelectionHighlighter for now, need to make this better
 				{
 					min, max := w.caretPosition.SelectionRange()
 					hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max))
@@ -6526,8 +6641,31 @@ func main() {
 
 		// Diff experiment
 		{
-			box1 := NewTextBoxWidget(np)
-			box2 := NewTextBoxWidget(np)
+			box1 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(`const Tau = 2 * math.Pi
+
+func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
+	const x = 64
+
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
+	gl.Begin(gl.TRIANGLE_FAN)
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
+	for i := 0; i <= x; i++ {
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), ...)
+	}
+	gl.End()`))
+			box2 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(`func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
+	const TwoPi = math.Pi * 2
+
+	const x = 64
+
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
+	gl.Begin(gl.TRIANGLE_FAN)
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
+	for i := 0; i <= x; i++ {
+		// Completely new line
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), ...)
+	}
+	gl.End()`))
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 240}, []Widgeter{box1, box2}, nil))
 
 			doDiff := DepNode2Func{}
@@ -6544,6 +6682,10 @@ func main() {
 			}
 			doDiff.AddSources(box1.Content, box2.Content)
 			keepUpdatedTEST = append(keepUpdatedTEST, &doDiff)
+
+			highlightedDiff := &highlightedDiff{}
+			highlightedDiff.AddSources(box1.Content, box2.Content)
+			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff)
 		}
 
 	} else if false {
