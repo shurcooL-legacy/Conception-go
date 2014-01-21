@@ -2113,14 +2113,40 @@ func SetScissor(pos, size mathgl.Vec2d) {
 	gl.GetDoublev(gl.PROJECTION_MATRIX, &ProjectionMatrix[0])
 	gl.GetIntegerv(gl.VIEWPORT, &Viewport[0])
 
-	glu.Project(gl.Double(pos[0]), gl.Double(pos[1]+size[1]), 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x0, &y0, &z0)
+	glu.Project(gl.Double(pos[0]), gl.Double(pos[1]+size[1] /* Inverted y coordinate. */), 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x0, &y0, &z0)
 	glu.Project(gl.Double(size[0]), gl.Double(size[1]), 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x1, &y1, &z1)
 	glu.Project(0, 0, 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x2, &y2, &z2)
 
-	pos0 := NearInt64(float64(x0))
-	pos1 := NearInt64(float64(y0))
-	size0 := NearInt64(float64(x1 - x2))
-	size1 := NearInt64(float64(y2 - y1))
+	old_pos0 := NearInt64(float64(x0))
+	old_pos1 := NearInt64(float64(y0))
+	old_size0 := NearInt64(float64(x1 - x2))
+	old_size1 := NearInt64(float64(y2 - y1))
+
+	p0 := mathgl.Projectd(mathgl.Vec3d{pos[0], pos[1] + size[1] /* Inverted y coordinate. */, 0},
+		mathgl.Mat4d{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
+		mathgl.Mat4d{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
+	p1 := mathgl.Projectd(mathgl.Vec3d{size[0], size[1], 0},
+		mathgl.Mat4d{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
+		mathgl.Mat4d{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
+	p2 := mathgl.Projectd(mathgl.Vec3d{0, 0, 0},
+		mathgl.Mat4d{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
+		mathgl.Mat4d{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
+
+	pos0 := NearInt64(float64(p0[0]))
+	pos1 := NearInt64(float64(p0[1]))
+	size0 := NearInt64(float64(p1[0] - p2[0]))
+	size1 := NearInt64(float64(p2[1] - p1[1]))
+
+	// TODO: Remove old glu version after some time
+	// Verify match
+	if pos0 != old_pos0 || pos1 != old_pos1 || size0 != old_size0 || size1 != old_size1 {
+		goon.Dump("old glu", old_pos0, old_pos1, old_size0, old_size1)
+		goon.Dump("next mathgl", pos0, pos1, size0, size1)
+		panic("mathgl.Project != glu.Project")
+	}
 
 	// Crop the scissor box by the parent scissor box
 	// TODO
@@ -6017,7 +6043,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if sublimeMode {
 
