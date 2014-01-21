@@ -1400,8 +1400,7 @@ type WindowWidget struct {
 func NewWindowWidget(pos, size mathgl.Vec2d) *WindowWidget {
 	w := &WindowWidget{Widget: NewWidget(pos, size)}
 	closeButton := NewButtonWidget(np, func() {
-		// HACK: Assumes *CompositeWidget
-		(&w.Parent().(*CompositeWidget).Widgets).RemoveWidget(w)
+		w.Parent().(RemoveWidgeter).RemoveWidget(w)
 		w.SetParent(nil) // TODO: Not sure if needed
 	})
 	w.chrome = NewCompositeWidget(np, []Widgeter{closeButton})
@@ -1472,18 +1471,6 @@ func (widgets Widgeters) ContainsWidget(targetWidget Widgeter) bool {
 		}
 	}
 	return false
-}
-
-// TEST
-func (widgets *Widgeters) RemoveWidget(targetWidget Widgeter) {
-	for index, widget := range *widgets {
-		if widget == targetWidget {
-			copy((*widgets)[index:], (*widgets)[index+1:])
-			(*widgets)[len(*widgets)-1] = nil
-			*widgets = (*widgets)[:len(*widgets)-1]
-			return
-		}
-	}
 }
 
 // ---
@@ -1782,6 +1769,10 @@ type AddWidgeter interface {
 	AddWidget(Widgeter)
 }
 
+type RemoveWidgeter interface {
+	RemoveWidget(Widgeter)
+}
+
 // ---
 
 type CompositeWidget struct {
@@ -1802,6 +1793,17 @@ func (w *CompositeWidget) AddWidget(widget Widgeter) {
 	w.Widgets = append(w.Widgets, widget)
 	widget.SetParent(w)
 	w.Layout()
+}
+
+func (w *CompositeWidget) RemoveWidget(targetWidget Widgeter) {
+	for index, widget := range w.Widgets {
+		if widget == targetWidget {
+			copy(w.Widgets[index:], w.Widgets[index+1:])
+			w.Widgets[len(w.Widgets)-1] = nil
+			w.Widgets = w.Widgets[:len(w.Widgets)-1]
+			return
+		}
+	}
 }
 
 func (w *CompositeWidget) Layout() {
