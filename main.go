@@ -706,7 +706,7 @@ func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) (*LiveGoroutineExpe
 		return out
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{parsedFile, source.caretPosition}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, true, []DepNode2I{parsedFile, source.caretPosition}, params, action)
 	return w, parsedFile
 }
 
@@ -921,8 +921,54 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source 
 		return out
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, []DepNode2I{typeCheckedPackage, source.caretPosition}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, true, []DepNode2I{typeCheckedPackage, source.caretPosition}, params, action)
 	return w, typeCheckedPackage
+}
+
+// ---
+
+func NewTest6OracleWidget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source *TextBoxWidget) Widgeter {
+	validFunc := func(c MultilineContentI) bool {
+		switch c.Content() {
+		case "callees", "callers", "callgraph", "callstack", "describe", "freevars", "implements", "peers", "referrers":
+			return true
+		default:
+			return false
+		}
+	}
+	mode := NewTextBoxValidationWidget(np, validFunc)
+
+	params := func() interface{} {
+		fileUri, _ := source.Content.GetUriForProtocol("file://")
+		return []interface{}{
+			source.caretPosition.Logical(),
+			fileUri,
+			goPackage,
+			mode.Content.Content(),
+		}
+	}
+
+	action := func(params interface{}) string {
+		caretPosition := params.([]interface{})[0].(uint32)
+		fileUri := params.([]interface{})[1].(FileUri)
+		goPackage := params.([]interface{})[2].(ImportPathFoundSelector)
+		mode := params.([]interface{})[3].(string)
+
+		if pkg := goPackage.GetSelected(); pkg != nil && fileUri != "" && mode != "" {
+			cmd := exec.Command("oracle", fmt.Sprintf("--pos=%s:#%d", fileUri[len("file://"):], caretPosition), mode, pkg.ImportPath())
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return "Error:\n" + err.Error()
+			}
+			return string(out)
+		} else {
+			return "<no file or mode selected>"
+		}
+	}
+
+	w := NewLiveGoroutineExpeWidget(pos, false, []DepNode2I{source.caretPosition, goPackage, mode}, params, action)
+
+	return NewFlowLayoutWidget(pos, Widgeters{mode, w}, nil)
 }
 
 // ---
@@ -2497,8 +2543,8 @@ type LiveGoroutineExpeWidget struct {
 	live                        bool
 }
 
-func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
-	w := &LiveGoroutineExpeWidget{outChan: make(chan timestampString), live: true}
+func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, live bool, dependees []DepNode2I, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
+	w := &LiveGoroutineExpeWidget{outChan: make(chan timestampString), live: live}
 
 	refreshButton := NewButtonWidget(np, func() { MakeUpdated(w.actionNode) })
 	liveToggle := NewTriButtonExternalStateWidget(mathgl.Vec2d{500, 700}, func() bool { return w.live }, func() { w.live = !w.live })
@@ -5224,6 +5270,7 @@ type TextBoxValidationWidget struct {
 	*TextBoxWidget
 	validFunc func(MultilineContentI) bool
 	DepNode   // Forward NotifyChanges from TextBoxWidget to us
+	DepNode2Manual
 }
 
 func NewTextBoxValidationWidget(pos mathgl.Vec2d, validFunc func(MultilineContentI) bool) *TextBoxValidationWidget {
@@ -5294,6 +5341,7 @@ func (w *TextBoxValidationWidget) Render() {
 func (w *TextBoxValidationWidget) NotifyChange() {
 	if w.validFunc(w.Content) {
 		w.NotifyAllListeners()
+		ExternallyUpdated(&w.DepNode2Manual)
 	}
 }
 
@@ -6082,7 +6130,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if sublimeMode {
 
@@ -6240,9 +6288,15 @@ func main() {
 			scrollToSymbolB.AddSources(nextTool5B.OnSelectionChanged())
 			keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
 
+			// ---
+
+			nextTool6 := NewTest6OracleWidget(np, goPackageListing, editor)
+			nextTool6Collapsible := NewCollapsibleWidget(np, nextTool6)
+			nextTool6Collapsible.state.state = true // HACK
+
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
@@ -6447,7 +6501,7 @@ func main() {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(np, []DepNode2I{src.Content}, params, action)
+			dst := NewLiveGoroutineExpeWidget(np, true, []DepNode2I{src.Content}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
@@ -6471,7 +6525,7 @@ func main() {
 					return ""
 				}
 			}
-			dst := NewLiveGoroutineExpeWidget(np, []DepNode2I{src.Content}, params, action)
+			dst := NewLiveGoroutineExpeWidget(np, true, []DepNode2I{src.Content}, params, action)
 
 			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
@@ -6677,7 +6731,7 @@ func main() {
 				// Return import statement as the output
 				return ". \"gist.github.com/" + GistId + ".git\""
 			}
-			output := NewLiveGoroutineExpeWidget(np, []DepNode2I{gistButtonTrigger}, params, action)
+			output := NewLiveGoroutineExpeWidget(np, true, []DepNode2I{gistButtonTrigger}, params, action)
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{500, 10}, []Widgeter{username, password, NewTextLabelWidgetString(np, "+Gist"), gistButtonTrigger, output}, nil))
 		}
@@ -6773,8 +6827,10 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
 
 	if sublimeMode {
+		// TODO: Position of {1, 1} means 1 column and 1 row of pixels will not get user input, need to fix
 		widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: false})
 	} else {
+		// TODO: Position of {1, 1} means 1 column and 1 row of pixels will not get user input, need to fix
 		widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: true})
 	}
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
