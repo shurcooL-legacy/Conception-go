@@ -1956,7 +1956,9 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		keyboardPointer.OriginMapping = []Widgeter{w}
+		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
+			keyboardPointer.OriginMapping = append(keyboardPointer.OriginMapping, w)
+		}
 	}
 
 	if w.options.Scrollable {
