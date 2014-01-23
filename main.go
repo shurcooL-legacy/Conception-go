@@ -1931,6 +1931,11 @@ func (w *CanvasWidget) AddWidget(widget Widgeter) {
 }
 
 func (w *CanvasWidget) Layout() {
+	// HACK
+	windowSize0, windowSize1 := globalWindow.GetSize()
+	windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
+	w.size = windowSize
+
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
 }
@@ -1946,6 +1951,14 @@ func (w *CanvasWidget) Render() {
 }
 
 func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		keyboardPointer.OriginMapping = []Widgeter{w}
+	}
+
 	if w.options.Scrollable {
 		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2 {
 			w.offset[1] += inputEvent.Sliders[0] * 10
@@ -1955,9 +1968,35 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 
 	// TODO: Make this happen as a PostProcessEvent if it hasn't been processed by an earlier widget, etc.
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		// TEST, DEBUG: Cmd+O shortcut to open a new window, for testing purposes
+		if glfw.Key(inputEvent.InputId) == glfw.KeyO && inputEvent.ModifierKey&glfw.ModSuper != 0 {
+			w2 := NewWindowWidget(mathgl.Vec2d{600, 400}, mathgl.Vec2d{300, 60})
+			w2.Name = "New Window"
+
+			// Add new widget to canvas
+			w.AddWidget(w2)
+
+			// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+			keyboardPointer.OriginMapping = []Widgeter{w2}
+		}
+
 		if glfw.Key(inputEvent.InputId) == glfw.KeyEscape {
 			keepRunning = false
 		}
+	}
+}
+
+func (w *CanvasWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		hits := []Widgeter{w}
+		for _, widget := range w.Widgets {
+			hits = append(hits, widget.Hit(LocalPosition)...)
+		}
+		return hits
+	} else {
+		return nil
 	}
 }
 
@@ -5549,8 +5588,8 @@ const (
 
 type Pointer struct {
 	VirtualCategory VirtualCategory
-	Mapping         Widgeters
-	OriginMapping   Widgeters
+	Mapping         Widgeters // Always reflects current pointer state.
+	OriginMapping   Widgeters // Updated only when pointer is moved while not active (e.g., where mouse button was first pressed down).
 	State           PointerState
 }
 
@@ -5611,8 +5650,6 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 	for len(inputEventQueue) > 0 {
 		inputEvent := inputEventQueue[0]
 
-		widget.ProcessEvent(inputEvent)
-
 		if !katOnly {
 			// TODO: Calculate whether a pointing pointer moved relative to canvas in a better way... what if canvas is moved via keyboard, etc.
 			pointingPointerMovedRelativeToCanvas := inputEvent.Pointer.VirtualCategory == POINTING &&
@@ -5634,7 +5671,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 				}
 			}
 
-			// Populate PointerMappings (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
+			// Populate OriginMapping (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
 			if pointingPointerMovedRelativeToCanvas &&
 				!inputEvent.EventTypes[POINTER_DEACTIVATION] && !inputEvent.Pointer.State.IsActive() {
 
@@ -5642,17 +5679,11 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 				copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
 			}
 
-			if inputEvent.Pointer == mousePointer && inputEvent.InputId == 0 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
-				//fmt.Println("Left down!")
-			} else if inputEvent.Pointer == mousePointer && inputEvent.InputId == 1 && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] {
-				//fmt.Println("Right down!")
-			}
-
 			for _, widget := range inputEvent.Pointer.OriginMapping {
 				widget.ProcessEvent(inputEvent)
 			}
 
-			// Populate PointerMappings (but only upon pointer deactivation event)
+			// Populate OriginMapping (but only upon pointer deactivation event)
 			if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[POINTER_DEACTIVATION] {
 
 				inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
@@ -6043,7 +6074,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if sublimeMode {
 
