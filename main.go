@@ -2490,48 +2490,37 @@ type timestampString struct {
 }
 
 type LiveGoroutineExpeWidget struct {
-	*TextBoxWidget
+	*FlowLayoutWidget
 	actionNode                  *actionNode
 	outChan                     chan timestampString
 	lastStartedT, lastFinishedT uint32
+	live                        bool
 }
 
 func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
-	/*dst := NewTextBoxWidget(mathgl.Vec2d{0, 0})
-	src.AfterChange = append(src.AfterChange, func() {
-		// TODO: Async?
-		dst.Content.Set(GetForcedUseFromImport(src.Content.Content()))
-	})*/
-	/*dst := NewTextBoxWidgetContentFunc(mathgl.Vec2d{0, 0}, func() string {
-		// TODO: Async?
-		if strings.TrimSpace(src.Content.Content()) != "" {
-			time.Sleep(time.Second)
-			return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
-		} else {
-			return ""
-		}
-	}, []DepNodeI{src})*/
+	w := &LiveGoroutineExpeWidget{outChan: make(chan timestampString), live: true}
 
-	w := &LiveGoroutineExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), outChan: make(chan timestampString)}
+	refreshButton := NewButtonWidget(np, func() { MakeUpdated(w.actionNode) })
+	liveToggle := NewTriButtonExternalStateWidget(mathgl.Vec2d{500, 700}, func() bool { return w.live }, func() { w.live = !w.live })
+	textBoxWidget := NewTextBoxWidget(pos)
+
+	w.FlowLayoutWidget = NewFlowLayoutWidget(pos, []Widgeter{refreshButton, liveToggle, textBoxWidget}, nil)
 
 	// THINK: The only reason to have a separate action node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
 	w.actionNode = &actionNode{owner: w, params: params, action: action}
 	w.actionNode.AddSources(dependees...)
 
-	UniversalClock.AddChangeListener(w)
-
 	return w
 }
 
-// HACK: I'm overriding NotifyChange() of TextBoxWidget here; it works because TextBoxWidget uses its own, but this isn't good
-func (w *LiveGoroutineExpeWidget) NotifyChange() {
+func (w *LiveGoroutineExpeWidget) layout2Test() {
 	select {
 	case s, ok := <-w.outChan:
 		if ok {
 			if s.t > w.lastFinishedT {
 				w.lastFinishedT = s.t
 
-				SetViewGroup(w.Content, s.s)
+				SetViewGroup(w.Widgets[2].(*TextBoxWidget).Content, s.s) // HACK: Should get Content in a better way
 				redraw = true
 			}
 		}
@@ -2540,10 +2529,13 @@ func (w *LiveGoroutineExpeWidget) NotifyChange() {
 }
 
 func (w *LiveGoroutineExpeWidget) Render() {
-	// TODO: I think this should be moved to a new proper Layout2() method or something. Render() is for putting it on the screen, not making changes.
-	MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
+	// TODO: I think this should be moved to a new proper Layout2() method or something. Render() is for putting it on the screen, not making changes (that can lead to resizing/re-layout of other widgets, etc.)
+	if w.live {
+		MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
+	}
+	w.layout2Test() // HACK: Shouldn't call from Render()
 
-	w.TextBoxWidget.Render()
+	w.FlowLayoutWidget.Render()
 }
 
 // ---
@@ -3759,7 +3751,6 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 //
 // Pre-conditions:
 //	- Moving caret by amount should result in a valid position.
-//	- amount should not be zero.
 func (cp *caretPositionInternal) willMoveH(amount int32) {
 	switch {
 	case amount < 0:
@@ -3787,7 +3778,8 @@ func (cp *caretPositionInternal) willMoveH(amount int32) {
 			}
 		}
 	default:
-		panic("unexpected value")
+		// There's no change, so don't do anything else
+		return
 	}
 
 	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
