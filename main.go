@@ -2024,8 +2024,8 @@ func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter) *CollapsibleWidget {
 	//w.state.state = true // HACK
 	w.state.SetParent(w) // For its Layout() to work...
 
-	// HACK
-	w.child.Pos()[0] = w.state.Size()[0] + 2
+	// HACK: Set position of child
+	w.child.Pos()[1] = w.state.Size()[1] + 2
 
 	// TODO: This needs to be automated, easy to forget, moved into Layout2(), etc.
 	w.Layout() // TODO: Should this be automatic from above SetParent()?
@@ -3757,7 +3757,9 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 // Moves caret horizontally by amount. It doesn't do bounds checking, so it's
 // the caller's responsibility to ensure it's a legal amount to move by.
 //
-// Pre-condition: moving caret by amount should result in a valid position.
+// Pre-conditions:
+//	- Moving caret by amount should result in a valid position.
+//	- amount should not be zero.
 func (cp *caretPositionInternal) willMoveH(amount int32) {
 	switch {
 	case amount < 0:
@@ -3784,9 +3786,13 @@ func (cp *caretPositionInternal) willMoveH(amount int32) {
 				cp.positionWithinLine = 0
 			}
 		}
+	default:
+		panic("unexpected value")
 	}
 
 	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
+
+	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
 // TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
@@ -3840,6 +3846,8 @@ func (cp *caretPositionInternal) Compare(other *caretPositionInternal) int8 {
 // TODO: Change amount to a proper type with 4 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
 // TOOD: Rename to JumpTo or something to indicate it's a method that can never fail.
 func (cp *caretPositionInternal) Move(amount int8) {
+	originalPosition := *cp
+
 	switch amount {
 	case -1, +1:
 		panic("Move(+-1) deprecated, should use TryMoveH")
@@ -3853,6 +3861,11 @@ func (cp *caretPositionInternal) Move(amount int8) {
 	case +3:
 		cp.lineIndex = cp.w.LenLines() - 1
 		cp.positionWithinLine = cp.w.Line(cp.lineIndex).Length
+	}
+
+	if cp.Compare(&originalPosition) == 0 {
+		// There's no change, so don't do anything else
+		return
 	}
 
 	cp.targetExpandedX, _ = cp.ExpandedPosition() // TODO: More direct
@@ -4786,6 +4799,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 	}
 	w.scrollToCaret.AddSources(w.caretPosition)
 
+	// DEBUG, TEMPORARY: Turn on Go highlighting for everything
 	//if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
 	{
 		highlightedGoContent := &highlightedGoContent{}
@@ -5078,14 +5092,14 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	//hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
 
 	if inputEvent.Pointer.VirtualCategory == POINTING {
-		if inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 {
-			// Leave selection on mouse release, or if shift is held down
-			leaveSelection := inputEvent.Buttons[0] == false || (inputEvent.ModifierKey&glfw.ModShift != 0)
+		if inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true { // On mouse button 0 down
+			// Leave selection if shift is held down
+			leaveSelection := inputEvent.ModifierKey&glfw.ModShift != 0
 
 			globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 			localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 			w.caretPosition.SetPositionFromPhysical(localPosition, leaveSelection)
-		} else if inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 && inputEvent.Pointer.State.Button(0) {
+		} else if inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 && inputEvent.Pointer.State.Button(0) { // On mouse move while button 0 down
 			leaveSelection := true
 
 			globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
@@ -6773,6 +6787,10 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	}
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
+
+	// Give the canvas initial keyboard focus
+	// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+	keyboardPointer.OriginMapping = []Widgeter{widget}
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
