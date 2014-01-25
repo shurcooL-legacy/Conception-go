@@ -20,7 +20,7 @@ import (
 	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3"
 	//"github.com/go-gl/glu"
-	glu "github.com/shurcooL/goglu/glu21"
+	//glu "github.com/shurcooL/goglu/glu21"
 
 	//"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/vcs"
@@ -2194,20 +2194,10 @@ func SetScissor(pos, size mathgl.Vec2d) {
 	var ModelMatrix [16]gl.Double
 	var ProjectionMatrix [16]gl.Double
 	var Viewport [4]gl.Int
-	var x0, y0, z0, x1, y1, z1, x2, y2, z2 gl.Double
 
 	gl.GetDoublev(gl.MODELVIEW_MATRIX, &ModelMatrix[0])
 	gl.GetDoublev(gl.PROJECTION_MATRIX, &ProjectionMatrix[0])
 	gl.GetIntegerv(gl.VIEWPORT, &Viewport[0])
-
-	glu.Project(gl.Double(pos[0]), gl.Double(pos[1]+size[1] /* Inverted y coordinate. */), 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x0, &y0, &z0)
-	glu.Project(gl.Double(size[0]), gl.Double(size[1]), 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x1, &y1, &z1)
-	glu.Project(0, 0, 0, &ModelMatrix[0], &ProjectionMatrix[0], &Viewport[0], &x2, &y2, &z2)
-
-	old_pos0 := NearInt64(float64(x0))
-	old_pos1 := NearInt64(float64(y0))
-	old_size0 := NearInt64(float64(x1 - x2))
-	old_size1 := NearInt64(float64(y2 - y1))
 
 	p0 := mathgl.Projectd(mathgl.Vec3d{pos[0], pos[1] + size[1] /* Inverted y coordinate. */, 0},
 		mathgl.Mat4d{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
@@ -2226,14 +2216,6 @@ func SetScissor(pos, size mathgl.Vec2d) {
 	pos1 := NearInt64(float64(p0[1]))
 	size0 := NearInt64(float64(p1[0] - p2[0]))
 	size1 := NearInt64(float64(p2[1] - p1[1]))
-
-	// TODO: Remove old glu version after some time
-	// Verify match
-	if pos0 != old_pos0 || pos1 != old_pos1 || size0 != old_size0 || size1 != old_size1 {
-		goon.Dump("old glu", old_pos0, old_pos1, old_size0, old_size1)
-		goon.Dump("next mathgl", pos0, pos1, size0, size1)
-		panic("mathgl.Project != glu.Project")
-	}
 
 	// Crop the scissor box by the parent scissor box
 	// TODO
