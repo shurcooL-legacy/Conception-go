@@ -1121,7 +1121,7 @@ func (this *goPackages) Update() {
 	{
 		goPackages := make(chan *GoPackage, 64)
 
-		go gist8018045.GetGoPackages2(goPackages)
+		go gist8018045.GetGoPackages(goPackages)
 
 		this.entries = nil
 		for {
