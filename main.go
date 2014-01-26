@@ -981,7 +981,7 @@ type docPackage struct {
 }
 
 func (this *docPackage) Update() {
-	goPackage := this.GetSources()[0].(*GoPackageListingPureWidget)
+	goPackage := this.GetSources()[0].(ImportPathFoundSelector)
 
 	importPath := ""
 	if goPackage.GetSelected() != nil {
@@ -1149,8 +1149,15 @@ type ImportPathFoundSelectorAdapter struct {
 // TODO: Convert to using *GoPackage instead of *ImportPathFound
 func (this *ImportPathFoundSelectorAdapter) GetSelected() *ImportPathFound {
 	if selected := this.Selecter.GetSelected(); selected != nil {
-		importPathFound := NewImportPathFound(selected.(*GoPackage).Bpkg.ImportPath, selected.(*GoPackage).Bpkg.Root)
-		return &importPathFound
+		switch selectedConv := selected.(type) {
+		case ImportPathFoundStringer:
+			return selectedConv.ImportPathFound
+		case *GoPackage:
+			importPathFound := NewImportPathFound(selected.(*GoPackage).Bpkg.ImportPath, selected.(*GoPackage).Bpkg.Root)
+			return &importPathFound
+		default:
+			panic("???")
+		}
 	}
 	return nil
 }
@@ -2962,6 +2969,14 @@ func (w *FilterableSelecterWidget) selectionChangedTest() {
 		scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
 	}
 
+	// HACK: Not general at all
+	// HACK: Not doing local-to-parent coordinate conversion, so it scrolls to wrong place
+	if w.Parent() != nil {
+		if scrollPane, ok := w.Parent().Parent().(*ScrollPaneWidget); ok {
+			scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
+		}
+	}
+
 	w.manuallyPicked = w.entries.Get(w.selected)
 
 	ExternallyUpdated(w)
@@ -3116,11 +3131,24 @@ func NewGoPackageListingPureWidget() *GoPackageListingPureWidget {
 	return w
 }
 
-func (this *GoPackageListingPureWidget) GetSelected() *ImportPathFound {
+func (this *GoPackageListingPureWidget) GetSelected() fmt.Stringer {
 	if this.selected == 0 {
 		return nil
 	}
-	return &this.entries[this.selected-1]
+	return ImportPathFoundStringer{&this.entries[this.selected-1]}
+}
+
+// HACK: Quick hack to get this to work, before it's removed because it's deprecated.
+type ImportPathFoundStringer struct {
+	*ImportPathFound
+}
+
+func (this ImportPathFoundStringer) String() string {
+	return this.ImportPathFound.ImportPath()
+}
+
+func (this *GoPackageListingPureWidget) OnSelectionChanged() Selecter {
+	return this
 }
 
 func (w *GoPackageListingPureWidget) NotifyChange() {
@@ -6184,7 +6212,7 @@ func main() {
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 		_ = windowSize
 
-		goPackageListing := NewGoPackageListingWidget()
+		goPackageListing := NewGoPackageListingPureWidget()
 		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, 600}, goPackageListing))
 
 		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
