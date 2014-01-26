@@ -3852,8 +3852,8 @@ func (cp *caretPositionInternal) TrySet(position uint32) {
 		position = uint32(cp.w.LenContent())
 	}
 
-	cp.lineIndex = sort.Search(cp.w.LenLines(), func(lineIndex int) bool {
-		return cp.w.Line(lineIndex).Start >= position
+	cp.lineIndex = sort.Search(cp.w.LenLines()-1, func(lineIndex int) bool {
+		return cp.w.Line(lineIndex+1).Start > position
 	})
 	cp.positionWithinLine = position - cp.w.Line(cp.lineIndex).Start
 
