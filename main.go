@@ -1538,9 +1538,9 @@ func (w *WindowWidget) Render() {
 	PrintSegment(w.pos.Add(mathgl.Vec2d{60}), w.Name)
 
 	gl.PushMatrix()
-	defer gl.PopMatrix()
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 	w.chrome.Render()
+	gl.PopMatrix()
 }
 func (w *WindowWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
@@ -2875,6 +2875,22 @@ func (this *FilterableStrings2) Update() {
 
 		this.filteredEntries = append(this.filteredEntries, source.Get(index))
 	}
+}
+
+// ---
+
+// HACK: Helper struct for testing popup menu
+type debugStrings2 struct {
+	entries []string
+	DepNode2Manual
+}
+
+func (this *debugStrings2) Get(index uint64) fmt.Stringer {
+	return &NodeStringer{str: this.entries[index]}
+}
+
+func (this *debugStrings2) Len() uint64 {
+	return uint64(len(this.entries))
 }
 
 // ---
@@ -4726,6 +4742,7 @@ type TextBoxWidget struct {
 
 	ExtensionsTest   []Widgeter
 	HighlightersTest []Highlighter
+	PopupTest        *SearchableListWidget
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -5015,15 +5032,33 @@ func (w *TextBoxWidget) Render() {
 
 		// Draw caret
 		gl.PushMatrix()
-		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Color3d(0, 0, 0)
 		gl.Recti(gl.Int(expandedCaretPosition*fontWidth-1), gl.Int(caretLine*fontHeight), gl.Int(expandedCaretPosition*fontWidth+1), gl.Int(caretLine*fontHeight)+fontHeight)
+		gl.PopMatrix()
+	}
+
+	if w.PopupTest != nil {
+		gl.PushMatrix()
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		w.PopupTest.Render()
+		gl.PopMatrix()
 	}
 }
 func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
-	if len(w.Widget.Hit(ParentPosition)) > 0 {
+	/*if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
+	} else {
+		return nil
+	}*/
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		hits := []Widgeter{w}
+		if w.PopupTest != nil {
+			hits = append(hits, w.PopupTest.Hit(LocalPosition)...)
+		}
+		return hits
 	} else {
 		return nil
 	}
@@ -5126,9 +5161,17 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					w.caretPosition.ReplaceSelectionWith(clipboard)
 				}
 			}
+		/*case glfw.KeyR:
+		if inputEvent.ModifierKey == glfw.ModSuper {
+			ExternallyUpdated(w.Content) // TODO: Need to make this apply only for event-based things; no point in forcibly updating pure data structures
+		}*/
 		case glfw.KeyR:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				ExternallyUpdated(w.Content) // TODO: Need to make this apply only for event-based things; no point in forcibly updating pure data structures
+				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugStrings2{entries: []string{"one", "two", "three"}})
+				w.PopupTest.SetParent(w)
+
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				keyboardPointer.OriginMapping = w.PopupTest.Widgets
 			}
 		// TEST: Closing this widget...
 		case glfw.KeyW:
@@ -5246,10 +5289,10 @@ func (w *TextBoxValidationWidget) Render() {
 
 		// Draw caret
 		gl.PushMatrix()
-		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Color3d(0, 0, 0)
 		gl.Recti(gl.Int(expandedCaretPosition*fontWidth-1), gl.Int(caretLine*fontHeight), gl.Int(expandedCaretPosition*fontWidth+1), gl.Int(caretLine*fontHeight)+fontHeight)
+		gl.PopMatrix()
 	}
 }
 
@@ -5319,10 +5362,10 @@ func (w *TextFieldWidget) Render() {
 	if hasTypingFocus {
 		// Draw caret
 		gl.PushMatrix()
-		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Color3d(0, 0, 0)
 		gl.Recti(gl.Int(w.CaretPosition*fontWidth-1), 0, gl.Int(w.CaretPosition*fontWidth+1), fontHeight)
+		gl.PopMatrix()
 	}
 }
 func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -5467,10 +5510,10 @@ func (w *MetaTextFieldWidget) Render() {
 	if hasTypingFocus {
 		// Draw caret
 		gl.PushMatrix()
-		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Color3d(0, 0, 0)
 		gl.Recti(gl.Int(w.CaretPosition*8-1), 0, gl.Int(w.CaretPosition*8+1), 16)
+		gl.PopMatrix()
 	}
 }
 func (w *MetaTextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -6045,7 +6088,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if sublimeMode {
 
