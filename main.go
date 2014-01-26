@@ -730,6 +730,7 @@ func (t *typeCheckedPackage) Update() {
 		importPath = goPackage.GetSelected().ImportPath()
 	}
 
+	// TODO: No longer necessary now that I get a *GoPackage?
 	bpkg, err := BuildPackageFromImportPath(importPath)
 	if err != nil {
 		t.fset = nil
@@ -1103,7 +1104,65 @@ func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) *
 	return w
 }
 
+// =====
+
+type goPackages struct {
+	entries []fmt.Stringer
+
+	DepNode2
+}
+
+func (this *goPackages) Get(index uint64) fmt.Stringer {
+	return this.entries[index]
+}
+
+func (this *goPackages) Len() uint64 {
+	return uint64(len(this.entries))
+}
+
+func (this *goPackages) Update() {
+	// TODO: Have a source?
+
+	// TODO: Make it load in background, without blocking, etc.
+	{
+		goPackages := make(chan *GoPackage, 64)
+
+		go gist8018045.GetGoPackages2(goPackages)
+
+		this.entries = nil
+		for {
+			if goPackage, ok := <-goPackages; ok {
+				this.entries = append(this.entries, goPackage)
+			} else {
+				break
+			}
+		}
+	}
+}
+
 // ---
+
+type ImportPathFoundSelectorAdapter struct {
+	Selecter
+}
+
+// TODO: Convert to using *GoPackage instead of *ImportPathFound
+func (this *ImportPathFoundSelectorAdapter) GetSelected() *ImportPathFound {
+	if selected := this.Selecter.GetSelected(); selected != nil {
+		importPathFound := NewImportPathFound(selected.(*GoPackage).Bpkg.ImportPath, selected.(*GoPackage).Bpkg.Root)
+		return &importPathFound
+	}
+	return nil
+}
+
+func NewGoPackageListingWidget() *SearchableListWidget {
+	goPackages := &goPackages{}
+
+	w := NewSearchableListWidget(np, goPackages)
+	return w
+}
+
+// =====
 
 type GoCompileErrorsManagerTest struct {
 	//Sources []*GoCompileErrorsTest // TODO: Migrate to using DepNode2
@@ -2753,8 +2812,8 @@ func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableList
 	return w
 }
 
-func (w *SearchableListWidget) OnSelectionChanged() DepNode2ManualI {
-	return w.CompositeWidget.Widgets[1].(DepNode2ManualI)
+func (w *SearchableListWidget) OnSelectionChanged() Selecter {
+	return w.CompositeWidget.Widgets[1].(*FilterableSelecterWidget)
 }
 
 func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
@@ -2821,6 +2880,7 @@ func (this *FilterableStrings2) Update() {
 
 // ---
 
+// TODO: Rename Strings2 -> SliceStringer
 type Strings2 interface {
 	Get(uint64) fmt.Stringer
 	Len() uint64
@@ -2830,6 +2890,8 @@ type Strings2 interface {
 
 type Selecter interface {
 	GetSelected() fmt.Stringer
+
+	DepNode2I
 }
 
 // TODO: Refactor other list-like widgets to use this?
@@ -3043,6 +3105,8 @@ type GoPackageListingPureWidget struct {
 	entries []ImportPathFound
 }
 
+// TODO: Remove this, it's been superseded by more general NewGoPackageListingWidget().
+// TODO: Take its "background streaming" functionality before removing.
 func NewGoPackageListingPureWidget() *GoPackageListingPureWidget {
 	w := &GoPackageListingPureWidget{Widget: NewWidget(np, np), goPackages: make(chan ImportPathFound, 64)}
 
@@ -6120,7 +6184,7 @@ func main() {
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 		_ = windowSize
 
-		goPackageListing := NewGoPackageListingPureWidget()
+		goPackageListing := NewGoPackageListingWidget()
 		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, 600}, goPackageListing))
 
 		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
@@ -6129,13 +6193,13 @@ func main() {
 		// TEST, HACK: Open the folder listing to the folder of the Go package
 		folderListingDirChanger := DepNode2Func{}
 		folderListingDirChanger.UpdateFunc = func(this DepNode2I) {
-			if importPathFound := this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected(); importPathFound != nil {
+			if importPathFound := this.GetSources()[0].(ImportPathFoundSelector).GetSelected(); importPathFound != nil {
 				path := importPathFound.FullPath()
 				folderListing.flow.SetWidgets([]Widgeter{newFolderListingPureWidgetWithSelection(path)})
 				ExternallyUpdated(folderListing)
 			}
 		}
-		folderListingDirChanger.AddSources(goPackageListing)
+		folderListingDirChanger.AddSources(&ImportPathFoundSelectorAdapter{goPackageListing.OnSelectionChanged()})
 		keepUpdatedTEST = append(keepUpdatedTEST, &folderListingDirChanger)
 
 		// Main editor
@@ -6178,12 +6242,12 @@ func main() {
 			template2.UpdateFunc = func(this DepNode2I) {
 				template2.Template = NewCmdTemplate("echo", "-n", "Nothing to go build.")
 
-				if importPathFound := this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected(); importPathFound != nil {
+				if importPathFound := this.GetSources()[0].(ImportPathFoundSelector).GetSelected(); importPathFound != nil {
 					template2.Template = NewCmdTemplate("go", "build", "-o", "./Con2RunBin", importPathFound.ImportPath())
 					//template2.Template.Dir = ""
 				}
 			}
-			template2.AddSources(goPackageListing)
+			template2.AddSources(&ImportPathFoundSelectorAdapter{goPackageListing.OnSelectionChanged()})
 
 			build := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template2)
 			nextTool2Collapsible := NewCollapsibleWidget(np, build)
@@ -6197,7 +6261,7 @@ func main() {
 
 			// ---
 
-			nextTool3, typeCheckedPackage := NewTest4Widget(np, goPackageListing, editor)
+			nextTool3, typeCheckedPackage := NewTest4Widget(np, &ImportPathFoundSelectorAdapter{goPackageListing.OnSelectionChanged()}, editor)
 			nextTool3Collapsible := NewCollapsibleWidget(np, nextTool3)
 
 			// ---
@@ -6272,7 +6336,7 @@ func main() {
 
 			// ---
 
-			nextTool6 := NewTest6OracleWidget(np, goPackageListing, editor)
+			nextTool6 := NewTest6OracleWidget(np, &ImportPathFoundSelectorAdapter{goPackageListing.OnSelectionChanged()}, editor)
 			nextTool6Collapsible := NewCollapsibleWidget(np, nextTool6)
 			nextTool6Collapsible.state.state = true // HACK
 
