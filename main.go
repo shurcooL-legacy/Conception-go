@@ -63,7 +63,6 @@ import (
 	. "gist.github.com/4727543.git"
 
 	"go/ast"
-	"go/doc"
 	"go/parser"
 	"go/scanner"
 	"go/token"
@@ -723,22 +722,17 @@ type typeCheckedPackage struct {
 }
 
 func (t *typeCheckedPackage) Update() {
-	goPackage := t.GetSources()[0].(ImportPathFoundSelector)
+	goPackageSelecter := t.GetSources()[0].(GoPackageSelecter)
 
-	importPath := ""
-	if goPackage.GetSelected() != nil {
-		importPath = goPackage.GetSelected().ImportPath()
-	}
-
-	// TODO: No longer necessary now that I get a *GoPackage?
-	bpkg, err := BuildPackageFromImportPath(importPath)
-	if err != nil {
+	if goPackageSelecter.GetSelectedGoPackage() == nil {
 		t.fset = nil
 		t.files = nil
 		t.tpkg = nil
 		t.info = nil
 		return
 	}
+
+	bpkg := goPackageSelecter.GetSelectedGoPackage().Bpkg
 
 	fset := token.NewFileSet()
 	files, err := ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
@@ -764,7 +758,7 @@ func (t *typeCheckedPackage) Update() {
 		Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		Scopes:     make(map[ast.Node]*types.Scope),
 	}
-	tpkg, err := cfg.Check(importPath, fset, files, info)
+	tpkg, err := cfg.Check(bpkg.ImportPath, fset, files, info)
 	if err == nil {
 		t.tpkg = tpkg
 		t.info = info
@@ -786,9 +780,9 @@ func FindFileAst(fset *token.FileSet, file *token.File, fileAsts []*ast.File) *a
 	return nil
 }
 
-func NewTest4Widget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
+func NewTest4Widget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
 	typeCheckedPackage := &typeCheckedPackage{}
-	typeCheckedPackage.AddSources(goPackage, source.Content)
+	typeCheckedPackage.AddSources(goPackageSelecter, source.Content)
 
 	params := func() interface{} {
 		fileUri, _ := source.Content.GetUriForProtocol("file://")
@@ -928,7 +922,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source 
 
 // ---
 
-func NewTest6OracleWidget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, source *TextBoxWidget) Widgeter {
+func NewTest6OracleWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) Widgeter {
 	validFunc := func(c MultilineContentI) bool {
 		switch c.Content() {
 		case "callees", "callers", "callgraph", "callstack", "describe", "freevars", "implements", "peers", "referrers":
@@ -944,7 +938,7 @@ func NewTest6OracleWidget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, s
 		return []interface{}{
 			source.caretPosition.Logical(),
 			fileUri,
-			goPackage,
+			goPackageSelecter,
 			mode.Content.Content(),
 		}
 	}
@@ -952,11 +946,11 @@ func NewTest6OracleWidget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, s
 	action := func(params interface{}) string {
 		caretPosition := params.([]interface{})[0].(uint32)
 		fileUri := params.([]interface{})[1].(FileUri)
-		goPackage := params.([]interface{})[2].(ImportPathFoundSelector)
+		goPackageSelecter := params.([]interface{})[2].(GoPackageSelecter)
 		mode := params.([]interface{})[3].(string)
 
-		if pkg := goPackage.GetSelected(); pkg != nil && fileUri != "" && mode != "" {
-			cmd := exec.Command("oracle", fmt.Sprintf("--pos=%s:#%d", fileUri[len("file://"):], caretPosition), mode, pkg.ImportPath())
+		if pkg := goPackageSelecter.GetSelectedGoPackage(); pkg != nil && fileUri != "" && mode != "" {
+			cmd := exec.Command("oracle", fmt.Sprintf("--pos=%s:#%d", fileUri[len("file://"):], caretPosition), mode, pkg.Bpkg.ImportPath)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				return "Error:\n" + err.Error()
@@ -967,21 +961,23 @@ func NewTest6OracleWidget(pos mathgl.Vec2d, goPackage ImportPathFoundSelector, s
 		}
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, false, []DepNode2I{source.caretPosition, goPackage, mode}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, false, []DepNode2I{source.caretPosition, goPackageSelecter, mode}, params, action)
 
 	return NewFlowLayoutWidget(pos, Widgeters{mode, w}, nil)
 }
 
 // ---
 
-type docPackage struct {
+// NOTE: I'm probably not going to use doc.Package because it duplicates AST stuff from other packages, and doesn't point back to real code...
+// Instead, I mimic doc.Package functionality, but stack it on top of types.Package rather than a duplicated ast.Package.
+/*type docPackage struct {
 	dpkg *doc.Package
 
 	DepNode2
 }
 
 func (this *docPackage) Update() {
-	goPackage := this.GetSources()[0].(ImportPathFoundSelector)
+	goPackage := this.GetSources()[0].(ImportPathFoundSelecter)
 
 	importPath := ""
 	if goPackage.GetSelected() != nil {
@@ -1002,7 +998,7 @@ func (this *docPackage) Update() {
 	}
 
 	this.dpkg = dpkg
-}
+}*/
 
 // ---
 
@@ -1034,7 +1030,7 @@ func (this *goSymbols) Len() uint64 {
 	return uint64(len(this.entries))
 }
 
-func (this *goSymbols) Update() {
+/*func (this *goSymbols) Update() {
 	dpkg := this.GetSources()[0].(*docPackage).dpkg
 
 	if dpkg == nil {
@@ -1056,7 +1052,7 @@ func (this *goSymbols) Update() {
 	}
 }
 
-/*func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *ListWidget {
+func NewTest5Widget(pos mathgl.Vec2d, goPackage *GoPackageListingPureWidget, source *TextBoxWidget) *ListWidget {
 	docPackage := &docPackage{}
 	docPackage.AddSources(goPackage, source.Content)
 
@@ -1066,8 +1062,6 @@ func (this *goSymbols) Update() {
 	w := NewListWidget(np, goSymbols)
 	return w
 }*/
-
-// ---
 
 type goSymbolsB struct {
 	goSymbols
@@ -1142,22 +1136,22 @@ func (this *goPackages) Update() {
 
 // ---
 
-type ImportPathFoundSelectorAdapter struct {
+type GoPackageSelecter interface {
+	GetSelectedGoPackage() *GoPackage
+
+	DepNode2I
+}
+
+type GoPackageSelecterAdapter struct {
 	Selecter
 }
 
-// TODO: Convert to using *GoPackage instead of *ImportPathFound
-func (this *ImportPathFoundSelectorAdapter) GetSelected() *ImportPathFound {
+func (this *GoPackageSelecterAdapter) GetSelectedGoPackage() *GoPackage {
 	if selected := this.Selecter.GetSelected(); selected != nil {
-		switch selected.(type) {
-		case *GoPackage:
-			importPathFound := NewImportPathFound(selected.(*GoPackage).Bpkg.ImportPath, selected.(*GoPackage).Bpkg.Root)
-			return &importPathFound
-		default:
-			panic("???")
-		}
+		return selected.(*GoPackage)
+	} else {
+		return nil
 	}
-	return nil
 }
 
 func NewGoPackageListingWidget() *SearchableListWidget {
@@ -3101,11 +3095,6 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 }
 
 // ---
-
-type ImportPathFoundSelector interface {
-	GetSelected() *ImportPathFound
-	DepNode2I
-}
 
 // TODO: Remove this, it's been superseded by more general NewGoPackageListingWidget().
 // TODO: Take its "background streaming" functionality before removing.
@@ -5862,9 +5851,9 @@ type goPackageHardcoded struct {
 	DepNode2Manual
 }
 
-func (*goPackageHardcoded) GetSelected() *ImportPathFound {
+func (*goPackageHardcoded) GetSelectedGoPackage() *GoPackage {
 	x := NewImportPathFound("gist.github.com/7176504.git", "/Users/Dmitri/Dropbox/Work/2013/GoLand/")
-	return &x
+	return GoPackageFromImportPathFound(x)
 }
 
 // ---
@@ -6073,13 +6062,13 @@ func main() {
 		// TEST, HACK: Open the folder listing to the folder of the Go package
 		folderListingDirChanger := DepNode2Func{}
 		folderListingDirChanger.UpdateFunc = func(this DepNode2I) {
-			if importPathFound := this.GetSources()[0].(ImportPathFoundSelector).GetSelected(); importPathFound != nil {
-				path := importPathFound.FullPath()
+			if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+				path := goPackage.FullPath()
 				folderListing.flow.SetWidgets([]Widgeter{newFolderListingPureWidgetWithSelection(path)})
 				ExternallyUpdated(folderListing)
 			}
 		}
-		folderListingDirChanger.AddSources(&ImportPathFoundSelectorAdapter{goPackageListing.OnSelectionChanged()})
+		folderListingDirChanger.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 		keepUpdatedTEST = append(keepUpdatedTEST, &folderListingDirChanger)
 
 		// Main editor
@@ -6122,12 +6111,12 @@ func main() {
 			template2.UpdateFunc = func(this DepNode2I) {
 				template2.Template = NewCmdTemplate("echo", "-n", "Nothing to go build.")
 
-				if importPathFound := this.GetSources()[0].(ImportPathFoundSelector).GetSelected(); importPathFound != nil {
-					template2.Template = NewCmdTemplate("go", "build", "-o", "./Con2RunBin", importPathFound.ImportPath())
+				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+					template2.Template = NewCmdTemplate("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath)
 					//template2.Template.Dir = ""
 				}
 			}
-			template2.AddSources(&ImportPathFoundSelectorAdapter{goPackageListing.OnSelectionChanged()})
+			template2.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 
 			build := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template2)
 			nextTool2Collapsible := NewCollapsibleWidget(np, build)
@@ -6141,7 +6130,7 @@ func main() {
 
 			// ---
 
-			nextTool3, typeCheckedPackage := NewTest4Widget(np, &ImportPathFoundSelectorAdapter{goPackageListing.OnSelectionChanged()}, editor)
+			nextTool3, typeCheckedPackage := NewTest4Widget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor)
 			nextTool3Collapsible := NewCollapsibleWidget(np, nextTool3)
 
 			// ---
@@ -6216,7 +6205,7 @@ func main() {
 
 			// ---
 
-			nextTool6 := NewTest6OracleWidget(np, &ImportPathFoundSelectorAdapter{goPackageListing.OnSelectionChanged()}, editor)
+			nextTool6 := NewTest6OracleWidget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor)
 			nextTool6Collapsible := NewCollapsibleWidget(np, nextTool6)
 			nextTool6Collapsible.state.state = true // HACK
 
