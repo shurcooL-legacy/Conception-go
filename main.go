@@ -6063,7 +6063,7 @@ func main() {
 		folderListingDirChanger := DepNode2Func{}
 		folderListingDirChanger.UpdateFunc = func(this DepNode2I) {
 			if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
-				path := goPackage.FullPath()
+				path := goPackage.Bpkg.Dir
 				folderListing.flow.SetWidgets([]Widgeter{newFolderListingPureWidgetWithSelection(path)})
 				ExternallyUpdated(folderListing)
 			}
