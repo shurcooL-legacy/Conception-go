@@ -2801,6 +2801,8 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 
 type SearchableListWidget struct {
 	*CompositeWidget
+
+	ExtensionsTest []Widgeter
 }
 
 func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableListWidget {
@@ -2808,7 +2810,7 @@ func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableList
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
 	listWidget := NewFilterableSelecterWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField)
 
-	w := &SearchableListWidget{NewCompositeWidget(pos, []Widgeter{searchField, listWidget})}
+	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidget})}
 
 	return w
 }
@@ -2818,13 +2820,17 @@ func (w *SearchableListWidget) OnSelectionChanged() Selecter {
 }
 
 func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
+	for _, extension := range w.ExtensionsTest {
+		extension.ProcessEvent(inputEvent)
+	}
+
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && // TODO: GetHoverer() // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { // TODO: GetHoverer() // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		// HACK: Temporarily set both widgets as mapping here
-		keyboardPointer.OriginMapping = w.CompositeWidget.Widgets
+		keyboardPointer.OriginMapping = append([]Widgeter{w}, w.CompositeWidget.Widgets...)
 	}
 }
 
@@ -5187,8 +5193,25 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugStrings2{entries: []string{"one", "two", "three"}})
 				w.PopupTest.SetParent(w)
 
+				originalMapping := keyboardPointer.OriginMapping // HACK
+				closeOnEscape := &CustomWidget{
+					Widget: NewWidget(np, np),
+					ProcessEventFunc: func(inputEvent InputEvent) {
+						if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+							switch glfw.Key(inputEvent.InputId) {
+							case glfw.KeyEscape:
+								w.PopupTest = nil
+
+								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+								keyboardPointer.OriginMapping = originalMapping
+							}
+						}
+					},
+				}
+				w.PopupTest.ExtensionsTest = append(w.PopupTest.ExtensionsTest, closeOnEscape)
+
 				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-				keyboardPointer.OriginMapping = w.PopupTest.Widgets
+				keyboardPointer.OriginMapping = append([]Widgeter{w.PopupTest}, w.PopupTest.Widgets...)
 			}
 		// TEST: Closing this widget...
 		case glfw.KeyW:
