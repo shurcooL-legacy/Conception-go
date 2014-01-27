@@ -153,10 +153,13 @@ var (
 	selectedTextInactiveColor = mathgl.Vec3d{240 / 255.0, 240 / 255.0, 240 / 255.0}
 )
 
+var np = mathgl.Vec2d{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
+
 // TODO: Remove these
 var globalWindow *glfw.Window
-var np = mathgl.Vec2d{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
 var keepUpdatedTEST = []DepNode2I{}
+var globalTypeCheckedPackage *typeCheckedPackage
+var globalGoSymbols *goSymbolsB
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -1092,12 +1095,12 @@ func (this *goSymbolsB) Update() {
 	}
 }
 
-func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) *SearchableListWidget {
+func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) (*SearchableListWidget, *goSymbolsB) {
 	goSymbols := &goSymbolsB{}
 	goSymbols.AddSources(typeCheckedPackage)
 
 	w := NewSearchableListWidget(np, goSymbols)
-	return w
+	return w, goSymbols
 }
 
 // =====
@@ -3025,29 +3028,32 @@ func (w *FilterableSelecterWidget) Render() {
 
 	// Render only visible lines.
 	// TODO: Generalize this.
-	index, lastIndex := 0, int(w.entries.Len()-1)
-	if topIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{})[1] / fontHeight); topIndex > index {
-		index = topIndex
+	const debugSmallerViewport = fontHeight
+	beginLineIndex, endLineIndex := 0, int(w.entries.Len())
+	if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+		beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 	}
-	_, height := globalWindow.GetSize() // HACK
-	if bottomIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1] / fontHeight); bottomIndex < lastIndex {
-		lastIndex = bottomIndex
+	_, height := globalWindow.GetSize() // HACK: Should be some viewport
+	height -= debugSmallerViewport
+	if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
+		endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 	}
-	for ; index <= lastIndex; index++ {
-		entry := w.entries.Get(uint64(index)).String()
-		if w.selected == uint64(index) {
+
+	for ; beginLineIndex < endLineIndex; beginLineIndex++ {
+		entry := w.entries.Get(uint64(beginLineIndex)).String()
+		if w.selected == uint64(beginLineIndex) {
 			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(index * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(beginLineIndex * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
 				gl.Color3d(1, 1, 1)
 			} else {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(index * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(beginLineIndex * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
 				gl.Color3d(0, 0, 0)
 			}
 		} else {
 			gl.Color3d(0, 0, 0)
 		}
 
-		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(index * fontHeight)}), entry)
+		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(beginLineIndex * fontHeight)}), entry)
 	}
 }
 
@@ -4872,7 +4878,7 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
-	/*if !hasTypingFocus {
+	if !hasTypingFocus {
 		_, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Highlight line
@@ -4881,7 +4887,7 @@ func (w *TextBoxWidget) Render() {
 		gl.Color3d(0.75, 0.75, 0.75)
 		gl.Recti(gl.Int(0), gl.Int(caretLine*fontHeight), gl.Int(w.size[0]), gl.Int(caretLine*fontHeight)+fontHeight)
 		gl.PopMatrix()
-	}*/
+	}
 
 	if w.DiffsTest == nil || glfw.Release != globalWindow.GetKey(glfw.KeyLeftSuper) {
 		gl.Color3d(0, 0, 0)
@@ -5063,7 +5069,10 @@ func (w *TextBoxWidget) Render() {
 
 	if w.PopupTest != nil {
 		gl.PushMatrix()
-		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		// HACK: Not general at all
+		if _, insideScrollPane := w.Parent().(*ScrollPaneWidget); !insideScrollPane {
+			gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		}
 		w.PopupTest.Render()
 		gl.PopMatrix()
 	}
@@ -5079,7 +5088,12 @@ func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		hits := []Widgeter{w}
 		if w.PopupTest != nil {
-			hits = append(hits, w.PopupTest.Hit(LocalPosition)...)
+			// HACK: Not general at all
+			if _, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
+				hits = append(hits, w.PopupTest.Hit(ParentPosition)...)
+			} else {
+				hits = append(hits, w.PopupTest.Hit(LocalPosition)...)
+			}
 		}
 		return hits
 	} else {
@@ -5096,7 +5110,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		keyboardPointer.OriginMapping = []Widgeter{w}
+		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
+			keyboardPointer.OriginMapping = []Widgeter{w}
+		}
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
@@ -5190,17 +5206,57 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		}*/
 		case glfw.KeyR:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugStrings2{entries: []string{"one", "two", "three"}})
-				w.PopupTest.SetParent(w)
+				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugStrings2{entries: []string{"one", "two", "three"}})
+				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, globalGoSymbols)
+				// HACK: Not general at all
+				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
+					w.PopupTest.SetParent(scrollPane)
+				} else {
+					w.PopupTest.SetParent(w)
+				}
 
-				originalMapping := keyboardPointer.OriginMapping // HACK
+				// HACK: Duplicated code, need to refactor
+				{
+					scrollToSymbolB := DepNode2Func{}
+					scrollToSymbolB.UpdateFunc = func(this DepNode2I) {
+						if entry := this.GetSources()[0].(Selecter).GetSelected(); entry != nil {
+							// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
+							//println("selected:", entry.String())
+
+							if declNode := entry.(*NodeStringer); true {
+
+								if file := globalTypeCheckedPackage.fset.File(declNode.Pos()); file != nil {
+									// TODO: Change folderListing selection if it's in a different file
+
+									// TODO: There's a race condition here, to do the thing below I need to have finished changing the file, but
+									//       that currently reloads ASTs, etc. causing crashes sometimes depending on order of file ASTs being processed.
+
+									w.CenterOnCaretPosition(uint32(file.Offset(declNode.Pos())))
+								}
+							}
+						}
+					}
+					scrollToSymbolB.AddSources(w.PopupTest.OnSelectionChanged())
+					keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
+				}
+
+				originalMapping := keyboardPointer.OriginMapping   // HACK
+				originalCaretPosition := w.caretPosition.Logical() // TODO: Save state in a better way
 				closeOnEscape := &CustomWidget{
 					Widget: NewWidget(np, np),
 					ProcessEventFunc: func(inputEvent InputEvent) {
 						if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 							switch glfw.Key(inputEvent.InputId) {
+							case glfw.KeyEnter:
+								w.PopupTest = nil
+
+								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+								keyboardPointer.OriginMapping = originalMapping
 							case glfw.KeyEscape:
 								w.PopupTest = nil
+
+								// TODO: Restore view, caretPosition in a better way
+								w.caretPosition.TrySet(originalCaretPosition)
 
 								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 								keyboardPointer.OriginMapping = originalMapping
@@ -6128,7 +6184,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if sublimeMode {
 
@@ -6214,6 +6270,7 @@ func main() {
 			// ---
 
 			nextTool3, typeCheckedPackage := NewTest4Widget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor)
+			globalTypeCheckedPackage = typeCheckedPackage // HACK
 			nextTool3Collapsible := NewCollapsibleWidget(np, nextTool3)
 
 			// ---
@@ -6250,7 +6307,8 @@ func main() {
 
 			// ---
 
-			nextTool5B := NewTest5BWidget(np, typeCheckedPackage)
+			var nextTool5B *SearchableListWidget
+			nextTool5B, globalGoSymbols = NewTest5BWidget(np, typeCheckedPackage)
 			nextTool5BCollapsible := NewCollapsibleWidget(np, nextTool5B)
 
 			scrollToSymbolB := DepNode2Func{}
