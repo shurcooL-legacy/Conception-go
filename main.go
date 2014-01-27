@@ -142,12 +142,12 @@ var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 
 // Colors
 var (
-	veryLightColor = mathgl.Vec3d{0.95, 0.95, 0.95}
-	lightColor     = mathgl.Vec3d{0.85, 0.85, 0.85}
-	darkColor      = mathgl.Vec3d{0.35, 0.35, 0.35}
+	nearlyWhiteColor = mathgl.Vec3d{0.975, 0.975, 0.975}
+	lightColor       = mathgl.Vec3d{0.85, 0.85, 0.85}
+	darkColor        = mathgl.Vec3d{0.35, 0.35, 0.35}
 
-	blackColor     = mathgl.Vec3d{0, 0, 0}
-	highlightColor = mathgl.Vec3d{0.898, 0.765, 0.396}
+	nearlyBlackColor = mathgl.Vec3d{0.025, 0.025, 0.025}
+	highlightColor   = mathgl.Vec3d{0.898, 0.765, 0.396}
 
 	selectedTextColor         = mathgl.Vec3d{195 / 255.0, 212 / 255.0, 242 / 255.0}
 	selectedTextInactiveColor = mathgl.Vec3d{240 / 255.0, 240 / 255.0, 240 / 255.0}
@@ -1528,15 +1528,15 @@ func (w *WindowWidget) Render() {
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	DrawNBox(w.pos, w.size)
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, veryLightColor, lightColor)
+		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, nearlyWhiteColor, lightColor)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, veryLightColor, lightColor)
+		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, nearlyWhiteColor, lightColor)
 	} else {
-		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, veryLightColor, lightColor)
+		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor, lightColor)
 	}
 
 	// Title
-	gl.Color3dv((*gl.Double)(&blackColor[0]))
+	gl.Color3dv((*gl.Double)(&nearlyBlackColor[0]))
 	PrintSegment(w.pos.Add(mathgl.Vec2d{60}), w.Name)
 
 	gl.PushMatrix()
@@ -1603,16 +1603,16 @@ func DrawBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) 
 	DrawBorderlessBox(pos, size, backgroundColor)
 }
 func DrawNBox(pos, size mathgl.Vec2d) {
-	DrawBox(pos, size, mathgl.Vec3d{0.3, 0.3, 0.3}, mathgl.Vec3d{1, 1, 1})
+	DrawBox(pos, size, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor)
 }
 func DrawYBox(pos, size mathgl.Vec2d) {
-	DrawBox(pos, size, highlightColor, mathgl.Vec3d{1, 1, 1})
+	DrawBox(pos, size, highlightColor, nearlyWhiteColor)
 }
 func DrawGBox(pos, size mathgl.Vec2d) {
 	DrawBox(pos, size, highlightColor, mathgl.Vec3d{0.75, 0.75, 0.75})
 }
 func DrawLGBox(pos, size mathgl.Vec2d) {
-	DrawBox(pos, size, mathgl.Vec3d{0.6, 0.6, 0.6}, mathgl.Vec3d{0.95, 0.95, 0.95})
+	DrawBox(pos, size, mathgl.Vec3d{0.6, 0.6, 0.6}, lightColor)
 }
 
 func DrawGradientBox(pos, size mathgl.Vec2d, borderColor, topColor, bottomColor mathgl.Vec3d) {
@@ -4866,7 +4866,7 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
-	if !hasTypingFocus {
+	/*if !hasTypingFocus {
 		_, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Highlight line
@@ -4875,7 +4875,7 @@ func (w *TextBoxWidget) Render() {
 		gl.Color3d(0.75, 0.75, 0.75)
 		gl.Recti(gl.Int(0), gl.Int(caretLine*fontHeight), gl.Int(w.size[0]), gl.Int(caretLine*fontHeight)+fontHeight)
 		gl.PopMatrix()
-	}
+	}*/
 
 	if w.DiffsTest == nil || glfw.Release != globalWindow.GetKey(glfw.KeyLeftSuper) {
 		gl.Color3d(0, 0, 0)
