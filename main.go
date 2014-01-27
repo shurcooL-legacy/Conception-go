@@ -2973,6 +2973,11 @@ func (w *FilterableSelecterWidget) NotifyChange() {
 
 	if !selectionPreserved {
 		w.selected = 0
+		if w.entries.Len() > 0 {
+			// HACK, TODO: This should happen not when the selection is unpreserved, but when it is unchanged
+			// (i.e. it may be unpreserved, but still equal, then no need to report a change)
+			w.selectionChangedTest() // TEST, HACK: This sets manuallyPicked because it's meant for user-driven actions, etc. Need to do this in a better way.
+		}
 		w.manuallyPicked = nil
 	}
 
