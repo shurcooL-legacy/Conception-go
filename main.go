@@ -925,6 +925,84 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, sourc
 	return w, typeCheckedPackage
 }
 
+func NewTypeUnderCaretWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget, typeCheckedPackage *typeCheckedPackage) *LiveGoroutineExpeWidget {
+	params := func() interface{} {
+		fileUri, _ := source.Content.GetUriForProtocol("file://")
+		return []interface{}{
+			source.caretPosition.Logical(),
+			fileUri,
+			typeCheckedPackage.fset,
+			typeCheckedPackage.files,
+			typeCheckedPackage.info,
+		}
+	}
+
+	action := func(params interface{}) string {
+		index := params.([]interface{})[0].(uint32)
+		fileUri := params.([]interface{})[1].(FileUri)
+		fset := params.([]interface{})[2].(*token.FileSet)
+		files := params.([]interface{})[3].([]*ast.File)
+		//tpkg := typeCheckedPackage.tpkg
+		info := params.([]interface{})[4].(*types.Info)
+
+		if fset == nil {
+			return "fset == nil"
+		}
+
+		// Figure out the file index and token.Pos of caret in that file
+		var fileAst *ast.File
+		var caretPos token.Pos
+		fset.Iterate(func(file *token.File) bool {
+			if fileUri == FileUri("file://"+file.Name()) {
+				fileAst = FindFileAst(fset, file, files)
+				caretPos = file.Pos(int(index))
+				return false
+			}
+			return true
+		})
+
+		if fileAst == nil {
+			return "fileAst == null, caretPos == token.NoPos"
+		}
+
+		var found2 []ast.Node
+		ast.Inspect(fileAst, func(n ast.Node) bool {
+			if n != nil && n.Pos() <= caretPos && caretPos <= n.End() {
+				found2 = append(found2, n)
+				return true
+			}
+			return false
+		})
+
+		if len(found2) == 0 {
+			return ""
+		}
+
+		out := ""
+
+		smallestV := found2[len(found2)-1]
+
+		if ident, ok := smallestV.(*ast.Ident); ok {
+			Test4WidgetIdent = ident // HACK
+
+			if info != nil && info.Objects[ident] != nil {
+				obj := info.Objects[ident]
+				out += TypeChainString(obj.Type())
+				if constObj, ok := obj.(*types.Const); ok {
+					out += fmt.Sprintf(" = %v", constObj.Val())
+				}
+			} else {
+				out += "nil Object"
+			}
+		}
+
+		return out
+	}
+
+	w := NewLiveGoroutineExpeWidget(pos, true, []DepNode2I{typeCheckedPackage, source.caretPosition}, params, action)
+	return w
+}
+
 // ---
 
 func NewTest6OracleWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) Widgeter {
@@ -2120,10 +2198,11 @@ func (w *CanvasWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition
 type CollapsibleWidget struct {
 	Widget
 	state *TriButtonWidget //*TriButtonExternalStateWidget
+	label Widgeter         // HACK: Manually adding widgets, this doesn't scale, need to use CompositeWidget or make Widgeter naturally extendable, etc.
 	child Widgeter
 }
 
-func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter) *CollapsibleWidget {
+func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter, title string) *CollapsibleWidget {
 	w := &CollapsibleWidget{Widget: NewWidget(pos, np), child: child}
 	w.child.SetParent(w)
 
@@ -2132,6 +2211,9 @@ func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter) *CollapsibleWidget {
 	w.state = NewTriButtonWidget(np, func() {})
 	//w.state.state = true // HACK
 	w.state.SetParent(w) // For its Layout() to work...
+
+	w.label = NewTextLabelWidgetString(mathgl.Vec2d{w.state.Size()[0] + 2, 0}, title) // HACK, should use FlowLayout or something
+	w.label.SetParent(w)                                                              // For its Layout() to work...
 
 	// HACK: Set position of child
 	w.child.Pos()[1] = w.state.Size()[1] + 2
@@ -2144,7 +2226,7 @@ func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter) *CollapsibleWidget {
 
 func (w *CollapsibleWidget) Layout() {
 	// HACK
-	Widgets := []Widgeter{w.state}
+	Widgets := []Widgeter{w.state, w.label}
 	if w.state.State() {
 		Widgets = append(Widgets, w.child)
 	}
@@ -2169,6 +2251,7 @@ func (w *CollapsibleWidget) Render() {
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 
 	w.state.Render()
+	w.label.Render()
 
 	if w.state.State() {
 		w.child.Render()
@@ -3471,7 +3554,11 @@ type GoonWidget struct {
 }
 
 func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
-	return newGoonWidget(pos, GetParentArgExprAsString(1)[1:], reflect.ValueOf(a))
+	title := GetParentArgExprAsString(1)
+	if !strings.HasPrefix(title, "&") {
+		panic("NewGoonWidget: Need to pass address of value.")
+	}
+	return newGoonWidget(pos, title[1:], reflect.ValueOf(a))
 }
 
 func newGoonWidget(pos mathgl.Vec2d, title string, a reflect.Value) *GoonWidget {
@@ -4611,7 +4698,7 @@ func (this *highlightedGoContent) Update() {
 
 		offset := uint32(fset.Position(pos).Offset)
 
-		const semanticHighlighting = true
+		const semanticHighlighting = false
 		if !semanticHighlighting {
 			switch {
 			case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
@@ -4621,7 +4708,7 @@ func (this *highlightedGoContent) Update() {
 			case lit == "false" || lit == "true":
 				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.008, 0.024, 1}})
 			case tok == token.COMMENT:
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.706, 0.094}})
+				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.506, 0.094}})
 			default:
 				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
 			}
@@ -4633,7 +4720,7 @@ func (this *highlightedGoContent) Update() {
 				r, g, b := colorspace.HSLToRGB(hue*360, 1, 0.3)
 				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{r, g, b}})
 			case tok == token.COMMENT:
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.706, 0.094}})
+				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.506, 0.094}})
 			default:
 				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
 			}
@@ -4987,7 +5074,7 @@ func (w *TextBoxWidget) Render() {
 					case lit == "false" || lit == "true":
 						gl.Color3d(0.008, 0.024, 1)
 					case tok == token.COMMENT:
-						gl.Color3d(0, 0.706, 0.094)
+						gl.Color3d(0, 0.506, 0.094)
 					default:
 						gl.Color3d(0, 0, 0)
 					}
@@ -6241,7 +6328,7 @@ func main() {
 			template.AddSources(folderListing)
 
 			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
-			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff)
+			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff, "git diff")
 
 			// ---
 
@@ -6263,7 +6350,7 @@ func main() {
 			template2.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 
 			build := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template2)
-			nextTool2Collapsible := NewCollapsibleWidget(np, build)
+			nextTool2Collapsible := NewCollapsibleWidget(np, build, "go build")
 
 			// Go Compile Errors hardcoded TEST
 			{
@@ -6276,13 +6363,16 @@ func main() {
 
 			nextTool3, typeCheckedPackage := NewTest4Widget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor)
 			globalTypeCheckedPackage = typeCheckedPackage // HACK
-			nextTool3Collapsible := NewCollapsibleWidget(np, nextTool3)
+			nextTool3Collapsible := NewCollapsibleWidget(np, nextTool3, "typeCheckedPackage verbose")
+
+			typeUnderCaretWidget := NewTypeUnderCaretWidget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor, typeCheckedPackage)
+			nextTool3bCollapsible := NewCollapsibleWidget(np, typeUnderCaretWidget, "Type")
 
 			// ---
 
 			// DEBUG: Goon widget of typeCheckedPackage
-			nextTool4 := NewCompositeWidget(np, []Widgeter{NewGoonWidget(mathgl.Vec2d{20, 0}, typeCheckedPackage)})
-			nextTool4Collapsible := NewCollapsibleWidget(np, nextTool4)
+			nextTool4 := NewCompositeWidget(np, []Widgeter{NewGoonWidget(mathgl.Vec2d{20, 0}, &typeCheckedPackage)})
+			nextTool4Collapsible := NewCollapsibleWidget(np, nextTool4, "goon of typeCheckedPackage")
 
 			// TEST: Add goto declaration extension to editor
 			{
@@ -6314,7 +6404,7 @@ func main() {
 
 			var nextTool5B *SearchableListWidget
 			nextTool5B, globalGoSymbols = NewTest5BWidget(np, typeCheckedPackage)
-			nextTool5BCollapsible := NewCollapsibleWidget(np, nextTool5B)
+			nextTool5BCollapsible := NewCollapsibleWidget(np, nextTool5B, "Go To Symbol")
 
 			scrollToSymbolB := DepNode2Func{}
 			scrollToSymbolB.UpdateFunc = func(this DepNode2I) {
@@ -6352,12 +6442,12 @@ func main() {
 			// ---
 
 			nextTool6 := NewTest6OracleWidget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor)
-			nextTool6Collapsible := NewCollapsibleWidget(np, nextTool6)
+			nextTool6Collapsible := NewCollapsibleWidget(np, nextTool6, "Oracle Tool")
 			nextTool6Collapsible.state.state = true // HACK
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
@@ -6458,7 +6548,7 @@ func main() {
 					case lit == "false" || lit == "true":
 						gl.Color3d(0.008, 0.024, 1)
 					case tok == token.COMMENT:
-						gl.Color3d(0, 0.706, 0.094)
+						gl.Color3d(0, 0.506, 0.094)
 					default:
 						gl.Color3d(0, 0, 0)
 					}
