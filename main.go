@@ -22,7 +22,7 @@ import (
 	//"github.com/go-gl/glu"
 	//glu "github.com/shurcooL/goglu/glu21"
 
-	//"github.com/shurcooL/go/exp/11"
+	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/gostatus/status"
 
@@ -6047,8 +6047,7 @@ func initHttpHandlers() {
 		}
 	})))
 	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "importer api changed, exp11 needs to be updated")
-		/*importPath := r.URL.Path[1:]
+		importPath := r.URL.Path[1:]
 
 		// TODO: Cache this via DepNode2I
 		buf := new(bytes.Buffer)
@@ -6056,7 +6055,7 @@ func initHttpHandlers() {
 		exp11.InlineDotImports(buf, importPath)
 		buf.WriteString("\n```")
 
-		WriteGitHubFlavoredMarkdown(w, buf)*/
+		WriteGitHubFlavoredMarkdown(w, buf)
 	})))
 }
 
