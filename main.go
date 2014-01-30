@@ -142,12 +142,14 @@ var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 
 // Colors
 var (
+	pureWhiteColor   = mathgl.Vec3d{1, 1, 1}
 	nearlyWhiteColor = mathgl.Vec3d{0.975, 0.975, 0.975}
 	lightColor       = mathgl.Vec3d{0.85, 0.85, 0.85}
+	grayColor        = mathgl.Vec3d{0.75, 0.75, 0.75}
 	darkColor        = mathgl.Vec3d{0.35, 0.35, 0.35}
-
 	nearlyBlackColor = mathgl.Vec3d{0.025, 0.025, 0.025}
-	highlightColor   = mathgl.Vec3d{0.898, 0.765, 0.396}
+
+	highlightColor = mathgl.Vec3d{0.898, 0.765, 0.396}
 
 	selectedTextColor         = mathgl.Vec3d{195 / 255.0, 212 / 255.0, 242 / 255.0}
 	selectedTextInactiveColor = mathgl.Vec3d{240 / 255.0, 240 / 255.0, 240 / 255.0}
@@ -1399,11 +1401,14 @@ func (w *ButtonWidget) Render() {
 
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawGBox(w.pos, w.size)
+		//DrawGBox(w.pos, w.size)
+		DrawInnerBox(w.pos, w.size, highlightColor, grayColor)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawYBox(w.pos, w.size)
+		//DrawYBox(w.pos, w.size)
+		DrawInnerBox(w.pos, w.size, highlightColor, nearlyWhiteColor)
 	} else {
-		DrawNBox(w.pos, w.size)
+		//DrawNBox(w.pos, w.size)
+		DrawInnerBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor)
 	}
 
 	// Tooltip
@@ -1690,7 +1695,7 @@ func DrawYBox(pos, size mathgl.Vec2d) {
 	DrawBox(pos, size, highlightColor, nearlyWhiteColor)
 }
 func DrawGBox(pos, size mathgl.Vec2d) {
-	DrawBox(pos, size, highlightColor, mathgl.Vec3d{0.75, 0.75, 0.75})
+	DrawBox(pos, size, highlightColor, grayColor)
 }
 func DrawLGBox(pos, size mathgl.Vec2d) {
 	DrawBox(pos, size, mathgl.Vec3d{0.6, 0.6, 0.6}, lightColor)
@@ -1700,6 +1705,38 @@ func DrawGradientBox(pos, size mathgl.Vec2d, borderColor, topColor, bottomColor 
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
 	DrawBorderlessGradientBox(pos, size, topColor, bottomColor)
+}
+
+func DrawInnerBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
+	if size[0] == 0 || size[1] == 0 {
+		return
+	}
+
+	const OuterDistance = 1.5
+	gl.Begin(gl.POLYGON)
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
+	gl.Vertex2d(gl.Double(pos[0]+OuterDistance), gl.Double(pos[1]))
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]+OuterDistance))
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]-OuterDistance+size[1]))
+	gl.Vertex2d(gl.Double(pos[0]+OuterDistance), gl.Double(pos[1]+size[1]))
+	gl.Vertex2d(gl.Double(pos[0]-OuterDistance+size[0]), gl.Double(pos[1]+size[1]))
+	gl.Vertex2d(gl.Double(pos[0]+size[0]), gl.Double(pos[1]-OuterDistance+size[1]))
+	gl.Vertex2d(gl.Double(pos[0]+size[0]), gl.Double(pos[1]+OuterDistance))
+	gl.Vertex2d(gl.Double(pos[0]-OuterDistance+size[0]), gl.Double(pos[1]))
+	gl.End()
+
+	const InnerDistance = math.Sqrt2 + 0.5
+	gl.Begin(gl.POLYGON)
+	gl.Color3dv((*gl.Double)(&backgroundColor[0]))
+	gl.Vertex2d(gl.Double(pos[0]+InnerDistance), gl.Double(pos[1]+1))
+	gl.Vertex2d(gl.Double(pos[0]+1), gl.Double(pos[1]+InnerDistance))
+	gl.Vertex2d(gl.Double(pos[0]+1), gl.Double(pos[1]-InnerDistance+size[1]))
+	gl.Vertex2d(gl.Double(pos[0]+InnerDistance), gl.Double(pos[1]-1+size[1]))
+	gl.Vertex2d(gl.Double(pos[0]-InnerDistance+size[0]), gl.Double(pos[1]-1+size[1]))
+	gl.Vertex2d(gl.Double(pos[0]-1+size[0]), gl.Double(pos[1]-InnerDistance+size[1]))
+	gl.Vertex2d(gl.Double(pos[0]-1+size[0]), gl.Double(pos[1]+InnerDistance))
+	gl.Vertex2d(gl.Double(pos[0]-InnerDistance+size[0]), gl.Double(pos[1]+1))
+	gl.End()
 }
 
 const Tau = 2 * math.Pi
@@ -4970,13 +5007,14 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
-	if !hasTypingFocus {
+	//if !hasTypingFocus {
+	if true { // TEST: Try to always highlight in subtle pure white
 		_, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Highlight line
 		gl.PushMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
-		gl.Color3d(0.75, 0.75, 0.75)
+		gl.Color3dv((*gl.Double)(&pureWhiteColor[0]))
 		gl.Recti(gl.Int(0), gl.Int(caretLine*fontHeight), gl.Int(w.size[0]), gl.Int(caretLine*fontHeight)+fontHeight)
 		gl.PopMatrix()
 	}
@@ -5235,7 +5273,24 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			w.caretPosition.CreateSelectionIfNone(+1)
 			w.caretPosition.ReplaceSelectionWith("")
 		case glfw.KeyEnter:
-			w.caretPosition.ReplaceSelectionWith("\n")
+			w.caretPosition.ReplaceSelectionWith("")
+
+			//func GetLeadingTabCount() uint32
+			tabCount := 0
+			{
+				lineToCaret := w.Content.Content()[w.Content.Line(w.caretPosition.caretPosition.lineIndex).Start:w.caretPosition.Logical()]
+
+				for _, c := range lineToCaret {
+					if c == '\t' {
+						tabCount++
+					} else {
+						break
+					}
+				}
+			}
+
+			w.caretPosition.ReplaceSelectionWith("\n" + strings.Repeat("\t", tabCount))
+
 		case glfw.KeyTab:
 			w.caretPosition.ReplaceSelectionWith("\t")
 		case glfw.KeyLeft:
@@ -6986,9 +7041,11 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
-	// Give the canvas initial keyboard focus
-	// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-	keyboardPointer.OriginMapping = []Widgeter{widget}
+	if keyboardPointer != nil {
+		// Give the canvas initial keyboard focus
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		keyboardPointer.OriginMapping = []Widgeter{widget}
+	}
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
