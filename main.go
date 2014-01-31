@@ -3564,25 +3564,6 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
-type Bool struct {
-	bool
-	DepNode2Manual
-}
-
-func (t *Bool) Get() bool {
-	return t.bool
-}
-func (t *Bool) Set(value bool) {
-	if t.bool != value {
-		t.bool = value
-		ExternallyUpdated(&t.DepNode2Manual)
-	}
-}
-func (t *Bool) Toggle() {
-	t.bool = !t.bool
-	ExternallyUpdated(&t.DepNode2Manual)
-}
-
 type GoonWidget struct {
 	*CompositeWidget
 	title    string
@@ -4773,7 +4754,7 @@ func (this *highlightedGoContent) Segment(index uint32) highlightSegment {
 		panic("Segment < 0")
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments)) {
-		panic("Segment index >= max")
+		panic("Segment index >= max") // TODO: Fix this.
 		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
 	} else {
 		return this.segments[index]
@@ -4890,7 +4871,7 @@ type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
 	caretPosition  *CaretPosition
-	Private        Bool
+	Private        bool
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
 
@@ -5021,7 +5002,7 @@ func (w *TextBoxWidget) Render() {
 
 	if w.DiffsTest == nil || glfw.Release != globalWindow.GetKey(glfw.KeyLeftSuper) {
 		gl.Color3d(0, 0, 0)
-		if !w.Private.Get() {
+		if !w.Private {
 			// Render only visible lines.
 			// TODO: Generalize this.
 			const debugSmallerViewport = fontHeight
@@ -5320,12 +5301,13 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyA:
 			if inputEvent.ModifierKey == glfw.ModSuper {
+				// TODO: Not move the view
 				// Select all
 				w.caretPosition.Move(-3)
 				w.caretPosition.Move(+3, true)
 			}
 		case glfw.KeyX:
-			if !w.Private.Get() &&
+			if !w.Private &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
 				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
@@ -5334,7 +5316,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 			}
 		case glfw.KeyC:
-			if !w.Private.Get() &&
+			if !w.Private &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
 				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
@@ -6330,7 +6312,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if sublimeMode {
 
@@ -6890,7 +6872,7 @@ func main() {
 		{
 			username := NewTextBoxWidget(np)
 			password := NewTextBoxWidget(np)
-			password.Private.Set(true)
+			password.Private = true
 
 			gistButtonTrigger := NewButtonTriggerWidget(np)
 
