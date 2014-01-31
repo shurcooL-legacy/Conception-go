@@ -2928,7 +2928,7 @@ type SearchableListWidget struct {
 	ExtensionsTest []Widgeter
 }
 
-func NewSearchableListWidget(pos mathgl.Vec2d, entries Strings2) *SearchableListWidget {
+func NewSearchableListWidget(pos mathgl.Vec2d, entries SliceStringer) *SearchableListWidget {
 	searchField := NewTextFieldWidget(np)
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
 	listWidget := NewFilterableSelecterWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField)
@@ -2969,29 +2969,29 @@ func (w *SearchableListWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 
 // ---
 
-type FilterableStrings2 struct {
+type FilterableSliceStringer struct {
 	filteredEntries []fmt.Stringer
 
 	DepNode2
 }
 
 // TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
-func NewFilterableStrings2(source Strings2, filter *TextFieldWidget) *FilterableStrings2 {
-	this := &FilterableStrings2{}
+func NewFilterableSliceStringer(source SliceStringer, filter *TextFieldWidget) *FilterableSliceStringer {
+	this := &FilterableSliceStringer{}
 	this.AddSources(source, filter)
 	return this
 }
 
-func (this *FilterableStrings2) Get(index uint64) fmt.Stringer {
+func (this *FilterableSliceStringer) Get(index uint64) fmt.Stringer {
 	return this.filteredEntries[index]
 }
 
-func (this *FilterableStrings2) Len() uint64 {
+func (this *FilterableSliceStringer) Len() uint64 {
 	return uint64(len(this.filteredEntries))
 }
 
-func (this *FilterableStrings2) Update() {
-	source := this.GetSources()[0].(Strings2)
+func (this *FilterableSliceStringer) Update() {
+	source := this.GetSources()[0].(SliceStringer)
 	filter := this.GetSources()[1].(*TextFieldWidget)
 
 	this.filteredEntries = nil
@@ -3011,23 +3011,22 @@ func (this *FilterableStrings2) Update() {
 // ---
 
 // HACK: Helper struct for testing popup menu
-type debugStrings2 struct {
+type debugSliceStringer struct {
 	entries []string
 	DepNode2Manual
 }
 
-func (this *debugStrings2) Get(index uint64) fmt.Stringer {
+func (this *debugSliceStringer) Get(index uint64) fmt.Stringer {
 	return &NodeStringer{str: this.entries[index]}
 }
 
-func (this *debugStrings2) Len() uint64 {
+func (this *debugSliceStringer) Len() uint64 {
 	return uint64(len(this.entries))
 }
 
 // ---
 
-// TODO: Rename Strings2 -> SliceStringer
-type Strings2 interface {
+type SliceStringer interface {
 	Get(uint64) fmt.Stringer
 	Len() uint64
 
@@ -3049,14 +3048,14 @@ type FilterableSelecterWidget struct {
 	DepNode2Manual     // SelectionChanged
 	layoutDepNode2     DepNode2Func
 
-	entries Strings2
+	entries SliceStringer
 
 	filter *TextFieldWidget
 }
 
 // TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
-func NewFilterableSelecterWidget(pos mathgl.Vec2d, entries Strings2, filter *TextFieldWidget) *FilterableSelecterWidget {
-	entries = NewFilterableStrings2(entries, filter)
+func NewFilterableSelecterWidget(pos mathgl.Vec2d, entries SliceStringer, filter *TextFieldWidget) *FilterableSelecterWidget {
+	entries = NewFilterableSliceStringer(entries, filter)
 
 	w := &FilterableSelecterWidget{Widget: NewWidget(pos, np), entries: entries, filter: filter}
 
@@ -5335,7 +5334,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		}*/
 		case glfw.KeyR:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugStrings2{entries: []string{"one", "two", "three"}})
+				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugSliceStringer{entries: []string{"one", "two", "three"}})
 				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, globalGoSymbols)
 				// HACK: Not general at all
 				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
