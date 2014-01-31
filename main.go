@@ -4909,7 +4909,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 
 	// DEBUG, TEMPORARY: Turn on Go highlighting for everything
 	//if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
-	{
+	if _, instant := w.Content.(*MultilineContentFuncInstant); !instant { // The MultilineContentFuncInstant hack is unsafe to use with highlighting
 		highlightedGoContent := &highlightedGoContent{}
 		highlightedGoContent.AddSources(mc)
 
