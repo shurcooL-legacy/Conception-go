@@ -23,8 +23,9 @@ import (
 	//glu "github.com/shurcooL/goglu/glu21"
 
 	"github.com/shurcooL/go/exp/11"
+	"github.com/shurcooL/go/exp/12"
+	"github.com/shurcooL/go/exp/14"
 	"github.com/shurcooL/go/vcs"
-	"github.com/shurcooL/gostatus/status"
 
 	"github.com/Jragonmiris/mathgl"
 
@@ -81,7 +82,6 @@ import (
 
 	"github.com/davecheney/profile"
 
-	"path"
 	"path/filepath"
 	. "gist.github.com/5953185.git"
 
@@ -115,7 +115,6 @@ import (
 	. "gist.github.com/7802150.git"
 
 	. "gist.github.com/7519227.git"
-	"gist.github.com/8018045.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -128,6 +127,8 @@ var _ = GetExprAsString
 var _ = UnsafeReflectValue
 var _ = profile.Start
 var _ = http.ListenAndServe
+var _ = Underline
+var _ = PrintPackageFullSummary
 
 var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
@@ -139,6 +140,8 @@ var keyboardPointer *Pointer
 
 var goCompileErrorsManagerTest GoCompileErrorsManagerTest
 var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
+
+var booVcs *exp12.MaybeVcsRepo
 
 // Colors
 var (
@@ -1185,38 +1188,16 @@ func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) (
 
 // =====
 
-type goPackages struct {
-	entries []fmt.Stringer
-
-	DepNode2
+type goPackagesSliceStringer struct {
+	*exp14.GoPackages
 }
 
-func (this *goPackages) Get(index uint64) fmt.Stringer {
-	return this.entries[index]
+func (this *goPackagesSliceStringer) Get(index uint64) fmt.Stringer {
+	return this.Entries[index]
 }
 
-func (this *goPackages) Len() uint64 {
-	return uint64(len(this.entries))
-}
-
-func (this *goPackages) Update() {
-	// TODO: Have a source?
-
-	// TODO: Make it load in background, without blocking, etc.
-	{
-		goPackages := make(chan *GoPackage, 64)
-
-		go gist8018045.GetGoPackages(goPackages)
-
-		this.entries = nil
-		for {
-			if goPackage, ok := <-goPackages; ok {
-				this.entries = append(this.entries, goPackage)
-			} else {
-				break
-			}
-		}
-	}
+func (this *goPackagesSliceStringer) Len() uint64 {
+	return uint64(len(this.Entries))
 }
 
 // ---
@@ -1240,9 +1221,9 @@ func (this *GoPackageSelecterAdapter) GetSelectedGoPackage() *GoPackage {
 }
 
 func NewGoPackageListingWidget() *SearchableListWidget {
-	goPackages := &goPackages{}
+	goPackagesSliceStringer := &goPackagesSliceStringer{&exp14.GoPackages{}}
 
-	w := NewSearchableListWidget(np, goPackages)
+	w := NewSearchableListWidget(np, goPackagesSliceStringer)
 	return w
 }
 
@@ -2821,7 +2802,7 @@ func (this *DepDumper) Update() {
 
 // ---
 
-type MultilineContentDepDumper struct {
+/*type MultilineContentDepDumper struct {
 	*MultilineContent
 	DepNode2
 }
@@ -2834,9 +2815,10 @@ func NewMultilineContentDepDumper(sources ...DepNode2I) MultilineContentI {
 
 func (this *MultilineContentDepDumper) Update() {
 	//content := TrimLastNewline(goon.Sdump(this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected()))
-	content := this.Content() + "+"
+	//content := this.Content() + "+"
+	content := this.GetSources()[0].(*VcsStatus).GetSources()[0].(*VcsNode).vcs.RootPath() + "\n" + this.GetSources()[0].(*VcsStatus).status
 	SetViewGroup(this.MultilineContent, content)
-}
+}*/
 
 // ---
 
@@ -6002,7 +5984,7 @@ func initHttpHandlers() {
 			return
 		}
 
-		_, plain := r.URL.Query()["plain"]
+		/*_, plain := r.URL.Query()["plain"]
 		switch plain {
 		case true:
 			w.Header().Set("Content-Type", "text/plain")
@@ -6056,7 +6038,7 @@ func initHttpHandlers() {
 						cmd := exec.Command("git", "diff", "--no-ext-diff")
 						cmd.Dir = goPackage.Bpkg.Dir
 						if outputBytes, err := cmd.CombinedOutput(); err == nil {
-							b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
+							b += "\n" /*+ `<a id="git-diff"></a>`* / + Underline("git diff")
 							b += "\n```diff\n" + string(outputBytes) + "\n```\n"
 						}
 					}
@@ -6080,7 +6062,7 @@ func initHttpHandlers() {
 			//w.Write(blackfriday.MarkdownCommon([]byte(b)))
 
 			WriteGitHubFlavoredMarkdown(w, strings.NewReader(b))
-		}
+		}*/
 	})))
 	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		importPath := r.URL.Path[1:]
@@ -6944,6 +6926,28 @@ func main() {
 			widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 240}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go"))
 		}
 
+		// TEST: Live vcs status of a single repo
+		if true {
+			booVcs = exp12.NewMaybeVcsRepo("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Go-Package-Store/")
+			MakeUpdated(booVcs)
+
+			params := func() interface{} {
+				return []interface{}{
+					booVcs.VcsState.Vcs.RootPath(),
+					booVcs.VcsState.VcsLocal.Status,
+				}
+			}
+
+			action := func(params interface{}) string {
+				rootPath := params.([]interface{})[0].(string)
+				vcsStatus := params.([]interface{})[1].(string)
+
+				return rootPath + "\n" + vcsStatus
+			}
+
+			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{800, 450}, false, []DepNode2I{booVcs.VcsState.VcsLocal}, params, action))
+		}
+
 		// Diff experiment
 		{
 			box1 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(`const Tau = 2 * math.Pi
@@ -7045,6 +7049,11 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 
 		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
 		UniversalClock.NotifyAllListeners()
+
+		// TEMPORARY, HACK
+		if booVcs != nil {
+			ExternallyUpdated(booVcs.VcsState.VcsLocal.GetSources()[1].(DepNode2ManualI)) // TODO: Updating this every frame is very slow (and should be done in background, not block main thread)
+		}
 
 		// DepNode2 dependency resolution
 		// TODO: General solution
