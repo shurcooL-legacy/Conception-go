@@ -75,7 +75,6 @@ import (
 
 	"hash/crc32"
 	"code.google.com/p/chroma/f64/colorspace"
-	"code.google.com/p/go.tools/go/exact"
 	"code.google.com/p/go.tools/go/types"
 	. "gist.github.com/7576804.git"
 	"honnef.co/go/importer"
@@ -761,8 +760,7 @@ func (t *typeCheckedPackage) Update() {
 	imp.Config.UseGcFallback = true
 	cfg := &types.Config{Import: imp.Import}
 	info := &types.Info{
-		Types:      make(map[ast.Expr]types.Type),
-		Values:     make(map[ast.Expr]exact.Value),
+		Types:      make(map[ast.Expr]types.TypeAndValue),
 		Objects:    make(map[*ast.Ident]types.Object),
 		Implicits:  make(map[ast.Node]types.Object),
 		Selections: make(map[*ast.SelectorExpr]*types.Selection),
@@ -7072,7 +7070,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 
 			widget.Render()
 
-			//spinner.NotifyChange()
 			fpsWidget.PushTimeToRender(time.Since(frameStartTime).Seconds() * 1000)
 			window.SwapBuffers()
 			runtime.Gosched()
