@@ -73,8 +73,6 @@ import (
 
 	. "gist.github.com/6724654.git"
 
-	"hash/crc32"
-	"code.google.com/p/chroma/f64/colorspace"
 	"code.google.com/p/go.tools/go/types"
 	. "gist.github.com/7576804.git"
 	"honnef.co/go/importer"
@@ -4695,32 +4693,17 @@ func (this *highlightedGoContent) Update() {
 
 		offset := uint32(fset.Position(pos).Offset)
 
-		const semanticHighlighting = false
-		if !semanticHighlighting {
-			switch {
-			case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.004, 0, 0.714}})
-			case tok.IsLiteral() && tok != token.IDENT:
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.804, 0, 0}})
-			case lit == "false" || lit == "true":
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.008, 0.024, 1}})
-			case tok == token.COMMENT:
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.506, 0.094}})
-			default:
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
-			}
-		} else {
-			switch {
-			case tok == token.IDENT && lit != "":
-				hash := crc32.ChecksumIEEE([]byte(lit))
-				hue := float64(hash) / (1 << 32)
-				r, g, b := colorspace.HSLToRGB(hue*360, 1, 0.3)
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{r, g, b}})
-			case tok == token.COMMENT:
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.506, 0.094}})
-			default:
-				this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
-			}
+		switch {
+		case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.004, 0, 0.714}})
+		case tok.IsLiteral() && tok != token.IDENT:
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.804, 0, 0}})
+		case lit == "false" || lit == "true":
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.008, 0.024, 1}})
+		case tok == token.COMMENT:
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.506, 0.094}})
+		default:
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
 		}
 	}
 
