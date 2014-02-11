@@ -107,7 +107,7 @@ import (
 
 	. "gist.github.com/7728088.git"
 
-	. "gist.github.com/7729255.git"
+	//. "gist.github.com/7729255.git"
 
 	. "gist.github.com/7651991.git"
 
@@ -4730,10 +4730,10 @@ func (this *highlightedGoContent) Update() {
 
 func (this *highlightedGoContent) Segment(index uint32) highlightSegment {
 	if index < 0 {
-		panic("Segment < 0")
+		//fmt.Println("warning: Segment < 0")
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments)) {
-		panic("Segment index >= max") // TODO: Fix this.
+		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
 		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
 	} else {
 		return this.segments[index]
@@ -6794,6 +6794,19 @@ func main() {
 		// `gofmt -r rule` experiment
 		{
 			in := NewTextBoxWidget(np)
+			SetViewGroup(in.Content, `package main
+
+import "bytes"
+
+func main() {
+	a := []byte("something")
+	b := []byte("or other")
+
+	if bytes.Compare(a, b) != 0 {
+		println("Mismatch.")
+	}
+}
+`)
 
 			validFunc := func(c MultilineContentI) bool {
 				_, err := parser.ParseExpr(c.Content())
@@ -6801,6 +6814,9 @@ func main() {
 			}
 			from := NewTextBoxValidationWidget(np, validFunc)
 			to := NewTextBoxValidationWidget(np, validFunc)
+
+			SetViewGroup(from.Content, "bytes.Compare(a, b) != 0")
+			SetViewGroup(to.Content, "!bytes.Equal(a, b)")
 
 			/* debug
 			template := new(CmdTemplate)
@@ -6816,21 +6832,37 @@ func main() {
 			out := NewLiveCmdExpeWidget(np, []DepNodeI{in, cmd}, template)
 			*/
 
-			nameArgs := StringsFunc(func() []string {
+			/*nameArgs := StringsFunc(func() []string {
 				out := []string{"gofmt"}
 				if from.IsValidTEST() && to.IsValidTEST() {
 					out = append(out, "-r", fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()))
 				}
 				return out
 			})
-			template := NewCmdTemplateDynamic(nameArgs)
-			template.Stdin = func() io.Reader { return NewContentReader(in.Content) } // This is not a race condition only because template.NewCommand() gets called from same thread that updates in.Content.
+			template := NewCmdTemplateDynamic(nameArgs)*/
 
-			debugOutput := func() string {
+			template := NewCmdTemplateDynamic2()
+			template.UpdateFunc = func(this DepNode2I) {
+				inContent := this.GetSources()[0].(MultilineContentI)
+				from := this.GetSources()[1].(*TextBoxValidationWidget)
+				to := this.GetSources()[2].(*TextBoxValidationWidget)
+
+				params := []string{}
+				if from.IsValidTEST() && to.IsValidTEST() {
+					params = append(params, "-r", fmt.Sprintf("%s -> %s", from.Content.Content(), to.Content.Content()))
+				}
+
+				template.Template = NewCmdTemplate("gofmt", params...)
+				template.Template.Stdin = func() io.Reader { return NewContentReader(inContent) } // This is not a race condition only because template.NewCommand() gets called from same thread that updates in.Content.
+			}
+			template.AddSources(in.Content, from, to)
+
+			/*debugOutput := func() string {
 				cmd := template.NewCommand()
 				return fmt.Sprintf("%#v", cmd.Args)
 			}
-			out := NewTextLabelWidgetContentFunc(np, debugOutput, []DepNodeI{&UniversalClock})
+			out := NewTextLabelWidgetContentFunc(np, debugOutput, []DepNodeI{&UniversalClock})*/
+			out := NewLiveCmdExpeWidget(np, []DepNode2I{template}, template)
 
 			//out.AddChangeListener(ChangeListenerFunc(func() {
 			/*refresh := NewButtonWidget(np, func() {
@@ -6845,6 +6877,28 @@ func main() {
 			})*/
 
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
+
+			box1 := in
+			box2 := out
+
+			doDiff := DepNode2Func{}
+			doDiff.UpdateFunc = func(this DepNode2I) {
+				left := this.GetSources()[0].(MultilineContentI)
+				right := this.GetSources()[1].(MultilineContentI)
+
+				dmp := diffmatchpatch.New()
+				diffs := dmp.DiffMain(left.Content(), right.Content(), true)
+				box1.DiffsTest = diffs
+				box1.Side = -1
+				box2.DiffsTest = diffs
+				box2.Side = +1
+			}
+			doDiff.AddSources(box1.Content, box2.Content)
+			keepUpdatedTEST = append(keepUpdatedTEST, &doDiff)
+
+			highlightedDiff := &highlightedDiff{}
+			highlightedDiff.AddSources(box1.Content, box2.Content)
+			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff)
 		}
 
 		// +Gist Button
