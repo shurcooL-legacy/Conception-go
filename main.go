@@ -101,6 +101,8 @@ import (
 
 	"github.com/sergi/go-diff/diffmatchpatch"
 
+	"github.com/mb0/diff"
+
 	"code.google.com/p/go.tools/astutil"
 
 	. "gist.github.com/7728088.git"
@@ -4829,6 +4831,173 @@ func (this *highlightedDiffIterator) Advance(span uint32) *TextStyle {
 
 // ---
 
+type tokLit struct {
+	offset uint32
+	tok    token.Token
+	lit    string
+}
+
+type tokenizedGoContent struct {
+	segments []tokLit
+
+	DepNode2
+}
+
+func (this *tokenizedGoContent) Update() {
+	content := this.GetSources()[0].(MultilineContentI)
+
+	this.segments = nil
+
+	src := []byte(content.Content())
+	//src := []byte(w.Content.Content()[w.Content.Line(beginLineIndex).Start:w.Content.Line(endLineIndex).Start])
+
+	var s scanner.Scanner
+	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(src))
+	s.Init(file, src, nil, scanner.ScanComments)
+
+	// Repeated calls to Scan yield the token sequence found in the input.
+	for {
+		pos, tok, lit := s.Scan()
+		if tok == token.EOF {
+			break
+		}
+
+		offset := uint32(fset.Position(pos).Offset)
+
+		this.segments = append(this.segments, tokLit{offset: offset, tok: tok, lit: lit})
+	}
+
+	// Fake last element
+	this.segments = append(this.segments, tokLit{offset: uint32(content.LenContent())})
+}
+
+func (this *tokenizedGoContent) Segment(index uint32) tokLit {
+	if index < 0 {
+		//fmt.Println("warning: Segment < 0")
+		return tokLit{offset: 0}
+	} else if index >= uint32(len(this.segments)) {
+		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
+		return tokLit{offset: uint32(this.segments[len(this.segments)-1].offset)}
+	} else {
+		return this.segments[index]
+	}
+}
+func (this *tokenizedGoContent) LenSegments() int {
+	return len(this.segments)
+}
+
+type tokenizedDiffHelper struct {
+	left  *tokenizedGoContent
+	right *tokenizedGoContent
+}
+
+func (this *tokenizedDiffHelper) Equal(i, j int) bool {
+	return this.left.Segment(uint32(i)).tok == this.right.Segment(uint32(j)).tok &&
+		this.left.Segment(uint32(i)).lit == this.right.Segment(uint32(j)).lit
+}
+
+type tokenizedDiff struct {
+	segments []highlightSegment
+	leftSide bool
+
+	DepNode2
+}
+
+func (this *tokenizedDiff) NewIterator(offset uint32) HighlighterIterator {
+	return NewTokenizedDiffIterator(this, offset)
+}
+
+func (this *tokenizedDiff) Update() {
+	left := this.GetSources()[0].(*tokenizedGoContent)
+	right := this.GetSources()[1].(*tokenizedGoContent)
+
+	this.segments = nil
+
+	dmp := tokenizedDiffHelper{left: left, right: right}
+	diffs := diff.Diff(left.LenSegments(), right.LenSegments(), &dmp)
+
+	// Fake first element
+	this.segments = append(this.segments, highlightSegment{offset: 0})
+
+	for _, diff := range diffs {
+		if !this.leftSide && diff.Ins > 0 {
+			beginOffset := right.Segment(uint32(diff.B)).offset
+			endOffset := right.Segment(uint32(diff.B + diff.Ins)).offset
+			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: mathgl.Vec3d{0.8, 1, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: endOffset})
+		} else if this.leftSide && diff.Del > 0 {
+			beginOffset := left.Segment(uint32(diff.A)).offset
+			endOffset := left.Segment(uint32(diff.A + diff.Del)).offset
+			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: mathgl.Vec3d{1, 0.8, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: endOffset})
+		}
+	}
+
+	// Fake last element
+	this.segments = append(this.segments, highlightSegment{offset: uint32(500000000)}) // TODO, HACK
+}
+
+func (this *tokenizedDiff) Segment(index uint32) highlightSegment {
+	if index < 0 {
+		//fmt.Println("warning: Segment < 0")
+		return highlightSegment{offset: 0}
+	} else if index >= uint32(len(this.segments)) {
+		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
+		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+	} else {
+		return this.segments[index]
+	}
+}
+func (this *tokenizedDiff) LenSegments() int {
+	return len(this.segments)
+}
+
+type tokenizedDiffIterator struct {
+	hl     *tokenizedDiff
+	offset uint32
+	index  uint32
+}
+
+func NewTokenizedDiffIterator(hl *tokenizedDiff, offset uint32) *tokenizedDiffIterator {
+	return &tokenizedDiffIterator{
+		hl:     hl,
+		offset: offset,
+		// Binary search for the first entry that ends past the beginning of visible text
+		index: uint32(sort.Search(hl.LenSegments()-1, func(i int) bool {
+			return hl.Segment(uint32(i)+1).offset > offset
+		})),
+	}
+}
+
+func (this *tokenizedDiffIterator) Next() uint32 {
+	return this.hl.Segment(this.index+1).offset - this.offset
+}
+
+func (this *tokenizedDiffIterator) Current() *TextStyle {
+	color := this.hl.Segment(this.index).color
+	colorPtr := &color
+	if color.ApproxEqual(mathgl.Vec3d{}) {
+		colorPtr = nil
+	}
+	return &TextStyle{
+		BackgroundColor: &colorPtr,
+	}
+}
+
+func (this *tokenizedDiffIterator) Advance(span uint32) *TextStyle {
+	if span < this.Next() {
+		this.offset += span
+		return nil
+	} else {
+		this.offset += span
+		this.index++
+		return this.Current()
+	}
+}
+
+// ---
+
 type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
@@ -6879,9 +7048,27 @@ func main() {
 			doDiff.AddSources(box1.Content, box2.Content)
 			keepUpdatedTEST = append(keepUpdatedTEST, &doDiff)
 
-			highlightedDiff := &highlightedDiff{}
+			/*highlightedDiff := &highlightedDiff{}
 			highlightedDiff.AddSources(box1.Content, box2.Content)
-			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff)
+			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff)*/
+
+			tokenizedGoContent1 := &tokenizedGoContent{}
+			tokenizedGoContent1.AddSources(box1.Content)
+
+			tokenizedGoContent2 := &tokenizedGoContent{}
+			tokenizedGoContent2.AddSources(box2.Content)
+
+			tokenizedDiff1 := &tokenizedDiff{leftSide: true}
+			tokenizedDiff1.AddSources(tokenizedGoContent1, tokenizedGoContent2)
+
+			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+			tokenizedDiff2 := &tokenizedDiff{}
+			tokenizedDiff2.AddSources(tokenizedGoContent1, tokenizedGoContent2)
+
+			//box1.HighlightersTest = append(box1.HighlightersTest, tokenizedDiffSide1{tokenizedDiff})
+			//box2.HighlightersTest = append(box2.HighlightersTest, tokenizedDiffSide2{tokenizedDiff})
+			box1.HighlightersTest = append(box1.HighlightersTest, tokenizedDiff1)
+			box2.HighlightersTest = append(box2.HighlightersTest, tokenizedDiff2)
 		}
 
 		// +Gist Button
