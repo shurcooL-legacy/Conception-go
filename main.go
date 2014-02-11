@@ -4731,6 +4731,7 @@ func (this *highlightedGoContent) LenSegments() int {
 // ---
 
 type highlightedDiff struct {
+	leftSide bool
 	segments []highlightSegment
 
 	DepNode2
@@ -4752,29 +4753,32 @@ func (this *highlightedDiff) Update() {
 	offset := uint32(0)
 
 	for _, diff := range diffs {
-		//if diff.Type == w.Side && diff.Type == -1 {
-		//	glt.BackgroundColor = &mathgl.Vec3d{1, 0.8, 0.8}
-		//} else if diff.Type == w.Side && diff.Type == +1 {
-		if diff.Type == +1 {
+		if this.leftSide && diff.Type == -1 {
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{1, 0.8, 0.8}})
+			offset += uint32(len(diff.Text))
+		} else if !this.leftSide && diff.Type == +1 {
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.8, 1, 0.8}})
+			offset += uint32(len(diff.Text))
 		} else if diff.Type == 0 {
 			this.segments = append(this.segments, highlightSegment{offset: offset})
-		} else {
-			continue
+			offset += uint32(len(diff.Text))
 		}
-		offset += uint32(len(diff.Text))
 	}
 
 	// Fake last element
-	this.segments = append(this.segments, highlightSegment{offset: uint32(right.LenContent())})
+	if this.leftSide {
+		this.segments = append(this.segments, highlightSegment{offset: uint32(left.LenContent())})
+	} else {
+		this.segments = append(this.segments, highlightSegment{offset: uint32(right.LenContent())})
+	}
 }
 
 func (this *highlightedDiff) Segment(index uint32) highlightSegment {
 	if index < 0 {
-		panic("Segment < 0")
+		//fmt.Println("warning: Segment < 0")
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments)) {
-		panic("Segment index >= max")
+		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
 		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
 	} else {
 		return this.segments[index]
@@ -4898,8 +4902,8 @@ func (this *tokenizedDiffHelper) Equal(i, j int) bool {
 }
 
 type tokenizedDiff struct {
-	segments []highlightSegment
 	leftSide bool
+	segments []highlightSegment
 
 	DepNode2
 }
@@ -5041,6 +5045,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *Te
 
 	// DEBUG, TEMPORARY: Turn on Go highlighting for everything
 	//if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
+	//if false {
 	if _, instant := w.Content.(*MultilineContentFuncInstant); !instant { // The MultilineContentFuncInstant hack is unsafe to use with highlighting
 		highlightedGoContent := &highlightedGoContent{}
 		highlightedGoContent.AddSources(mc)
@@ -7048,9 +7053,14 @@ func main() {
 			doDiff.AddSources(box1.Content, box2.Content)
 			keepUpdatedTEST = append(keepUpdatedTEST, &doDiff)
 
-			/*highlightedDiff := &highlightedDiff{}
-			highlightedDiff.AddSources(box1.Content, box2.Content)
-			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff)*/
+			/*highlightedDiff1 := &highlightedDiff{leftSide: true}
+			highlightedDiff1.AddSources(box1.Content, box2.Content)
+			box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
+
+			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+			highlightedDiff2 := &highlightedDiff{}
+			highlightedDiff2.AddSources(box1.Content, box2.Content)
+			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)*/
 
 			tokenizedGoContent1 := &tokenizedGoContent{}
 			tokenizedGoContent1.AddSources(box1.Content)
