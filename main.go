@@ -7224,9 +7224,14 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			doDiff.AddSources(box1.Content, box2.Content)
 			keepUpdatedTEST = append(keepUpdatedTEST, &doDiff)
 
-			highlightedDiff := &highlightedDiff{}
-			highlightedDiff.AddSources(box1.Content, box2.Content)
-			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff)
+			highlightedDiff1 := &highlightedDiff{leftSide: true}
+			highlightedDiff1.AddSources(box1.Content, box2.Content)
+			box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
+
+			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+			highlightedDiff2 := &highlightedDiff{}
+			highlightedDiff2.AddSources(box1.Content, box2.Content)
+			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
 		}
 
 	} else if false {
