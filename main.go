@@ -26,6 +26,7 @@ import (
 	"github.com/shurcooL/go/exp/12"
 	"github.com/shurcooL/go/exp/14"
 	"github.com/shurcooL/go/vcs"
+	"github.com/shurcooL/gostatus/status"
 
 	"github.com/Jragonmiris/mathgl"
 
@@ -79,6 +80,7 @@ import (
 
 	"github.com/davecheney/profile"
 
+	"path"
 	"path/filepath"
 	. "gist.github.com/5953185.git"
 
@@ -140,7 +142,7 @@ var keyboardPointer *Pointer
 var goCompileErrorsManagerTest GoCompileErrorsManagerTest
 var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 
-var booVcs *exp12.MaybeVcsRepo
+var booVcs *exp12.Directory
 
 // Colors
 var (
@@ -6139,7 +6141,7 @@ func initHttpHandlers() {
 			return
 		}
 
-		/*_, plain := r.URL.Query()["plain"]
+		_, plain := r.URL.Query()["plain"]
 		switch plain {
 		case true:
 			w.Header().Set("Content-Type", "text/plain")
@@ -6175,25 +6177,25 @@ func initHttpHandlers() {
 
 			b += "\n---\n\n"
 
-			if goPackage.Vcs != nil {
+			if goPackage.Dir.Repo != nil {
 				b += "```\n"
-				if goPackage.Status == "" {
+				if goPackage.Dir.Repo.VcsLocal.Status == "" {
 					b += "nothing to commit, working directory clean\n\n"
 				} else {
-					b += goPackage.Status + "\n"
+					b += goPackage.Dir.Repo.VcsLocal.Status + "\n"
 				}
-				b += "Branch: " + goPackage.LocalBranch + "\n"
-				b += "Local:  " + goPackage.Local + "\n"
-				b += "Remote: " + goPackage.Remote + "\n"
+				b += "Branch: " + goPackage.Dir.Repo.VcsLocal.LocalBranch + "\n"
+				b += "Local:  " + goPackage.Dir.Repo.VcsLocal.LocalRev + "\n"
+				b += "Remote: " + goPackage.Dir.Repo.VcsRemote.RemoteRev + "\n"
 				b += "```\n"
 
 				// git diff
-				if goPackage.Status != "" {
-					if goPackage.Vcs.Type() == vcs.Git {
+				if goPackage.Dir.Repo.VcsLocal.Status != "" {
+					if goPackage.Dir.Repo.Vcs.Type() == vcs.Git {
 						cmd := exec.Command("git", "diff", "--no-ext-diff")
 						cmd.Dir = goPackage.Bpkg.Dir
 						if outputBytes, err := cmd.CombinedOutput(); err == nil {
-							b += "\n" /*+ `<a id="git-diff"></a>`* / + Underline("git diff")
+							b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
 							b += "\n```diff\n" + string(outputBytes) + "\n```\n"
 						}
 					}
@@ -6217,7 +6219,7 @@ func initHttpHandlers() {
 			//w.Write(blackfriday.MarkdownCommon([]byte(b)))
 
 			WriteGitHubFlavoredMarkdown(w, strings.NewReader(b))
-		}*/
+		}
 	})))
 	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		importPath := r.URL.Path[1:]
@@ -7160,13 +7162,13 @@ func main() {
 
 		// TEST: Live vcs status of a single repo
 		if true {
-			booVcs = exp12.NewMaybeVcsRepo("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Go-Package-Store/")
+			booVcs = exp12.NewDirectory("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Go-Package-Store/")
 			MakeUpdated(booVcs)
 
 			params := func() interface{} {
 				return []interface{}{
-					booVcs.VcsState.Vcs.RootPath(),
-					booVcs.VcsState.VcsLocal.Status,
+					booVcs.Repo.Vcs.RootPath(),
+					booVcs.Repo.VcsLocal.Status,
 				}
 			}
 
@@ -7177,7 +7179,7 @@ func main() {
 				return rootPath + "\n" + vcsStatus
 			}
 
-			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{800, 450}, false, []DepNode2I{booVcs.VcsState.VcsLocal}, params, action))
+			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{800, 450}, false, []DepNode2I{booVcs.Repo.VcsLocal}, params, action))
 		}
 
 		// Diff experiment
@@ -7289,7 +7291,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 
 		// TEMPORARY, HACK
 		if booVcs != nil {
-			ExternallyUpdated(booVcs.VcsState.VcsLocal.GetSources()[1].(DepNode2ManualI)) // TODO: Updating this every frame is very slow (and should be done in background, not block main thread)
+			ExternallyUpdated(booVcs.Repo.VcsLocal.GetSources()[1].(DepNode2ManualI)) // TODO: Updating this every frame is very slow (and should be done in background, not block main thread)
 		}
 
 		// DepNode2 dependency resolution
