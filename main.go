@@ -5467,6 +5467,21 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					w.caretPosition.ReplaceSelectionWith(clipboard)
 				}
 			}
+		case glfw.KeyE:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if fileUri, ok := w.Content.GetUriForProtocol("file://"); ok {
+					// Open in external editor
+					func(filePath string) {
+
+						// HACK: OS X specific
+						cmd := exec.Command("open", filePath)
+						err := cmd.Start()
+						CheckError(err)
+						go cmd.Wait() // It looks like I need to wait for the process, else it doesn't terminate properly
+
+					}(string(fileUri[len("file://"):]))
+				}
+			}
 		/*case glfw.KeyR:
 		if inputEvent.ModifierKey == glfw.ModSuper {
 			ExternallyUpdated(w.Content) // TODO: Need to make this apply only for event-based things; no point in forcibly updating pure data structures
@@ -6450,7 +6465,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if sublimeMode {
 
@@ -7323,5 +7338,5 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		}
 	}
 
-	goon.DumpExpr(os.Remove("./Con2RunBin")) // TODO: Generalize this
+	os.Remove("./Con2RunBin") // TODO: Generalize this
 }
