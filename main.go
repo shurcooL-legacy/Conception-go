@@ -2911,9 +2911,10 @@ type SearchableListWidget struct {
 }
 
 func NewSearchableListWidget(pos mathgl.Vec2d, entries SliceStringer) *SearchableListWidget {
-	searchField := NewTextFieldWidget(np)
+	//searchField := NewTextFieldWidget(np)
+	searchField := NewTextBoxWidget(np)
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
-	listWidget := NewFilterableSelecterWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField)
+	listWidget := NewFilterableSelecterWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField.Content)
 
 	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidget})}
 
@@ -2957,8 +2958,7 @@ type FilterableSliceStringer struct {
 	DepNode2
 }
 
-// TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
-func NewFilterableSliceStringer(source SliceStringer, filter *TextFieldWidget) *FilterableSliceStringer {
+func NewFilterableSliceStringer(source SliceStringer, filter MultilineContentI) *FilterableSliceStringer {
 	this := &FilterableSliceStringer{}
 	this.AddSources(source, filter)
 	return this
@@ -2974,14 +2974,14 @@ func (this *FilterableSliceStringer) Len() uint64 {
 
 func (this *FilterableSliceStringer) Update() {
 	source := this.GetSources()[0].(SliceStringer)
-	filter := this.GetSources()[1].(*TextFieldWidget)
+	filter := this.GetSources()[1].(MultilineContentI)
 
 	this.filteredEntries = nil
 	for index := uint64(0); index < source.Len(); index++ {
 		entry := source.Get(index).String()
 
-		if filter.Content != "" {
-			if !strings.Contains(strings.ToLower(entry), strings.ToLower(filter.Content)) { // TODO: Do case folding correctly
+		if filter.Content() != "" {
+			if !strings.Contains(strings.ToLower(entry), strings.ToLower(filter.Content())) { // TODO: Do case folding correctly
 				continue
 			}
 		}
@@ -3031,15 +3031,12 @@ type FilterableSelecterWidget struct {
 	layoutDepNode2     DepNode2Func
 
 	entries SliceStringer
-
-	filter *TextFieldWidget
 }
 
-// TODO: Change *TextFieldWidget for String interface (that includes DepNode2I)
-func NewFilterableSelecterWidget(pos mathgl.Vec2d, entries SliceStringer, filter *TextFieldWidget) *FilterableSelecterWidget {
+func NewFilterableSelecterWidget(pos mathgl.Vec2d, entries SliceStringer, filter MultilineContentI) *FilterableSelecterWidget {
 	entries = NewFilterableSliceStringer(entries, filter)
 
-	w := &FilterableSelecterWidget{Widget: NewWidget(pos, np), entries: entries, filter: filter}
+	w := &FilterableSelecterWidget{Widget: NewWidget(pos, np), entries: entries}
 
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(entries) // TODO: What about removing w when it's "deleted"?
@@ -5008,9 +5005,12 @@ type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
 	caretPosition  *CaretPosition
-	Private        bool
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
+
+	// Options
+	Private    bool
+	singleLine bool // TODO
 
 	// TESTS
 	DiffsTest []diffmatchpatch.Diff
@@ -5102,7 +5102,7 @@ func (w *TextBoxWidget) Render() {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	// HACK: Brute-force check the mouse pointer if it contains this widget
 	isOriginHit := false
