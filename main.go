@@ -619,7 +619,7 @@ type Test2Widget struct {
 }
 
 func NewTest2Widget(pos mathgl.Vec2d, field *float64) *Test2Widget {
-	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, NewMultilineContentFuncInstant(func() string { return TrimLastNewline(goon.Sdump(*field)) })), field: field}
+	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, NewMultilineContentFuncInstant(func() string { return TrimLastNewline(goon.Sdump(*field)) }), nil), field: field}
 }
 
 func (w *Test2Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -3706,7 +3706,7 @@ func setupInternals3(titleString string, a reflect.Value) Widgeter {
 		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
 	} else if a.Kind() == reflect.String && a.Addr().CanInterface() {
 		title := NewTextLabelWidgetString(np, titleString+": ")
-		t := NewTextBoxWidgetExternalContent(np, NewMultilineContentPointer(a.Addr().Interface().(*string)))
+		t := NewTextBoxWidgetExternalContent(np, NewMultilineContentPointer(a.Addr().Interface().(*string)), nil)
 		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
 	} else if vv := a; vv.CanAddr() {
 		w = newGoonWidget(tab, titleString, vv.Addr())
@@ -5008,9 +5008,7 @@ type TextBoxWidget struct {
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
 
-	// Options
-	Private    bool
-	singleLine bool // TODO
+	options TextBoxWidgetOptions
 
 	// TESTS
 	DiffsTest []diffmatchpatch.Diff
@@ -5021,16 +5019,31 @@ type TextBoxWidget struct {
 	PopupTest        *SearchableListWidget
 }
 
-func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
-	mc := NewMultilineContent()
-	return NewTextBoxWidgetExternalContent(pos, mc)
+type TextBoxWidgetOptions struct {
+	SingleLine bool // TODO
+	Private    bool
 }
 
-func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *TextBoxWidget {
+func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
+	mc := NewMultilineContent()
+	return NewTextBoxWidgetExternalContent(pos, mc, nil)
+}
+
+func NewTextBoxWidgetOptions(pos mathgl.Vec2d, options TextBoxWidgetOptions) *TextBoxWidget {
+	mc := NewMultilineContent()
+	return NewTextBoxWidgetExternalContent(pos, mc, &options)
+}
+
+func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, options *TextBoxWidgetOptions) *TextBoxWidget {
+	if options == nil {
+		options = &TextBoxWidgetOptions{}
+	}
+
 	w := &TextBoxWidget{
 		Widget:        NewWidget(pos, mathgl.Vec2d{0, 0}),
 		Content:       mc,
 		caretPosition: NewCaretPosition(mc),
+		options:       *options,
 	}
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
@@ -5140,7 +5153,7 @@ func (w *TextBoxWidget) Render() {
 
 	if w.DiffsTest == nil || glfw.Release != globalWindow.GetKey(glfw.KeyLeftSuper) {
 		gl.Color3d(0, 0, 0)
-		if !w.Private {
+		if !w.options.Private {
 			// Render only visible lines.
 			// TODO: Generalize this.
 			const debugSmallerViewport = fontHeight
@@ -5445,7 +5458,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.caretPosition.Move(+3, true)
 			}
 		case glfw.KeyX:
-			if !w.Private &&
+			if !w.options.Private &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
 				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
@@ -5454,7 +5467,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 			}
 		case glfw.KeyC:
-			if !w.Private &&
+			if !w.options.Private &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
 				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
@@ -5578,7 +5591,7 @@ type TextFileWidget struct {
 func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
 	// TODO: Opening the same file shouldn't result in a new MultilineContentFile
 	ec := NewMultilineContentFile(path)
-	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec)}
+	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec, nil)}
 	return w
 }
 
@@ -5590,7 +5603,7 @@ func (w *TextFileWidget) Path() string {
 
 func NewTextBoxWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string, dependees []DepNodeI) *TextBoxWidget {
 	mc := NewMultilineContentFunc(contentFunc, dependees)
-	w := NewTextBoxWidgetExternalContent(pos, mc)
+	w := NewTextBoxWidgetExternalContent(pos, mc, nil)
 	return w
 }
 
@@ -5678,284 +5691,6 @@ func (w *TextBoxValidationWidget) NotifyChange() {
 	if w.validFunc(w.Content) {
 		w.NotifyAllListeners()
 		ExternallyUpdated(&w.DepNode2Manual)
-	}
-}
-
-// ---
-
-type TextFieldWidget struct {
-	Widget
-	Content        string
-	DepNode2Manual // ContentChanged
-	CaretPosition  uint32
-}
-
-func NewTextFieldWidget(pos mathgl.Vec2d) *TextFieldWidget {
-	return &TextFieldWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0})}
-}
-
-func (w *TextFieldWidget) Layout() {
-	if len(w.Content) < 3 {
-		w.size[0] = float64(fontWidth * 3)
-	} else {
-		w.size[0] = float64(fontWidth * len(w.Content))
-	}
-	w.size[1] = fontHeight
-
-	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
-	w.Widget.Layout()
-}
-
-func (w *TextFieldWidget) Render() {
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
-	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
-
-	// HACK: Setting the widget size in Render() is bad, because all the input calculations will fail before it's rendered
-	w.Layout()
-
-	// HACK: Brute-force check the mouse pointer if it contains this widget
-	isOriginHit := false
-	for _, hit := range mousePointer.OriginMapping {
-		if w == hit {
-			isOriginHit = true
-			break
-		}
-	}
-	isHit := len(w.HoverPointers()) > 0
-
-	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
-	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawYBox(w.pos, w.size)
-	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawYBox(w.pos, w.size)
-	} else if hasTypingFocus {
-		DrawYBox(w.pos, w.size)
-	} else {
-		DrawNBox(w.pos, w.size)
-	}
-
-	gl.Color3d(0, 0, 0)
-	PrintSegment(w.pos, w.Content)
-
-	if hasTypingFocus {
-		// Draw caret
-		gl.PushMatrix()
-		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
-		gl.Color3d(0, 0, 0)
-		gl.Recti(gl.Int(w.CaretPosition*fontWidth-1), 0, gl.Int(w.CaretPosition*fontWidth+1), fontHeight)
-		gl.PopMatrix()
-	}
-}
-func (w *TextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
-	if len(w.Widget.Hit(ParentPosition)) > 0 {
-		return []Widgeter{w}
-	} else {
-		return nil
-	}
-}
-func (w *TextFieldWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
-
-		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
-			keyboardPointer.OriginMapping = []Widgeter{w}
-		}
-	}
-
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
-	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
-
-	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
-		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
-		if localPosition[0] < 0 {
-			w.CaretPosition = 0
-		} else if localPosition[0] > float64(len(w.Content)*fontWidth) {
-			w.CaretPosition = uint32(len(w.Content))
-		} else {
-			w.CaretPosition = uint32((localPosition[0] + fontWidth*0.5) / fontWidth)
-		}
-	}
-
-	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
-		switch glfw.Key(inputEvent.InputId) {
-		case glfw.KeyBackspace:
-			if w.CaretPosition >= 1 {
-				w.CaretPosition--
-				w.Content = w.Content[:w.CaretPosition] + w.Content[w.CaretPosition+1:]
-				ExternallyUpdated(&w.DepNode2Manual)
-			}
-		case glfw.KeyDelete:
-			if w.CaretPosition+1 <= uint32(len(w.Content)) {
-				w.Content = w.Content[:w.CaretPosition] + w.Content[w.CaretPosition+1:]
-				ExternallyUpdated(&w.DepNode2Manual)
-			}
-		case glfw.KeyLeft:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.CaretPosition = 0
-			} else if inputEvent.ModifierKey == 0 {
-				if w.CaretPosition >= 1 {
-					w.CaretPosition--
-				}
-			}
-		case glfw.KeyRight:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.CaretPosition = uint32(len(w.Content))
-			} else if inputEvent.ModifierKey == 0 {
-				if w.CaretPosition < uint32(len(w.Content)) {
-					w.CaretPosition++
-				}
-			}
-		}
-	}
-
-	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
-		w.Content = w.Content[:w.CaretPosition] + string(byte(inputEvent.InputId)) + w.Content[w.CaretPosition:]
-		ExternallyUpdated(&w.DepNode2Manual)
-		w.CaretPosition++
-	}
-}
-
-// ---
-
-type MetaCharacter struct {
-	Character byte
-	Timestamp int64
-}
-
-func NewMetaCharacter(ch byte) MetaCharacter {
-	return MetaCharacter{ch, time.Now().UnixNano()}
-}
-
-type MetaTextFieldWidget struct {
-	Widget
-	Content       []MetaCharacter
-	CaretPosition uint32
-}
-
-func NewMetaTextFieldWidget(pos mathgl.Vec2d) *MetaTextFieldWidget {
-	return &MetaTextFieldWidget{NewWidget(pos, mathgl.Vec2d{0, 0}), nil, 0}
-}
-
-func (w *MetaTextFieldWidget) Render() {
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
-
-	// HACK: Setting the widget size in Render() is bad, because all the input calculations will fail before it's rendered
-	if len(w.Content) < 3 {
-		w.size[0] = float64(fontWidth * 3)
-	} else {
-		w.size[0] = float64(fontWidth * len(w.Content))
-	}
-	w.size[1] = fontHeight
-
-	// HACK: Brute-force check the mouse pointer if it contains this widget
-	isOriginHit := false
-	for _, hit := range mousePointer.OriginMapping {
-		if w == hit {
-			isOriginHit = true
-			break
-		}
-	}
-	isHit := len(w.HoverPointers()) > 0
-
-	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
-	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawYBox(w.pos, w.size)
-	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawYBox(w.pos, w.size)
-	} else if hasTypingFocus {
-		DrawYBox(w.pos, w.size)
-	} else {
-		DrawNBox(w.pos, w.size)
-	}
-
-	now := time.Now().UnixNano()
-	for i, mc := range w.Content {
-		age := now - mc.Timestamp
-		highlight := gl.Double(age) / 10000000000
-
-		gl.Color3d(1, 1, highlight)
-		gl.Rectd(gl.Double(w.pos[0]+float64(i*8)), gl.Double(w.pos[1]), gl.Double(w.pos[0]+float64(i+1)*8), gl.Double(w.pos[1]+16))
-
-		gl.Color3d(0, 0, 0)
-		PrintSegment(mathgl.Vec2d{w.pos[0] + float64(8*i), w.pos[1]}, string(mc.Character))
-	}
-
-	if hasTypingFocus {
-		// Draw caret
-		gl.PushMatrix()
-		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
-		gl.Color3d(0, 0, 0)
-		gl.Recti(gl.Int(w.CaretPosition*8-1), 0, gl.Int(w.CaretPosition*8+1), 16)
-		gl.PopMatrix()
-	}
-}
-func (w *MetaTextFieldWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
-	if len(w.Widget.Hit(ParentPosition)) > 0 {
-		return []Widgeter{w}
-	} else {
-		return nil
-	}
-}
-func (w *MetaTextFieldWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
-
-		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		keyboardPointer.OriginMapping = []Widgeter{w}
-	}
-
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
-
-	// Need to check if either button 0 is currently down, or was released. This is so that caret gets set at cursor pos when widget gains focus.
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.Pointer.State.Button(0) || (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0)) {
-		if inputEvent.Pointer.State.Axes[0]-w.pos[0] < 0 {
-			w.CaretPosition = 0
-		} else if inputEvent.Pointer.State.Axes[0]-w.pos[0] > float64(len(w.Content)*8) {
-			w.CaretPosition = uint32(len(w.Content))
-		} else {
-			w.CaretPosition = uint32((inputEvent.Pointer.State.Axes[0] - w.pos[0] + 4) / 8)
-		}
-	}
-
-	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
-		switch glfw.Key(inputEvent.InputId) {
-		case glfw.KeyBackspace:
-			if w.CaretPosition >= 1 {
-				w.CaretPosition--
-				w.Content = append(w.Content[:w.CaretPosition], w.Content[w.CaretPosition+1:]...)
-			}
-		case glfw.KeyLeft:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.CaretPosition = 0
-			} else if inputEvent.ModifierKey == 0 {
-				if w.CaretPosition >= 1 {
-					w.CaretPosition--
-				}
-			}
-		case glfw.KeyRight:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				w.CaretPosition = uint32(len(w.Content))
-			} else if inputEvent.ModifierKey == 0 {
-				if w.CaretPosition < uint32(len(w.Content)) {
-					w.CaretPosition++
-				}
-			}
-		}
-	}
-
-	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
-		//w.Content = append(append(w.Content[:w.CaretPosition], NewMetaCharacter(byte(inputEvent.InputId))), w.Content[w.CaretPosition:]...)
-		w.Content = append(w.Content, MetaCharacter{})
-		copy(w.Content[w.CaretPosition+1:], w.Content[w.CaretPosition:])
-		w.Content[w.CaretPosition] = NewMetaCharacter(byte(inputEvent.InputId))
-		w.CaretPosition++
 	}
 }
 
@@ -6465,7 +6200,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if sublimeMode {
 
@@ -6496,7 +6231,7 @@ func main() {
 		editorFileOpener := NewFileOpener(editorContent)
 		editorFileOpener.AddSources(folderListing)
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
-		editor := NewTextBoxWidgetExternalContent(np, editorContent)
+		editor := NewTextBoxWidgetExternalContent(np, editorContent, nil)
 		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, editor))
 
 		// View sidebar
@@ -6771,13 +6506,11 @@ func main() {
 				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
 			}))
 		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mathgl.Vec2d{50, 180}, mathgl.Vec2d{0, 0}), window})
-		widgets = append(widgets, NewTextFieldWidget(mathgl.Vec2d{50, 50}))
-		widgets = append(widgets, NewMetaTextFieldWidget(mathgl.Vec2d{50, 70}))
 		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
 		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
 		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{90, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content))   // HACK: Manual test
-		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content)) // HACK: Manual test
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content, nil)) // HACK: Manual test
+		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content))    // HACK: Manual test
 
 		if false {
 			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
@@ -6880,7 +6613,7 @@ func main() {
 		//widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{160, 30}, []Widgeter{NewGoPackageListingPureWidget()}))
 
 		contentWs := NewMultilineContent()
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800 - 50, 30}, contentWs))
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800 - 50, 30}, contentWs, nil))
 		http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `<html>
 	<body>
@@ -7100,9 +6833,8 @@ func main() {
 
 		// +Gist Button
 		{
-			username := NewTextBoxWidget(np)
-			password := NewTextBoxWidget(np)
-			password.Private = true
+			username := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
+			password := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true, Private: true})
 
 			gistButtonTrigger := NewButtonTriggerWidget(np)
 
@@ -7210,7 +6942,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	for i := 0; i <= x; i++ {
 		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), ...)
 	}
-	gl.End()`))
+	gl.End()`), nil)
 			box2 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(`func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	const TwoPi = math.Pi * 2
 
@@ -7223,7 +6955,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		// Completely new line
 		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), ...)
 	}
-	gl.End()`))
+	gl.End()`), nil)
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 240}, []Widgeter{box1, box2}, nil))
 
 			doDiff := DepNode2Func{}
