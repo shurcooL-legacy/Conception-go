@@ -763,7 +763,8 @@ func (t *typeCheckedPackage) Update() {
 	cfg := &types.Config{Import: imp.Import}
 	info := &types.Info{
 		Types:      make(map[ast.Expr]types.TypeAndValue),
-		Objects:    make(map[*ast.Ident]types.Object),
+		Defs:       make(map[*ast.Ident]types.Object),
+		Uses:       make(map[*ast.Ident]types.Object),
 		Implicits:  make(map[ast.Node]types.Object),
 		Selections: make(map[*ast.SelectorExpr]*types.Selection),
 		Scopes:     make(map[ast.Node]*types.Scope),
@@ -903,8 +904,8 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, sourc
 		if ident, ok := smallestV.(*ast.Ident); ok {
 			Test4WidgetIdent = ident // HACK
 
-			if info != nil && info.Objects[ident] != nil {
-				obj := info.Objects[ident]
+			if info != nil && info.Uses[ident] != nil {
+				obj := info.Uses[ident]
 				out += ">>> " + TypeChainString(obj.Type())
 				if constObj, ok := obj.(*types.Const); ok {
 					out += fmt.Sprintf(" = %v", constObj.Val())
@@ -990,8 +991,8 @@ func NewTypeUnderCaretWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelect
 		if ident, ok := smallestV.(*ast.Ident); ok {
 			Test4WidgetIdent = ident // HACK
 
-			if info != nil && info.Objects[ident] != nil {
-				obj := info.Objects[ident]
+			if info != nil && info.Uses[ident] != nil {
+				obj := info.Uses[ident]
 				out += TypeChainString(obj.Type())
 				if constObj, ok := obj.(*types.Const); ok {
 					out += fmt.Sprintf(" = %v", constObj.Val())
@@ -1213,7 +1214,7 @@ type GoPackageSelecterAdapter struct {
 }
 
 func (this *GoPackageSelecterAdapter) GetSelectedGoPackage() *GoPackage {
-	if selected := this.Selecter.GetSelected(); selected != nil {
+	if selected := this.GetSelected(); selected != nil {
 		return selected.(*GoPackage)
 	} else {
 		return nil
@@ -2911,8 +2912,7 @@ type SearchableListWidget struct {
 }
 
 func NewSearchableListWidget(pos mathgl.Vec2d, entries SliceStringer) *SearchableListWidget {
-	//searchField := NewTextFieldWidget(np)
-	searchField := NewTextBoxWidget(np)
+	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
 	listWidget := NewFilterableSelecterWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField.Content)
 
@@ -5022,6 +5022,7 @@ type TextBoxWidget struct {
 type TextBoxWidgetOptions struct {
 	SingleLine bool // TODO
 	Private    bool
+	PopupTest  bool
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -5405,6 +5406,10 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			w.caretPosition.CreateSelectionIfNone(+1)
 			w.caretPosition.ReplaceSelectionWith("")
 		case glfw.KeyEnter:
+			if w.options.SingleLine {
+				break
+			}
+
 			w.caretPosition.ReplaceSelectionWith("")
 
 			//func GetLeadingTabCount() uint32
@@ -5500,6 +5505,11 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			ExternallyUpdated(w.Content) // TODO: Need to make this apply only for event-based things; no point in forcibly updating pure data structures
 		}*/
 		case glfw.KeyR:
+			// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
+			if !w.options.PopupTest {
+				break
+			}
+
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugSliceStringer{entries: []string{"one", "two", "three"}})
 				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, globalGoSymbols)
@@ -6200,7 +6210,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if sublimeMode {
 
@@ -6231,7 +6241,7 @@ func main() {
 		editorFileOpener := NewFileOpener(editorContent)
 		editorFileOpener.AddSources(folderListing)
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
-		editor := NewTextBoxWidgetExternalContent(np, editorContent, nil)
+		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true})
 		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, editor))
 
 		// View sidebar
@@ -6308,7 +6318,7 @@ func main() {
 							case glfw.KeyDown:
 								if inputEvent.ModifierKey == glfw.ModSuper|glfw.ModAlt {
 									if Test4WidgetIdent != nil && typeCheckedPackage.info != nil {
-										if obj := typeCheckedPackage.info.Objects[Test4WidgetIdent]; obj != nil {
+										if obj := typeCheckedPackage.info.Uses[Test4WidgetIdent]; obj != nil {
 											if file := typeCheckedPackage.fset.File(obj.Pos()); file != nil {
 												// TODO: Change folderListing selection if it's in a different file
 
