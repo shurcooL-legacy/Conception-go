@@ -4339,8 +4339,6 @@ type FileView struct {
 
 	DepNode2Manual // File content changed.
 
-	dir *exp12.Directory
-
 	lastContentQUICKHACK string // HACK: Need this here for `git diff` testing
 }
 
@@ -4350,9 +4348,6 @@ func NewFileView(path string) *FileView {
 
 	absPath, err := filepath.Abs(path)
 	CheckError(err)
-
-	dir, _ := filepath.Split(absPath)
-	this.dir = exp12.LookupDirectory(dir)
 
 	this.lastContentQUICKHACK = TryReadFile(this.path)
 
