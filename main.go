@@ -24,6 +24,7 @@ import (
 
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
+	"github.com/shurcooL/go/exp/13"
 	"github.com/shurcooL/go/exp/14"
 	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/gostatus/status"
@@ -2764,9 +2765,36 @@ func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
 
 // ---
 
+type VcsLocalInvalidator struct {
+	DepNode2
+	init bool
+
+	Repo *exp13.VcsState
+}
+
+func (this *VcsLocalInvalidator) Update() {
+	// Don't do anything for initialization, only for further changes.
+	if !this.init {
+		this.init = true
+		return
+	}
+
+	//fileView := this.GetSources()[0].(*FileView)
+	//println("changed:", fileView.path, "of:", this.Repo.Vcs.RootPath()[32:])
+
+	// Invalidate the Repo.VcsLocal.
+	ExternallyUpdated(this.Repo.VcsLocal.GetSources()[1].(DepNode2ManualI))
+}
+
+func (this *VcsLocalInvalidator) SetTarget() {
+}
+
+// ---
+
 type FileOpener struct {
 	editor     ViewGroupI
-	openedFile ViewGroupI
+	openedFile *FileView
+
 	DepNode2
 }
 
@@ -2778,7 +2806,7 @@ func NewFileOpener(editor ViewGroupI) *FileOpener {
 func (this *FileOpener) Update() {
 	if this.openedFile != nil {
 		this.editor.RemoveView(this.openedFile)
-		this.openedFile.(*FileView).Close()
+		this.openedFile.Close()
 		this.openedFile = nil
 
 		SetViewGroup(this.editor, "")
@@ -2788,6 +2816,15 @@ func (this *FileOpener) Update() {
 		this.openedFile = NewFileView(path)
 
 		this.openedFile.AddAndSetViewGroup(this.editor, TryReadFile(path))
+
+		if goPackage := this.GetSources()[1].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+			goPackage.UpdateVcs()
+			if goPackage.Dir.Repo != nil {
+				vcsLocalInvalidator := &VcsLocalInvalidator{Repo: goPackage.Dir.Repo}
+				vcsLocalInvalidator.AddSources(this.openedFile)
+				keepUpdatedTEST = append(keepUpdatedTEST, vcsLocalInvalidator) // TODO: Clear old ones...
+			}
+		}
 	}
 }
 
@@ -4300,16 +4337,28 @@ type FileView struct {
 	path string
 	ViewGroup
 
+	DepNode2Manual // File content changed.
+
+	dir *exp12.Directory
+
 	lastContentQUICKHACK string // HACK: Need this here for `git diff` testing
 }
 
 // TODO: Opening same path should result in same FileView, etc.
 func NewFileView(path string) *FileView {
 	this := &FileView{path: path}
+
 	absPath, err := filepath.Abs(path)
 	CheckError(err)
+
+	dir, _ := filepath.Split(absPath)
+	this.dir = exp12.LookupDirectory(dir)
+
+	this.lastContentQUICKHACK = TryReadFile(this.path)
+
 	this.InitViewGroup(this, FileUri("file://"+absPath))
 	UniversalClock.AddChangeListener(this) // TODO: Closing, etc.
+
 	return this
 }
 
@@ -4323,6 +4372,7 @@ func (this *FileView) SetSelf(content string) {
 	err := ioutil.WriteFile(this.path, []byte(content), 0666)
 	CheckError(err)
 	this.lastContentQUICKHACK = content
+	ExternallyUpdated(&this.DepNode2Manual) // File content changed.
 }
 
 // TODO: Change detection, closing, etc.
@@ -4332,6 +4382,7 @@ func (this *FileView) NotifyChange() {
 	if NewContent != this.lastContentQUICKHACK {
 		this.lastContentQUICKHACK = NewContent
 		SetViewGroupOther(this, NewContent)
+		ExternallyUpdated(&this.DepNode2Manual) // File content changed.
 	}
 }
 
@@ -6239,7 +6290,7 @@ func main() {
 		// Main editor
 		editorContent := NewMultilineContent()
 		editorFileOpener := NewFileOpener(editorContent)
-		editorFileOpener.AddSources(folderListing)
+		editorFileOpener.AddSources(folderListing, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
 		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true})
 		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, editor))
@@ -6919,7 +6970,7 @@ func main() {
 
 		// TEST: Live vcs status of a single repo
 		if true {
-			booVcs = exp12.NewDirectory("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Go-Package-Store/")
+			booVcs = exp12.LookupDirectory("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Go-Package-Store/")
 			MakeUpdated(booVcs)
 
 			params := func() interface{} {
