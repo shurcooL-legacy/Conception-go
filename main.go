@@ -1051,7 +1051,7 @@ func NewTest6OracleWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter,
 		}
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, false, []DepNode2I{source.caretPosition, goPackageSelecter, mode}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, false, []DepNode2I{source.caretPosition, goPackageSelecter, &mode.ValidChange}, params, action)
 
 	return NewFlowLayoutWidget(pos, Widgeters{mode, w}, nil)
 }
@@ -5060,15 +5060,23 @@ type TextBoxWidget struct {
 	DiffsTest []diffmatchpatch.Diff
 	Side      int8
 
+	ValidChange TextBoxWidgetValidChange // TODO: This should probably be properly moved into DepNode2 or similar.
+
 	ExtensionsTest   []Widgeter
 	HighlightersTest []Highlighter
 	PopupTest        *SearchableListWidget
+}
+
+type TextBoxWidgetValidChange struct {
+	*TextBoxWidget
+	DepNode2Manual
 }
 
 type TextBoxWidgetOptions struct {
 	SingleLine bool // TODO
 	Private    bool
 	PopupTest  bool
+	ValidFunc  func(MultilineContentI) bool
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -5094,6 +5102,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, opt
 	}
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(mc) // TODO: What about removing w when it's "deleted"?
+	w.ValidChange.TextBoxWidget = w
 
 	// TEST
 	w.scrollToCaret.UpdateFunc = func(DepNode2I) {
@@ -5136,8 +5145,18 @@ func (w *TextBoxWidget) NotifyChange() {
 
 	w.NotifyAllListeners()
 
+	// TODO: This should probably be properly moved into DepNode2 or similar.
+	if w.IsValidTEST() {
+		ExternallyUpdated(&w.ValidChange)
+	}
+
 	// TODO: Figure out if this should be here... is it a big deal if it gets called here AND elsewhere?
 	redraw = true
+}
+
+// TODO: Remove after done testing...
+func (w *TextBoxWidget) IsValidTEST() bool {
+	return w.options.ValidFunc == nil || w.options.ValidFunc(w.Content)
 }
 
 func (w *TextBoxWidget) Layout() {
@@ -5174,20 +5193,40 @@ func (w *TextBoxWidget) Render() {
 	}
 	isHit := len(w.HoverPointers()) > 0
 
-	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
-	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawYBox(w.pos, w.size)
-	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawYBox(w.pos, w.size)
-	} else if hasTypingFocus {
-		DrawYBox(w.pos, w.size)
+	if w.options.ValidFunc == nil {
+		// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+		if isOriginHit && mousePointer.State.IsActive() && isHit {
+			DrawYBox(w.pos, w.size)
+		} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+			DrawYBox(w.pos, w.size)
+		} else if hasTypingFocus {
+			DrawYBox(w.pos, w.size)
+		} else {
+			DrawNBox(w.pos, w.size)
+		}
 	} else {
-		DrawNBox(w.pos, w.size)
+		var background mathgl.Vec3d
+		if w.options.ValidFunc(w.Content) {
+			background = mathgl.Vec3d{0.9, 1, 0.9}
+		} else {
+			background = mathgl.Vec3d{1, 0.9, 0.9}
+		}
+
+		// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+		if isOriginHit && mousePointer.State.IsActive() && isHit {
+			DrawBox(w.pos, w.size, highlightColor, background)
+		} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+			DrawBox(w.pos, w.size, highlightColor, background)
+		} else if hasTypingFocus {
+			DrawBox(w.pos, w.size, highlightColor, background)
+		} else {
+			DrawBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, background)
+		}
 	}
 
 	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
 	//if !hasTypingFocus {
-	if true { // TEST: Try to always highlight in subtle pure white
+	if w.options.ValidFunc == nil { // TEST: Try to always highlight in subtle pure white (unless there's validation).
 		_, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Highlight line
@@ -5671,83 +5710,9 @@ func NewTextLabelWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string, 
 
 // ---
 
-type TextBoxValidationWidget struct {
-	*TextBoxWidget
-	validFunc func(MultilineContentI) bool
-	DepNode   // Forward NotifyChanges from TextBoxWidget to us
-	DepNode2Manual
-}
-
-func NewTextBoxValidationWidget(pos mathgl.Vec2d, validFunc func(MultilineContentI) bool) *TextBoxValidationWidget {
-	w := &TextBoxValidationWidget{TextBoxWidget: NewTextBoxWidget(pos), validFunc: validFunc}
-	w.TextBoxWidget.AddChangeListener(w) // Forward NotifyChanges from TextBoxWidget to us
+func NewTextBoxValidationWidget(pos mathgl.Vec2d, validFunc func(MultilineContentI) bool) *TextBoxWidget {
+	w := NewTextBoxWidgetOptions(pos, TextBoxWidgetOptions{ValidFunc: validFunc})
 	return w
-}
-
-// TODO: Remove after done testing...
-func (w *TextBoxValidationWidget) IsValidTEST() bool {
-	return w.validFunc(w.Content)
-}
-
-func (w *TextBoxValidationWidget) Render() {
-	// TODO: Move to Layout2()
-	MakeUpdated(&w.layoutDepNode2)
-	MakeUpdated(&w.scrollToCaret)
-
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w.TextBoxWidget == keyboardPointer.OriginMapping[0]
-
-	// HACK: Brute-force check the mouse pointer if it contains this widget
-	isOriginHit := false
-	for _, hit := range mousePointer.OriginMapping {
-		if w == hit {
-			isOriginHit = true
-			break
-		}
-	}
-	isHit := len(w.HoverPointers()) > 0
-
-	var background mathgl.Vec3d
-	if w.validFunc(w.Content) {
-		background = mathgl.Vec3d{0.9, 1, 0.9}
-	} else {
-		background = mathgl.Vec3d{1, 0.9, 0.9}
-	}
-
-	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
-	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawBox(w.pos, w.size, highlightColor, background)
-	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawBox(w.pos, w.size, highlightColor, background)
-	} else if hasTypingFocus {
-		DrawBox(w.pos, w.size, highlightColor, background)
-	} else {
-		DrawBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, background)
-	}
-
-	gl.Color3d(0, 0, 0)
-	for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
-		contentLine := w.Content.Line(lineIndex)
-		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
-	}
-
-	if hasTypingFocus {
-		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
-
-		// Draw caret
-		gl.PushMatrix()
-		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
-		gl.Color3d(0, 0, 0)
-		gl.Recti(gl.Int(expandedCaretPosition*fontWidth-1), gl.Int(caretLine*fontHeight), gl.Int(expandedCaretPosition*fontWidth+1), gl.Int(caretLine*fontHeight)+fontHeight)
-		gl.PopMatrix()
-	}
-}
-
-func (w *TextBoxValidationWidget) NotifyChange() {
-	if w.validFunc(w.Content) {
-		w.NotifyAllListeners()
-		ExternallyUpdated(&w.DepNode2Manual)
-	}
 }
 
 // ---
@@ -6256,7 +6221,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if sublimeMode {
 
@@ -6807,8 +6772,8 @@ func main() {
 			template := NewCmdTemplateDynamic2()
 			template.UpdateFunc = func(this DepNode2I) {
 				inContent := this.GetSources()[0].(MultilineContentI)
-				from := this.GetSources()[1].(*TextBoxValidationWidget)
-				to := this.GetSources()[2].(*TextBoxValidationWidget)
+				from := this.GetSources()[1].(*TextBoxWidgetValidChange)
+				to := this.GetSources()[2].(*TextBoxWidgetValidChange)
 
 				params := []string{}
 				if from.IsValidTEST() && to.IsValidTEST() {
@@ -6818,7 +6783,7 @@ func main() {
 				template.Template = NewCmdTemplate("gofmt", params...)
 				template.Template.Stdin = func() io.Reader { return NewContentReader(inContent) } // This is not a race condition only because template.NewCommand() gets called from same thread that updates in.Content.
 			}
-			template.AddSources(in.Content, from, to)
+			template.AddSources(in.Content, &from.ValidChange, &to.ValidChange)
 
 			/*debugOutput := func() string {
 				cmd := template.NewCommand()
