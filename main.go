@@ -147,8 +147,8 @@ var booVcs *exp12.Directory
 
 // Colors
 var (
-	pureWhiteColor   = mathgl.Vec3d{1, 1, 1}
 	nearlyWhiteColor = mathgl.Vec3d{0.975, 0.975, 0.975}
+	veryLightColor   = mathgl.Vec3d{0.95, 0.95, 0.95}
 	lightColor       = mathgl.Vec3d{0.85, 0.85, 0.85}
 	grayColor        = mathgl.Vec3d{0.75, 0.75, 0.75}
 	darkColor        = mathgl.Vec3d{0.35, 0.35, 0.35}
@@ -5226,13 +5226,13 @@ func (w *TextBoxWidget) Render() {
 
 	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
 	//if !hasTypingFocus {
-	if w.options.ValidFunc == nil { // TEST: Try to always highlight in subtle pure white (unless there's validation).
+	if w.options.ValidFunc == nil { // TEST: Try to always highlight in subtly darker white (unless there's validation).
 		_, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Highlight line
 		gl.PushMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
-		gl.Color3dv((*gl.Double)(&pureWhiteColor[0]))
+		gl.Color3dv((*gl.Double)(&veryLightColor[0]))
 		gl.Recti(gl.Int(0), gl.Int(caretLine*fontHeight), gl.Int(w.size[0]), gl.Int(caretLine*fontHeight)+fontHeight)
 		gl.PopMatrix()
 	}
