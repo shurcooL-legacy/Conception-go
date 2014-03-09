@@ -3811,8 +3811,10 @@ type caretPositionInternal struct {
 }
 
 func (cp *caretPositionInternal) NotifyContentChanged() {
-	if cp.Logical() > uint32(cp.w.LenContent()) {
+	if cp.lineIndex > cp.w.LenLines()-1 {
 		cp.Move(+3)
+	} else if cp.positionWithinLine > cp.w.Line(cp.lineIndex).Length {
+		cp.Move(+2)
 	}
 }
 
@@ -6221,7 +6223,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if sublimeMode {
 
