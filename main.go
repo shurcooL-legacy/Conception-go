@@ -106,7 +106,7 @@ import (
 
 	"github.com/mb0/diff"
 
-	"code.google.com/p/go.tools/astutil"
+	//"code.google.com/p/go.tools/astutil"
 
 	. "gist.github.com/7728088.git"
 
@@ -119,6 +119,12 @@ import (
 	. "gist.github.com/7519227.git"
 
 	goimports "code.google.com/p/go.tools/imports"
+
+	igo_ast "github.com/daddye/igo/ast"
+	"github.com/daddye/igo/from_go"
+	igo_parser "github.com/daddye/igo/parser"
+	"github.com/daddye/igo/to_go"
+	igo_token "github.com/daddye/igo/token"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -641,6 +647,34 @@ func (w *Test2Widget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
+type parsedIgoFile struct {
+	fset    *igo_token.FileSet
+	fileAst *igo_ast.File
+
+	DepNode2
+}
+
+func (t *parsedIgoFile) Update() {
+	source := t.GetSources()[0].(MultilineContentI)
+
+	t.fset = nil
+	t.fileAst = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("parsedIgoFile.Update() panic:", r)
+		}
+	}()
+
+	fset := igo_token.NewFileSet()
+	fileAst, _ := igo_parser.ParseFile(fset, "", source.Content(), igo_parser.ParseComments|igo_parser.AllErrors)
+
+	t.fset = fset
+	t.fileAst = fileAst
+}
+
+// ---
+
 type parsedFile struct {
 	fset    *token.FileSet
 	fileAst *ast.File
@@ -651,20 +685,16 @@ type parsedFile struct {
 func (t *parsedFile) Update() {
 	source := t.GetSources()[0].(MultilineContentI)
 	fset := token.NewFileSet()
-	fileAst, err := parser.ParseFile(fset, "", source.Content(), 1*parser.ParseComments)
+	fileAst, err := parser.ParseFile(fset, "", source.Content(), parser.ParseComments|parser.AllErrors)
 
 	{
 		//fileAst.Decls[0].(*ast.GenDecl).Specs = append(fileAst.Decls[0].(*ast.GenDecl).Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"yay/new/import"`}})
-		astutil.AddImport(fset, fileAst, "yay/new/import")
+		//astutil.AddImport(fset, fileAst, "yay/new/import")
 	}
 
-	if err == nil {
-		t.fset = fset
-		t.fileAst = fileAst
-	} else {
-		t.fset = nil
-		t.fileAst = nil
-	}
+	t.fset = fset
+	t.fileAst = fileAst
+	_ = err
 }
 
 func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *parsedFile) {
@@ -6235,9 +6265,75 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
-	if sublimeMode {
+	if true {
+
+		// iGo Live Editor experiment
+
+		//source := NewTextFileWidget(mathgl.Vec2d{50, 160}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
+		source := NewTextBoxWidget(mathgl.Vec2d{50, 160})
+		widgets = append(widgets, source)
+
+		parsedFile := &parsedFile{}
+		parsedFile.AddSources(source.Content)
+
+		params := func() interface{} {
+			return []interface{}{
+				parsedFile.fset,
+				parsedFile.fileAst,
+			}
+		}
+
+		action := func(params interface{}) string {
+			fset := params.([]interface{})[0].(*token.FileSet)
+			fileAst := params.([]interface{})[1].(*ast.File)
+
+			if fset == nil || fileAst == nil {
+				return "<Go parsing error>"
+			}
+
+			/*defer func() {
+				_ = recover()
+			}()*/
+
+			var buf bytes.Buffer
+			from_go.Fprint(&buf, fset, fileAst)
+
+			return buf.String()
+		}
+
+		w := NewLiveGoroutineExpeWidget(mathgl.Vec2d{500, 160}, true, []DepNode2I{parsedFile}, params, action)
+		widgets = append(widgets, w)
+
+		parsedIgoFile := &parsedIgoFile{}
+		parsedIgoFile.AddSources(w.Widgets[2].(*TextBoxWidget).Content) // HACK: Should get Content in a better way
+
+		params2 := func() interface{} {
+			return []interface{}{
+				parsedIgoFile.fset,
+				parsedIgoFile.fileAst,
+			}
+		}
+
+		action2 := func(params interface{}) string {
+			fset := params.([]interface{})[0].(*igo_token.FileSet)
+			fileAst := params.([]interface{})[1].(*igo_ast.File)
+
+			if fset == nil || fileAst == nil {
+				return "<iGo parsing error>"
+			}
+
+			var buf bytes.Buffer
+			to_go.Fprint(&buf, fset, fileAst)
+
+			return buf.String()
+		}
+
+		w2 := NewLiveGoroutineExpeWidget(mathgl.Vec2d{950, 160}, true, []DepNode2I{parsedIgoFile}, params2, action2)
+		widgets = append(widgets, w2)
+
+	} else if sublimeMode {
 
 		windowSize0, windowSize1 := window.GetSize()
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
@@ -6961,7 +7057,7 @@ func main() {
 				return rootPath + "\n" + vcsStatus
 			}
 
-			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{800, 450}, false, []DepNode2I{booVcs.Repo.VcsLocal}, params, action))
+			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{260, 180}, false, []DepNode2I{booVcs.Repo.VcsLocal}, params, action))
 		}
 
 		// Diff experiment
@@ -6991,7 +7087,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), ...)
 	}
 	gl.End()`), nil)
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 240}, []Widgeter{box1, box2}, nil))
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 200}, []Widgeter{box1, box2}, nil))
 
 			doDiff := DepNode2Func{}
 			doDiff.UpdateFunc = func(this DepNode2I) {
