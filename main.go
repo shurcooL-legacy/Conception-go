@@ -117,6 +117,8 @@ import (
 	. "gist.github.com/7802150.git"
 
 	. "gist.github.com/7519227.git"
+
+	goimports "code.google.com/p/go.tools/imports"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -2695,7 +2697,7 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, live bool, dependees []DepNode
 	w := &LiveGoroutineExpeWidget{outChan: make(chan timestampString), live: live}
 
 	refreshButton := NewButtonWidget(np, func() { MakeUpdated(w.actionNode) })
-	liveToggle := NewTriButtonExternalStateWidget(mathgl.Vec2d{500, 700}, func() bool { return w.live }, func() { w.live = !w.live })
+	liveToggle := NewTriButtonExternalStateWidget(np, func() bool { return w.live }, func() { w.live = !w.live })
 	textBoxWidget := NewTextBoxWidget(pos)
 
 	w.FlowLayoutWidget = NewFlowLayoutWidget(pos, []Widgeter{refreshButton, liveToggle, textBoxWidget}, nil)
@@ -5591,13 +5593,23 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		if inputEvent.ModifierKey == glfw.ModSuper {
 			ExternallyUpdated(w.Content) // TODO: Need to make this apply only for event-based things; no point in forcibly updating pure data structures
 		}*/
-		case glfw.KeyR:
-			// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
-			if !w.options.PopupTest {
-				break
-			}
-
+		case glfw.KeyS:
 			if inputEvent.ModifierKey == glfw.ModSuper {
+				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
+				if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
+					// Run `goimports` on the source code
+					if out, err := goimports.Process("", []byte(w.Content.Content()), nil); err == nil {
+						SetViewGroup(w.Content, string(out))
+					}
+				}
+			}
+		case glfw.KeyR:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
+				if !w.options.PopupTest {
+					break
+				}
+
 				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugSliceStringer{entries: []string{"one", "two", "three"}})
 				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, globalGoSymbols)
 				// HACK: Not general at all
