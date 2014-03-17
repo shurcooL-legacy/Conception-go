@@ -120,11 +120,11 @@ import (
 
 	goimports "code.google.com/p/go.tools/imports"
 
-	igo_ast "github.com/daddye/igo/ast"
-	"github.com/daddye/igo/from_go"
-	igo_parser "github.com/daddye/igo/parser"
-	"github.com/daddye/igo/to_go"
-	igo_token "github.com/daddye/igo/token"
+	igo_ast "github.com/DAddYE/igo/ast"
+	"github.com/DAddYE/igo/from_go"
+	igo_parser "github.com/DAddYE/igo/parser"
+	"github.com/DAddYE/igo/to_go"
+	igo_token "github.com/DAddYE/igo/token"
 )
 
 var _ = UnderscoreSepToCamelCase
