@@ -125,6 +125,8 @@ import (
 	igo_parser "github.com/DAddYE/igo/parser"
 	"github.com/DAddYE/igo/to_go"
 	igo_token "github.com/DAddYE/igo/token"
+
+	. "gist.github.com/5423254.git"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -661,9 +663,7 @@ func (t *parsedIgoFile) Update() {
 	t.fileAst = nil
 
 	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("parsedIgoFile.Update() panic:", r)
-		}
+		_ = recover()
 	}()
 
 	fset := igo_token.NewFileSet()
@@ -4291,7 +4291,7 @@ func NewMultilineContentString(content string) *MultilineContent {
 }
 
 func (c *MultilineContent) Content() string      { return c.content }
-func (c *MultilineContent) Lines() []contentLine { return c.lines }
+func (c *MultilineContent) Lines() []contentLine { return c.lines } // DEPRECATED
 func (c *MultilineContent) LongestLine() uint32  { return c.longestLine }
 
 func (c *MultilineContent) LenContent() int { return len(c.content) }
@@ -4474,6 +4474,27 @@ func (this *WebSocketView) NotifyChange() {
 	default:
 	}
 }
+
+// ---
+
+// TEST: An unfinished experiment.
+type ReverseMultilineContent struct {
+	*MultilineContent
+}
+
+func NewReverseMultilineContent() *ReverseMultilineContent {
+	rmc := &ReverseMultilineContent{&MultilineContent{}}
+	rmc.InitViewGroup(rmc, "memory://???(reverse)")
+	rmc.updateLines()
+	return rmc
+}
+
+func (c *ReverseMultilineContent) Content() string { return Reverse(c.content) }
+
+/*func (c *ReverseMultilineContent) SetSelf(content string) {
+	c.content = Reverse(content)
+	c.updateLines()
+}*/
 
 // ---
 
@@ -6253,6 +6274,10 @@ func main() {
 			redraw = true // HACK
 		})
 
+		/*window.SetDropCallback(func(w *glfw.Window, names []string) {
+			goon.DumpExpr(names)
+		})*/
+
 		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 		//gl.ClearColor(0.8, 0.3, 0.01, 1)
 		gl.ClearColor(0.85, 0.85, 0.85, 1)
@@ -6332,6 +6357,17 @@ func main() {
 
 		w2 := NewLiveGoroutineExpeWidget(mathgl.Vec2d{950, 160}, true, []DepNode2I{parsedIgoFile}, params2, action2)
 		widgets = append(widgets, w2)
+
+		{
+			mc1 := NewMultilineContent()
+			b1 := NewTextBoxWidgetExternalContent(mathgl.Vec2d{400, 800}, mc1, nil)
+
+			mc2 := NewReverseMultilineContent()
+			mc2.AddAndSetViewGroup(mc1, "")
+			b2 := NewTextBoxWidgetExternalContent(mathgl.Vec2d{800, 800}, mc2, nil)
+
+			widgets = append(widgets, b1, b2)
+		}
 
 	} else if sublimeMode {
 
