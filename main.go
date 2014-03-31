@@ -6211,11 +6211,12 @@ func (*goPackageHardcoded) GetSelectedGoPackage() *GoPackage {
 
 // ---
 
+var startedProcess = time.Now()
+
 func main() {
 	//defer profile.Start(profile.CPUProfile).Stop()
 	//defer profile.Start(profile.MemProfile).Stop()
 
-	startedProcess := time.Now()
 	fmt.Printf("go version %s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
@@ -6251,8 +6252,7 @@ func main() {
 		CheckError(err)
 		window.MakeContextCurrent()
 
-		err = gl.Init()
-		if nil != err {
+		if err := gl.Init(); nil != err {
 			log.Print(err)
 		}
 		fmt.Printf("glfw %d.%d.%d; %s %s %s\n", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision,
@@ -6404,7 +6404,7 @@ func main() {
 
 	const sublimeMode = false
 
-	if true {
+	if !sublimeMode {
 
 		// iGo Live Editor experiment
 
