@@ -2480,6 +2480,48 @@ func (w *ScrollPaneWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
+type SpacerWidget struct {
+	Widget
+	child  Widgeter
+	border int
+}
+
+func NewSpacerWidget(pos mathgl.Vec2d, child Widgeter) *SpacerWidget {
+	w := &SpacerWidget{Widget: NewWidget(pos, np), child: child, border: 2}
+	w.child.SetParent(w)
+	w.Layout() // TODO: Should this be automatic from above SetParent()?
+	return w
+}
+
+func (w *SpacerWidget) Layout() {
+	w.Widget.size = w.child.Size().Add(mathgl.Vec2d{float64(w.border * 2), float64(w.border * 2)})
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *SpacerWidget) Render() {
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translated(gl.Double(w.pos[0]+float64(w.border)), gl.Double(w.pos[1]+float64(w.border)), 0)
+
+	w.child.Render()
+}
+
+func (w *SpacerWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	hits := w.child.Hit(LocalPosition)
+
+	return hits
+}
+
+func (w *SpacerWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+	return w.Widget.ParentToLocal(ParentPosition).Sub(mathgl.Vec2d{float64(w.border), float64(w.border)})
+}
+
+// ---
+
 type UnderscoreSepToCamelCaseWidget struct {
 	Widget
 	window *glfw.Window
@@ -6479,6 +6521,22 @@ func main() {
 			b2 := NewTextBoxWidgetExternalContent(mathgl.Vec2d{800, 800}, mc2, nil)
 
 			widgets = append(widgets, b1, b2)
+		}
+
+		// Led Sign
+		widgets = append(widgets, &BoxWidget{Widget: NewWidget(mathgl.Vec2d{500, 850}, mathgl.Vec2d{96, 16})})
+
+		// TEST: Bunch of buttons with spacing.
+		{
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{500, 900}, []Widgeter{
+				NewSpacerWidget(np, NewButtonWidget(np, nil)),
+				NewSpacerWidget(np, NewButtonWidget(np, nil)),
+				NewSpacerWidget(np, NewButtonWidget(np, nil)),
+				NewSpacerWidget(np, NewTriButtonExternalStateWidget(np, func() bool { return true }, nil)),
+				NewSpacerWidget(np, NewTextLabelWidgetString(np, "Label!")),
+				NewSpacerWidget(np, NewTextBoxWidget(np)),
+				NewSpacerWidget(np, NewButtonWidget(np, nil)),
+			}, nil))
 		}
 
 	} else if sublimeMode {
