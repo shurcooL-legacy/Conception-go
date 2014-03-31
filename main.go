@@ -4498,6 +4498,118 @@ func (c *ReverseMultilineContent) Content() string { return Reverse(c.content) }
 
 // ---
 
+type lifeFormWidget struct {
+	Widget
+
+	Color uint8
+
+	/*struct State
+	{
+		sint32				Health		= 100;		// [0, 200]
+		sint32				Pain		= 0;		// [0, 100]
+		sint32				Energy		= 1000;		// [0, 2000]
+	};
+
+	struct Output
+	{
+		sint32				Action		= -1;		// [-1, 8], move direction, where -1 means stop
+	};
+
+	Vector2d				m_PositionD;
+	Vector2d				m_VelocityD;
+
+	State					m_CurrentState;
+
+	Output GenerateOutput();*/
+}
+
+func NewLifeFormWidget(pos mathgl.Vec2d) *lifeFormWidget {
+	w := &lifeFormWidget{Widget: NewWidget(pos, mathgl.Vec2d{100, 100})}
+	UniversalClock.AddChangeListener(w)
+	return w
+}
+
+func (w *lifeFormWidget) Render() {
+	Colors := []mathgl.Vec3d{
+		mathgl.Vec3d{0 / 255.0, 140 / 255.0, 0 / 255.0},
+		mathgl.Vec3d{0 / 255.0, 98 / 255.0, 140 / 255.0},
+		mathgl.Vec3d{194 / 255.0, 74 / 255.0, 0 / 255.0},
+		mathgl.Vec3d{89 / 255.0, 0 / 255.0, 140 / 255.0},
+		mathgl.Vec3d{191 / 255.0, 150 / 255.0, 0 / 255.0},
+		mathgl.Vec3d{140 / 255.0, 0 / 255.0, 0 / 255.0},
+	}
+
+	DrawCircle(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, Colors[w.Color])
+
+	// Render properties
+	/*OpenGLStream OpenGLStream(GetPosition() + Vector2n(GetDimensions().X() / 2 + 5, GetDimensions().X() / -2));
+	std::stringstream ss;
+	ss << "Health: " << m_CurrentState.Health << '\n';
+	ss << "Pain: " << m_CurrentState.Pain << '\n';
+	ss << "Energy: " << m_CurrentState.Energy;
+	OpenGLStream << ss.str();*/
+}
+
+func (w *lifeFormWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if w.pos.Sub(ParentPosition).Len() <= w.size[0]/2 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+
+func (w *lifeFormWidget) NotifyChange() {
+	var timePassed float64 = UniversalClock.TimePassed
+
+	m_PositionD := w.pos
+	var m_VelocityD mathgl.Vec2d
+
+	// Instinct model
+	{
+		m_VelocityD = mathgl.Vec2d{8, 5}
+
+		const speedMultiplier = float64(250)
+
+		ParentPosition := WidgeterS{w}.GlobalToParent(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		LocalPosition := w.ParentToLocal(ParentPosition)
+
+		if true && //PointerState.GetButtonState(0)
+			len(w.Hit(ParentPosition)) > 0 {
+
+			EscapeVector := LocalPosition
+			EscapeAngle := math.Atan2(EscapeVector[0], EscapeVector[1])
+			EscapeDirection := mathgl.Vec2d{math.Sin(EscapeAngle), math.Cos(EscapeAngle)}.Mul(-1)
+
+			m_VelocityD = EscapeDirection.Mul(speedMultiplier)
+		}
+	}
+
+	// Thinking model
+	/*{
+		const auto QuarterPi = std::atan(1);
+
+		auto Output = GenerateOutput();
+
+		m_VelocityD = Vector2d(0, 0);
+
+		if (   Output.Action >= 0
+			&& Output.Action <  8)
+		{
+			m_VelocityD = Vector2d(std::cos(QuarterPi * Output.Action), std::sin(QuarterPi * Output.Action)) * 10;
+		}
+	}*/
+
+	// Simulation
+	{
+		m_PositionD = m_PositionD.Add(m_VelocityD.Mul(timePassed))
+
+		w.pos = m_PositionD
+		redraw = true
+	}
+}
+
+// ---
+
 type MultilineContentFunc struct {
 	*MultilineContent // TODO: Explore this being a pointer vs value
 	contentFunc       func() string
@@ -7168,6 +7280,9 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	// Http Server
 	initHttpHandlers()
 	widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
+
+	// lifeFormWidget test.
+	//widgets = append(widgets, NewLifeFormWidget(mathgl.Vec2d{400, 400}))
 
 	if sublimeMode {
 		// TODO: Position of {1, 1} means 1 column and 1 row of pixels will not get user input, need to fix
