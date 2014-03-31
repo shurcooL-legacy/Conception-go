@@ -28,6 +28,7 @@ import (
 	"github.com/shurcooL/go/exp/14"
 	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/gostatus/status"
+	"github.com/shurcooL/markdownfmt/markdown"
 
 	"github.com/Jragonmiris/mathgl"
 
@@ -5801,10 +5802,18 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyS:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
-				if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
-					// Run `goimports` on the source code
-					if out, err := goimports.Process("", []byte(w.Content.Content()), nil); err == nil {
-						SetViewGroup(w.Content, string(out))
+				if uri, ok := w.Content.GetUriForProtocol("file://"); ok {
+					switch {
+					case strings.HasSuffix(string(uri), ".go"):
+						// Run `goimports` on the source code
+						if out, err := goimports.Process("", []byte(w.Content.Content()), nil); err == nil {
+							SetViewGroup(w.Content, string(out))
+						}
+					case strings.HasSuffix(string(uri), ".md") || strings.HasSuffix(string(uri), ".markdown"):
+						// Run `markdownfmt` on Markdown.
+						if out, err := markdown.Process("", []byte(w.Content.Content()), nil); err == nil {
+							SetViewGroup(w.Content, string(out))
+						}
 					}
 				}
 			}
