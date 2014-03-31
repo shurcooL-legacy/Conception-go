@@ -212,8 +212,8 @@ func PrintSegment(pos mathgl.Vec2d, s string) {
 	}
 
 	gl.Enable(gl.BLEND)
-	gl.Enable(gl.TEXTURE_2D)
 	defer gl.Disable(gl.BLEND)
+	gl.Enable(gl.TEXTURE_2D)
 	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
@@ -307,8 +307,8 @@ func (o *OpenGlStream) PrintSegment(s string) {
 	}
 
 	gl.Enable(gl.BLEND)
-	gl.Enable(gl.TEXTURE_2D)
 	defer gl.Disable(gl.BLEND)
+	gl.Enable(gl.TEXTURE_2D)
 	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
