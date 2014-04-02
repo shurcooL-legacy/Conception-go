@@ -3676,7 +3676,8 @@ func NewGoonWidget(pos mathgl.Vec2d, a interface{}) Widgeter {
 	if !strings.HasPrefix(title, "&") {
 		panic("NewGoonWidget: Need to pass address of value.")
 	}
-	goonWidget := newGoonWidget(mathgl.Vec2d{fontHeight + 2}, title[1:], reflect.ValueOf(a))
+	//goonWidget := newGoonWidget(mathgl.Vec2d{fontHeight + 2}, title[1:], reflect.ValueOf(a))
+	goonWidget := setupInternals3(mathgl.Vec2d{fontHeight + 2}, title[1:], UnsafeReflectValue(reflect.ValueOf(a)).Elem())
 	return NewCompositeWidget(pos, []Widgeter{goonWidget})
 }
 
@@ -3772,6 +3773,7 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	title := NewTextLabelWidgetString(np, w.title+": ")
 	t := NewTextLabelWidgetString(np, fmt.Sprintf("%s{", getTypeString(v)))
 	header := NewFlowLayoutWidget(np, []Widgeter{title, t}, nil)
+	tab := mathgl.Vec2d{fontWidth * 4}
 
 	widgets := []Widgeter{header}
 
@@ -3795,19 +3797,19 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	case reflect.Struct:
 		vt := v.Type()
 		for i := 0; i < v.NumField(); i++ {
-			widgets = append(widgets, setupInternals3(vt.Field(i).Name, v.Field(i)))
+			widgets = append(widgets, setupInternals3(tab, vt.Field(i).Name, v.Field(i)))
 		}
 	case reflect.Map:
 		for _, key := range v.MapKeys() {
 			addrValue := UnsafeReflectValue(v.MapIndex(key))
-			widgets = append(widgets, setupInternals3(key.String(), addrValue))
+			widgets = append(widgets, setupInternals3(tab, key.String(), addrValue))
 		}
 	case reflect.Array, reflect.Slice:
 		for i := 0; i < v.Len(); i++ {
-			widgets = append(widgets, setupInternals3(strconv.Itoa(i), v.Index(i)))
+			widgets = append(widgets, setupInternals3(tab, strconv.Itoa(i), v.Index(i)))
 		}
 	case reflect.Ptr, reflect.Interface:
-		widgets = append(widgets, setupInternals3("*", v.Elem()))
+		widgets = append(widgets, setupInternals3(tab, "*", v.Elem()))
 	}
 
 	widgets = append(widgets, NewTextLabelWidgetString(np, "}"))
@@ -3815,9 +3817,7 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	return NewFlowLayoutWidget(np, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 }
 
-func setupInternals3(titleString string, a reflect.Value) Widgeter {
-	tab := mathgl.Vec2d{fontWidth * 4}
-
+func setupInternals3(pos mathgl.Vec2d, titleString string, a reflect.Value) Widgeter {
 	/*if !a.CanInterface() {
 		a = UnsafeReflectValue(a)
 	}*/
@@ -3826,22 +3826,21 @@ func setupInternals3(titleString string, a reflect.Value) Widgeter {
 	if a.Kind() == reflect.Float64 && a.Addr().CanInterface() {
 		title := NewTextLabelWidgetString(np, titleString+": ")
 		t := NewTest2Widget(np, a.Addr().Interface().(*float64))
-		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
+		w = NewFlowLayoutWidget(pos, []Widgeter{title, t}, nil)
 	} else if a.Kind() == reflect.String && a.Addr().CanInterface() {
 		title := NewTextLabelWidgetString(np, titleString+": ")
 		t := NewTextBoxWidgetExternalContent(np, NewMultilineContentPointer(a.Addr().Interface().(*string)), nil)
-		w = NewFlowLayoutWidget(tab, []Widgeter{title, t}, nil)
+		w = NewFlowLayoutWidget(pos, []Widgeter{title, t}, nil)
 	} else if vv := a; vv.CanAddr() {
-		w = newGoonWidget(tab, titleString, vv.Addr())
+		w = newGoonWidget(pos, titleString, vv.Addr())
 	} else if vv := a; (vv.Kind() == reflect.Interface || vv.Kind() == reflect.Ptr) && vv.Elem().CanAddr() { // HACK
-		w = newGoonWidget(tab, titleString, vv.Elem().Addr())
+		w = newGoonWidget(pos, titleString, vv.Elem().Addr())
 	} else {
-		//w = NewTextLabelWidgetString(tab, goon.Sdump(vv))
-		w = NewTextLabelWidgetString(tab, fmt.Sprintf("(%s)(can't addr... %s)", vv.Kind().String(), vv.String()))
+		//w = NewTextLabelWidgetString(pos, goon.Sdump(vv))
+		w = NewTextLabelWidgetString(pos, fmt.Sprintf("(%s)(can't addr... %s)", vv.Kind().String(), vv.String()))
 	}
 
 	spacer := NewCompositeWidget(np, []Widgeter{w})
-
 	return spacer
 }
 
@@ -6581,9 +6580,11 @@ func main() {
 				},
 			}
 
-			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 316}, &x))
+			someString := "Can you edit me?"
+			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296}, &someString))
+			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296 + 20}, &x))
 
-			dumpButton := NewButtonWidget(mathgl.Vec2d{600 - 20, 316}, func() { goon.DumpExpr(x) })
+			dumpButton := NewButtonWidget(mathgl.Vec2d{600 - 20, 296}, func() { goon.DumpExpr(x); goon.DumpExpr(someString) })
 			widgets = append(widgets, dumpButton)
 		}
 
