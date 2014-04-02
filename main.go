@@ -7368,6 +7368,13 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
 	}
 
+	// Http Server
+	initHttpHandlers()
+	widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
+
+	// lifeFormWidget test.
+	//widgets = append(widgets, NewLifeFormWidget(mathgl.Vec2d{400, 400}))
+
 	// Debug Panel
 	{
 		var w Widgeters
@@ -7376,13 +7383,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		w = append(w, NewGoonWidget(np, &widgets))
 		widgets = append(widgets, NewCollapsibleWidget(mathgl.Vec2d{fontHeight + 2, 0} /* TODO: Make this np */, NewFlowLayoutWidget(np, w, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}), "Debug"))
 	}
-
-	// Http Server
-	initHttpHandlers()
-	widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
-
-	// lifeFormWidget test.
-	//widgets = append(widgets, NewLifeFormWidget(mathgl.Vec2d{400, 400}))
 
 	if sublimeMode {
 		// TODO: Position of {1, 1} means 1 column and 1 row of pixels will not get user input, need to fix
