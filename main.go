@@ -938,8 +938,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, sourc
 		if ident, ok := smallestV.(*ast.Ident); ok {
 			Test4WidgetIdent = ident // HACK
 
-			if info != nil && info.Uses[ident] != nil {
-				obj := info.Uses[ident]
+			if obj := findTypesObject(info, ident); obj != nil {
 				out += ">>> " + TypeChainString(obj.Type())
 				if constObj, ok := obj.(*types.Const); ok {
 					out += fmt.Sprintf(" = %v", constObj.Val())
@@ -1025,8 +1024,7 @@ func NewTypeUnderCaretWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelect
 		if ident, ok := smallestV.(*ast.Ident); ok {
 			Test4WidgetIdent = ident // HACK
 
-			if info != nil && info.Uses[ident] != nil {
-				obj := info.Uses[ident]
+			if obj := findTypesObject(info, ident); obj != nil {
 				out += TypeChainString(obj.Type())
 				if constObj, ok := obj.(*types.Const); ok {
 					out += fmt.Sprintf(" = %v", constObj.Val())
@@ -1041,6 +1039,18 @@ func NewTypeUnderCaretWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelect
 
 	w := NewLiveGoroutineExpeWidget(pos, true, []DepNode2I{typeCheckedPackage, source.caretPosition}, params, action)
 	return w
+}
+
+func findTypesObject(info *types.Info, ident *ast.Ident) (obj types.Object) {
+	if info != nil {
+		switch {
+		case info.Uses[ident] != nil:
+			obj = info.Uses[ident]
+		case info.Defs[ident] != nil:
+			obj = info.Defs[ident]
+		}
+	}
+	return obj
 }
 
 // ---
