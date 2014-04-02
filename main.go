@@ -6548,6 +6548,34 @@ func main() {
 			}, nil))
 		}
 
+		// TEST: GoonWidget improvements...
+		{
+			type Inner struct {
+				Field1 string
+				Field2 int
+			}
+			type Lang struct {
+				Name  string
+				Year  int
+				URLs  [2]string
+				Inner Inner
+			}
+			x := Lang{
+				Name: "Go",
+				Year: 2009,
+				URLs: [2]string{"http", "https"},
+				Inner: Inner{
+					Field1: "Secret!",
+					Field2: 123367,
+				},
+			}
+
+			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 316}, &x))
+
+			dumpButton := NewButtonWidget(mathgl.Vec2d{600 - 36, 316}, func() { goon.DumpExpr(x) })
+			widgets = append(widgets, dumpButton)
+		}
+
 	} else if sublimeMode {
 
 		windowSize0, windowSize1 := window.GetSize()
@@ -6950,10 +6978,6 @@ func main() {
 			widgets = append(widgets, w)
 		}
 
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 70}, &widgets))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 100}, &keyboardPointer))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{510, 130}, &mousePointer))
-
 		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
 
 		//widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{160, 30}, []Widgeter{NewGoPackageListingPureWidget()}))
@@ -7342,6 +7366,15 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
 		mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
+	}
+
+	// Debug Panel
+	{
+		var w Widgeters
+		w = append(w, NewGoonWidget(np, &mousePointer))
+		w = append(w, NewGoonWidget(np, &keyboardPointer))
+		w = append(w, NewGoonWidget(np, &widgets))
+		widgets = append(widgets, NewCollapsibleWidget(mathgl.Vec2d{fontHeight + 2, 0} /* TODO: Make this np */, NewFlowLayoutWidget(np, w, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}), "Debug"))
 	}
 
 	// Http Server
