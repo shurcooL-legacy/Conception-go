@@ -2552,7 +2552,7 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 // ---
 
 type ChannelExpeWidget struct {
-	*CompositeWidget
+	*FlowLayoutWidget
 	cmd *exec.Cmd
 	ch  ChanWriter
 }
@@ -2575,11 +2575,11 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 			w.cmd = nil
 		}
 	}
-	w.CompositeWidget = NewCompositeWidget(pos,
+	w.FlowLayoutWidget = NewFlowLayoutWidget(pos,
 		[]Widgeter{
-			NewTextBoxWidget(mathgl.Vec2d{0, 0}),
-			NewTriButtonExternalStateWidget(mathgl.Vec2d{0, -fontHeight - 2}, func() bool { return w.cmd != nil }, action),
-		})
+			NewTriButtonExternalStateWidget(np, func() bool { return w.cmd != nil }, action),
+			NewTextBoxWidget(np),
+		}, nil)
 
 	UniversalClock.AddChangeListener(w)
 
@@ -2615,7 +2615,7 @@ func (w *ChannelExpeWidget) NotifyChange() {
 	select {
 	case b, ok := <-w.ch:
 		if ok {
-			box := w.CompositeWidget.Widgets[0].(*TextBoxWidget)
+			box := w.FlowLayoutWidget.Widgets[1].(*TextBoxWidget)
 			SetViewGroup(box.Content, box.Content.Content()+string(b))
 			redraw = true
 		}
@@ -3661,12 +3661,13 @@ type GoonWidget struct {
 	expanded *TriButtonWidget
 }
 
-func NewGoonWidget(pos mathgl.Vec2d, a interface{}) *GoonWidget {
+func NewGoonWidget(pos mathgl.Vec2d, a interface{}) Widgeter {
 	title := GetParentArgExprAsString(1)
 	if !strings.HasPrefix(title, "&") {
 		panic("NewGoonWidget: Need to pass address of value.")
 	}
-	return newGoonWidget(pos, title[1:], reflect.ValueOf(a))
+	goonWidget := newGoonWidget(mathgl.Vec2d{fontHeight + 2}, title[1:], reflect.ValueOf(a))
+	return NewCompositeWidget(pos, []Widgeter{goonWidget})
 }
 
 func newGoonWidget(pos mathgl.Vec2d, title string, a reflect.Value) *GoonWidget {
@@ -6572,7 +6573,7 @@ func main() {
 
 			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 316}, &x))
 
-			dumpButton := NewButtonWidget(mathgl.Vec2d{600 - 36, 316}, func() { goon.DumpExpr(x) })
+			dumpButton := NewButtonWidget(mathgl.Vec2d{600 - 20, 316}, func() { goon.DumpExpr(x) })
 			widgets = append(widgets, dumpButton)
 		}
 
@@ -7381,7 +7382,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		w = append(w, NewGoonWidget(np, &mousePointer))
 		w = append(w, NewGoonWidget(np, &keyboardPointer))
 		w = append(w, NewGoonWidget(np, &widgets))
-		widgets = append(widgets, NewCollapsibleWidget(mathgl.Vec2d{fontHeight + 2, 0} /* TODO: Make this np */, NewFlowLayoutWidget(np, w, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}), "Debug"))
+		widgets = append(widgets, NewCollapsibleWidget(np, NewFlowLayoutWidget(np, w, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}), "Debug"))
 	}
 
 	if sublimeMode {
