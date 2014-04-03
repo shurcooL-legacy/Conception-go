@@ -12,15 +12,11 @@ import (
 	. "gist.github.com/5286084.git"
 
 	"image"
-	_ "github.com/ftrvxmtrx/tga"
-	//_ "image/png"
 	"os"
+	_ "github.com/ftrvxmtrx/tga"
 
-	//"github.com/go-gl/gl"
 	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3"
-	//"github.com/go-gl/glu"
-	//glu "github.com/shurcooL/goglu/glu21"
 
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
@@ -42,17 +38,12 @@ import (
 
 	. "gist.github.com/5571468.git"
 
-	//"go/parser"
-	//"go/token"
-
 	"math"
 	intmath "github.com/pkg/math"
 
+	. "gist.github.com/5259939.git"
 	. "gist.github.com/5504644.git"
 	. "gist.github.com/5639599.git"
-	//"io/ioutil"
-	//"runtime/debug"
-	. "gist.github.com/5259939.git"
 	. "gist.github.com/6418462.git"
 
 	"errors"
@@ -90,10 +81,8 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	. "gist.github.com/7390843.git"
-	//"github.com/russross/blackfriday"
 
 	. "gist.github.com/7480523.git"
-	//. "gist.github.com/7519227.git"
 
 	. "gist.github.com/7576154.git"
 
@@ -107,11 +96,7 @@ import (
 
 	"github.com/mb0/diff"
 
-	//"code.google.com/p/go.tools/astutil"
-
 	. "gist.github.com/7728088.git"
-
-	//. "gist.github.com/7729255.git"
 
 	. "gist.github.com/7651991.git"
 
