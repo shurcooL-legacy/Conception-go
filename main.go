@@ -456,6 +456,7 @@ func (this *DepNode) NotifyAllListeners() {
 
 type Widgeter interface {
 	Layout()
+	LayoutNeeded()
 	Render()
 	Hit(mathgl.Vec2d) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
@@ -491,7 +492,8 @@ func (w *Widget) Layout() {
 		w.parent.Layout()
 	}
 }
-func (*Widget) Render() {}
+func (_ *Widget) LayoutNeeded() {}
+func (_ *Widget) Render()       {}
 func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
 
@@ -1598,39 +1600,37 @@ type WindowWidget struct {
 	Widget
 	chrome *CompositeWidget
 	Name   string
+	child  Widgeter
 }
 
-func NewWindowWidget(pos, size mathgl.Vec2d) *WindowWidget {
-	w := &WindowWidget{Widget: NewWidget(pos, size)}
+func NewWindowWidget(pos, size mathgl.Vec2d, child Widgeter) *WindowWidget {
+	w := &WindowWidget{Widget: NewWidget(pos, size), child: child}
 	closeButton := NewButtonWidget(np, func() {
 		w.Parent().(RemoveWidgeter).RemoveWidget(w)
 		w.SetParent(nil) // TODO: Not sure if needed
 	})
 	w.chrome = NewCompositeWidget(np, []Widgeter{closeButton})
 	w.chrome.SetParent(w)
+	w.child.SetParent(w)
+	w.Layout() // TODO: Should this be automatic from above SetParent()?
 	return w
 }
 
-func (w *WindowWidget) Render() {
-	// HACK: Brute-force check the mouse pointer if it contains this widget
-	isOriginHit := false
-	for _, hit := range mousePointer.OriginMapping {
-		if w == hit {
-			isOriginHit = true
-			break
-		}
-	}
-	isHit := len(w.HoverPointers()) > 0
+func (w *WindowWidget) Layout() {
+	w.size = *w.child.Size()
 
-	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *WindowWidget) LayoutNeeded() {
+	w.chrome.LayoutNeeded()
+	w.child.LayoutNeeded()
+}
+
+func (w *WindowWidget) Render() {
 	DrawNBox(w.pos, w.size)
-	if isOriginHit && mousePointer.State.IsActive() && isHit {
-		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, nearlyWhiteColor, lightColor)
-	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
-		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, highlightColor, nearlyWhiteColor, lightColor)
-	} else {
-		DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor, lightColor)
-	}
+	DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor, lightColor)
 
 	// Title
 	gl.Color3dv((*gl.Double)(&nearlyBlackColor[0]))
@@ -1639,6 +1639,8 @@ func (w *WindowWidget) Render() {
 	gl.PushMatrix()
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 	w.chrome.Render()
+	gl.Translated(gl.Double(0), gl.Double(fontHeight+1), 0)
+	w.child.Render()
 	gl.PopMatrix()
 }
 func (w *WindowWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
@@ -1654,7 +1656,7 @@ func (w *WindowWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 		hits = append(hits, w.chrome.Hit(LocalPosition)...)
 		return hits
 	} else {
-		return nil
+		return w.child.Hit(LocalPosition.Sub(mathgl.Vec2d{0, fontHeight + 1}))
 	}
 }
 
@@ -2055,6 +2057,11 @@ func (w *CompositeWidget) Layout() {
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
 }
+func (w *CompositeWidget) LayoutNeeded() {
+	for _, widget := range w.Widgets {
+		widget.LayoutNeeded()
+	}
+}
 func (w *CompositeWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
@@ -2207,7 +2214,7 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		// TEST, DEBUG: Cmd+O shortcut to open a new window, for testing purposes
 		if glfw.Key(inputEvent.InputId) == glfw.KeyO && inputEvent.ModifierKey&glfw.ModSuper != 0 {
-			w2 := NewWindowWidget(mathgl.Vec2d{600, 400}, mathgl.Vec2d{300, 60})
+			w2 := NewWindowWidget(mathgl.Vec2d{600, 400}, mathgl.Vec2d{300, 60}, NewTextBoxWidget(np))
 			w2.Name = "New Window"
 
 			// Add new widget to canvas
@@ -2291,6 +2298,15 @@ func (w *CollapsibleWidget) Layout() {
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
+}
+
+func (w *CollapsibleWidget) LayoutNeeded() {
+	w.state.LayoutNeeded()
+	w.label.LayoutNeeded()
+
+	if w.state.State() {
+		w.child.LayoutNeeded()
+	}
 }
 
 func (w *CollapsibleWidget) Render() {
@@ -2415,6 +2431,10 @@ func SetScissor(pos, size mathgl.Vec2d) {
 	// TODO
 
 	gl.Scissor(gl.Int(pos0), gl.Int(pos1), gl.Sizei(size0), gl.Sizei(size1))
+}
+
+func (w *ScrollPaneWidget) LayoutNeeded() {
+	w.child.LayoutNeeded()
 }
 
 func (w *ScrollPaneWidget) Render() {
@@ -2712,10 +2732,13 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 	}
 }
 
-func (w *LiveCmdExpeWidget) Render() {
-	// TODO: I think this should be moved to a new proper Layout2() method or something. Render() is for putting it on the screen, not making changes.
+func (w *LiveCmdExpeWidget) LayoutNeeded() {
 	MakeUpdated(w.commandNode) // THINK: Is this a hack or is this the way to go?
 
+	w.TextBoxWidget.LayoutNeeded()
+}
+
+func (w *LiveCmdExpeWidget) Render() {
 	w.TextBoxWidget.Render()
 }
 
@@ -2792,13 +2815,16 @@ func (w *LiveGoroutineExpeWidget) layout2Test() {
 	}
 }
 
-func (w *LiveGoroutineExpeWidget) Render() {
-	// TODO: I think this should be moved to a new proper Layout2() method or something. Render() is for putting it on the screen, not making changes (that can lead to resizing/re-layout of other widgets, etc.)
+func (w *LiveGoroutineExpeWidget) LayoutNeeded() {
+	w.FlowLayoutWidget.LayoutNeeded()
+
 	if w.live {
 		MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
 	}
-	w.layout2Test() // HACK: Shouldn't call from Render()
+	w.layout2Test()
+}
 
+func (w *LiveGoroutineExpeWidget) Render() {
 	w.FlowLayoutWidget.Render()
 }
 
@@ -3227,8 +3253,11 @@ func (w *FilterableSelecterWidget) Layout() {
 	w.Widget.Layout()
 }
 
+func (w *FilterableSelecterWidget) LayoutNeeded() {
+}
+
 func (w *FilterableSelecterWidget) Render() {
-	// TODO: Move to Layout2()
+	// TODO: Move to LayoutNeeded()
 	MakeUpdated(&w.layoutDepNode2)
 
 	DrawNBox(w.pos, w.size)
@@ -5388,11 +5417,16 @@ func (w *TextBoxWidget) Layout() {
 	w.Widget.Layout()
 }
 
-func (w *TextBoxWidget) Render() {
-	// TODO: Move to Layout2()
+func (w *TextBoxWidget) LayoutNeeded() {
 	MakeUpdated(&w.layoutDepNode2)
 	MakeUpdated(&w.scrollToCaret)
 
+	if w.PopupTest != nil {
+		w.PopupTest.LayoutNeeded()
+	}
+}
+
+func (w *TextBoxWidget) Render() {
 	for _, highlighter := range w.HighlightersTest {
 		MakeUpdated(highlighter)
 	}
@@ -6460,9 +6494,9 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
-	if !sublimeMode {
+	if !sublimeMode && false {
 
 		// iGo Live Editor experiment
 
@@ -7308,7 +7342,7 @@ func main() {
 		// Sample Window widget
 		{
 			newWindowButton := NewButtonWidget(np, func() {
-				w := NewWindowWidget(mathgl.Vec2d{500, 500}, mathgl.Vec2d{200, 140})
+				w := NewWindowWidget(mathgl.Vec2d{500, 500}, mathgl.Vec2d{200, 140}, NewTextBoxWidget(np))
 				w.Name = "New Window"
 
 				// Add new widget to canvas
@@ -7316,7 +7350,7 @@ func main() {
 			})
 			widgets = append(widgets, newWindowButton)
 
-			w := NewWindowWidget(mathgl.Vec2d{1000, 40}, mathgl.Vec2d{200, 140})
+			w := NewWindowWidget(mathgl.Vec2d{1000, 40}, mathgl.Vec2d{200, 140}, NewTextBoxWidget(np))
 			w.Name = "Sample Window"
 			widgets = append(widgets, w)
 		}
@@ -7488,6 +7522,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
 
+			widget.LayoutNeeded()
 			widget.Render()
 
 			fpsWidget.PushTimeToRender(time.Since(frameStartTime).Seconds() * 1000)
