@@ -3816,6 +3816,11 @@ func setupInternals3(pos mathgl.Vec2d, titleString string, a reflect.Value) Widg
 		title := NewTextLabelWidgetString(np, titleString+": ")
 		t := NewTextBoxWidgetExternalContent(np, NewMultilineContentPointer(a.Addr().Interface().(*string)), nil)
 		w = NewFlowLayoutWidget(pos, []Widgeter{title, t}, nil)
+	} else if a.Kind() == reflect.Bool && a.Addr().CanInterface() {
+		title := NewTextLabelWidgetString(np, titleString+": ")
+		t := NewTriButtonExternalStateWidget(np, func() bool { return *a.Addr().Interface().(*bool) }, func() { *a.Addr().Interface().(*bool) = !*a.Addr().Interface().(*bool) })
+		t2 := NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(func() string { return fmt.Sprint(*a.Addr().Interface().(*bool)) }))
+		w = NewFlowLayoutWidget(pos, []Widgeter{title, t, t2}, nil)
 	} else if vv := a; vv.CanAddr() {
 		w = newGoonWidget(pos, titleString, vv.Addr())
 	} else if vv := a; (vv.Kind() == reflect.Interface || vv.Kind() == reflect.Ptr) && vv.Elem().CanAddr() { // HACK
@@ -6561,6 +6566,7 @@ func main() {
 				Year  int
 				URLs  [2]string
 				Inner Inner
+				Bool  bool
 			}
 			x := Lang{
 				Name: "Go",
@@ -6570,13 +6576,53 @@ func main() {
 					Field1: "Secret!",
 					Field2: 123367,
 				},
+				Bool: true,
 			}
 
 			someString := "Can you edit me?"
 			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296}, &someString))
-			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296 + 20}, &x))
+			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600 - 100, 296 + 20}, &x))
 
-			dumpButton := NewButtonWidget(mathgl.Vec2d{600 - 20, 296}, func() { goon.DumpExpr(x); goon.DumpExpr(someString) })
+			// *ast.File goon
+			src := `package main
+
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+
+	"github.com/shurcooL/markdownfmt/markdown"
+)
+
+func main() {
+	input, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		panic(err)
+	}
+
+	output, err := markdown.Process("", input, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Print(string(output))
+}
+`
+			fset := token.NewFileSet()
+			fileAst, err := parser.ParseFile(fset, "", src, 0 /*parser.ParseComments|parser.AllErrors*/)
+			CheckError(err)
+
+			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296 + 40}, &fileAst))
+			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296 + 60}, &parsedFile))
+
+			output := NewTextBoxWidget(mathgl.Vec2d{1000, 300})
+			widgets = append(widgets, output)
+
+			dumpButton := NewButtonWidget(mathgl.Vec2d{600 - 20, 296}, func() {
+				goon.DumpExpr(x)
+				goon.DumpExpr(someString)
+				SetViewGroup(output.Content, SprintAstBare(fileAst))
+			})
 			widgets = append(widgets, dumpButton)
 		}
 
