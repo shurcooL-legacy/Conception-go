@@ -4693,12 +4693,19 @@ func (this *MultilineContentFuncInstant) Content() string {
 	return this.MultilineContentFunc.Content()
 }
 func (this *MultilineContentFuncInstant) Lines() []contentLine {
-	this.MultilineContentFunc.NotifyChange()
-	return this.MultilineContentFunc.Lines()
+	panic("MultilineContentFuncInstant.Lines(): DEPRECATED")
 }
 func (this *MultilineContentFuncInstant) LongestLine() uint32 {
 	this.MultilineContentFunc.NotifyChange()
 	return this.MultilineContentFunc.LongestLine()
+}
+func (this *MultilineContentFuncInstant) LenContent() int {
+	this.MultilineContentFunc.NotifyChange()
+	return this.MultilineContentFunc.LenContent()
+}
+func (this *MultilineContentFuncInstant) Line(lineIndex int) contentLine {
+	this.MultilineContentFunc.NotifyChange()
+	return this.MultilineContentFunc.Line(lineIndex)
 }
 
 // ---
