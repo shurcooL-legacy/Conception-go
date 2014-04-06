@@ -2695,13 +2695,10 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, template CmdF
 	w.commandNode = &commandNode{w: w, template: template}
 	w.commandNode.AddSources(dependees...)
 
-	UniversalClock.AddChangeListener(w)
-
 	return w
 }
 
-// HACK: I'm overriding NotifyChange() of TextBoxWidget here; it works because TextBoxWidget uses its own, but this isn't good
-func (w *LiveCmdExpeWidget) NotifyChange() {
+func (w *LiveCmdExpeWidget) layout2Test() {
 	select {
 	case b, ok := <-w.stdoutChan:
 		if ok {
@@ -2734,6 +2731,7 @@ func (w *LiveCmdExpeWidget) NotifyChange() {
 
 func (w *LiveCmdExpeWidget) LayoutNeeded() {
 	MakeUpdated(w.commandNode) // THINK: Is this a hack or is this the way to go?
+	w.layout2Test()
 
 	w.TextBoxWidget.LayoutNeeded()
 }
@@ -2816,12 +2814,12 @@ func (w *LiveGoroutineExpeWidget) layout2Test() {
 }
 
 func (w *LiveGoroutineExpeWidget) LayoutNeeded() {
-	w.FlowLayoutWidget.LayoutNeeded()
-
 	if w.live {
 		MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
 	}
 	w.layout2Test()
+
+	w.FlowLayoutWidget.LayoutNeeded()
 }
 
 func (w *LiveGoroutineExpeWidget) Render() {
