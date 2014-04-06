@@ -1214,7 +1214,7 @@ func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) (
 	goSymbols := &goSymbolsB{}
 	goSymbols.AddSources(typeCheckedPackage)
 
-	w := NewSearchableListWidget(np, goSymbols)
+	w := NewSearchableListWidget(np, mathgl.Vec2d{200, 200}, goSymbols)
 	return w, goSymbols
 }
 
@@ -1252,10 +1252,10 @@ func (this *GoPackageSelecterAdapter) GetSelectedGoPackage() *GoPackage {
 	}
 }
 
-func NewGoPackageListingWidget() *SearchableListWidget {
+func NewGoPackageListingWidget(pos, size mathgl.Vec2d) *SearchableListWidget {
 	goPackagesSliceStringer := &goPackagesSliceStringer{&exp14.GoPackages{}}
 
-	w := NewSearchableListWidget(np, goPackagesSliceStringer)
+	w := NewSearchableListWidget(pos, size, goPackagesSliceStringer)
 	return w
 }
 
@@ -3041,21 +3041,33 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 type SearchableListWidget struct {
 	*CompositeWidget
 
+	// Internal access shortcuts (also inside CompositeWidget).
+	searchField Widgeter
+	listWidget  *FilterableSelecterWidget
+
 	ExtensionsTest []Widgeter
 }
 
-func NewSearchableListWidget(pos mathgl.Vec2d, entries SliceStringer) *SearchableListWidget {
+func NewSearchableListWidget(pos, size mathgl.Vec2d, entries SliceStringer) *SearchableListWidget {
 	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
-	listWidget := NewFilterableSelecterWidget(mathgl.Vec2d{0, fontHeight + 2}, entries, searchField.Content)
+	listWidget := NewFilterableSelecterWidget(np, entries, searchField.Content)
+	listWidgetScrollPane := NewScrollPaneWidget(mathgl.Vec2d{0, fontHeight + 2}, size, listWidget)
 
-	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidget})}
+	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget}
 
 	return w
 }
 
 func (w *SearchableListWidget) OnSelectionChanged() Selecter {
-	return w.CompositeWidget.Widgets[1].(*FilterableSelecterWidget)
+	return w.listWidget
+}
+
+// HACK/TEST: Mostly for external callers...
+func (w *SearchableListWidget) SetKeyboardFocus() {
+	// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+	// HACK: Temporarily set both widgets as mapping here
+	keyboardPointer.OriginMapping = append([]Widgeter{w}, w.searchField, w.listWidget)
 }
 
 func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
@@ -3067,9 +3079,7 @@ func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && // TODO: GetHoverer() // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { // TODO: GetHoverer() // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
-		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		// HACK: Temporarily set both widgets as mapping here
-		keyboardPointer.OriginMapping = append([]Widgeter{w}, w.CompositeWidget.Widgets...)
+		w.SetKeyboardFocus()
 	}
 }
 
@@ -3224,14 +3234,6 @@ func (w *FilterableSelecterWidget) selectionChangedTest() {
 		scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
 	}
 
-	// HACK: Not general at all
-	// HACK: Not doing local-to-parent coordinate conversion, so it scrolls to wrong place
-	if w.Parent() != nil {
-		if scrollPane, ok := w.Parent().Parent().(*ScrollPaneWidget); ok {
-			scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
-		}
-	}
-
 	w.manuallyPicked = w.entries.Get(w.selected)
 
 	ExternallyUpdated(w)
@@ -3254,12 +3256,10 @@ func (w *FilterableSelecterWidget) Layout() {
 }
 
 func (w *FilterableSelecterWidget) LayoutNeeded() {
+	MakeUpdated(&w.layoutDepNode2)
 }
 
 func (w *FilterableSelecterWidget) Render() {
-	// TODO: Move to LayoutNeeded()
-	MakeUpdated(&w.layoutDepNode2)
-
 	DrawNBox(w.pos, w.size)
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
@@ -5689,9 +5689,15 @@ func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 		if w.PopupTest != nil {
 			// HACK: Not general at all
 			if _, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
-				hits = append(hits, w.PopupTest.Hit(ParentPosition)...)
+				popupHits := w.PopupTest.Hit(ParentPosition)
+				if len(popupHits) > 0 {
+					return popupHits
+				}
 			} else {
-				hits = append(hits, w.PopupTest.Hit(LocalPosition)...)
+				popupHits := w.PopupTest.Hit(LocalPosition)
+				if len(popupHits) > 0 {
+					return popupHits
+				}
 			}
 		}
 		return hits
@@ -5866,7 +5872,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 
 				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugSliceStringer{entries: []string{"one", "two", "three"}})
-				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, globalGoSymbols)
+				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, mathgl.Vec2d{600, 600}, globalGoSymbols)
 				// HACK: Not general at all
 				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
 					w.PopupTest.SetParent(scrollPane)
@@ -5926,7 +5932,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.PopupTest.ExtensionsTest = append(w.PopupTest.ExtensionsTest, closeOnEscape)
 
 				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-				keyboardPointer.OriginMapping = append([]Widgeter{w.PopupTest}, w.PopupTest.Widgets...)
+				w.PopupTest.SetKeyboardFocus()
 			}
 		// TEST: Closing this widget...
 		case glfw.KeyW:
@@ -6666,11 +6672,11 @@ func main() {
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 		_ = windowSize
 
-		goPackageListing := NewGoPackageListingWidget()
-		widgets = append(widgets, NewScrollPaneWidget(np, mathgl.Vec2d{200, 600}, goPackageListing))
+		goPackageListing := NewGoPackageListingWidget(mathgl.Vec2d{0, 200}, mathgl.Vec2d{200, 500 - fontHeight - 2})
+		widgets = append(widgets, goPackageListing)
 
 		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
-		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{0, 600 + 2}, mathgl.Vec2d{200, float64(windowSize1 - 602 - 2)}, folderListing))
+		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{0, 200 + 500 + 2}, mathgl.Vec2d{200, float64(windowSize1 - 602 - 2)}, folderListing))
 
 		// TEST, HACK: Open the folder listing to the folder of the Go package
 		folderListingDirChanger := DepNode2Func{}
