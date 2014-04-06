@@ -4146,6 +4146,14 @@ func (cp *caretPositionInternal) SetHint(caretPosition uint32, beginLineIndex in
 	return cp.targetExpandedX, y
 }
 
+func (cp *caretPositionInternal) SaveState() *caretPositionInternal {
+	return &caretPositionInternal{
+		lineIndex:          cp.lineIndex,
+		positionWithinLine: cp.positionWithinLine,
+		targetExpandedX:    cp.targetExpandedX,
+	}
+}
+
 func isCoreCharacter(character byte) bool {
 	return (('a' <= character && character <= 'z') ||
 		('A' <= character && character <= 'Z') ||
@@ -4316,6 +4324,19 @@ func (cp *CaretPosition) TrySet(position uint32, leaveSelectionOptional ...bool)
 	if !leaveSelection {
 		cp.selectionPosition.MoveTo(cp.caretPosition)
 	}
+}
+
+func (cp *CaretPosition) SaveState() CaretPosition {
+	return CaretPosition{
+		caretPosition:     cp.caretPosition.SaveState(),
+		selectionPosition: cp.selectionPosition.SaveState(),
+	}
+}
+
+func (cp *CaretPosition) RestoreState(state CaretPosition) {
+	// TODO: Add support for gracefully handling content changing since the time state was saved.
+	cp.caretPosition.MoveTo(state.caretPosition)
+	cp.selectionPosition.MoveTo(state.selectionPosition)
 }
 
 // ---
@@ -5384,6 +5405,29 @@ func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
 	}
 }
 
+type TextBoxScrollPaneView struct {
+	caretPosition      CaretPosition
+	scrollPaneChildPos mathgl.Vec2d
+}
+
+func (w *TextBoxWidget) SaveView() (view TextBoxScrollPaneView) {
+	view.caretPosition = w.caretPosition.SaveState()
+
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+		view.scrollPaneChildPos = *scrollPane.child.Pos()
+	}
+
+	return view
+}
+
+func (w *TextBoxWidget) RestoreView(view TextBoxScrollPaneView) {
+	w.caretPosition.RestoreState(view.caretPosition)
+
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+		*scrollPane.child.Pos() = view.scrollPaneChildPos
+	}
+}
+
 func (w *TextBoxWidget) NotifyChange() {
 	w.caretPosition.NotifyContentChanged()
 
@@ -5905,8 +5949,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
 				}
 
-				originalMapping := keyboardPointer.OriginMapping   // HACK
-				originalCaretPosition := w.caretPosition.Logical() // TODO: Save state in a better way
+				originalMapping := keyboardPointer.OriginMapping // HACK
+				originalView := w.SaveView()
 				closeOnEscape := &CustomWidget{
 					Widget: NewWidget(np, np),
 					ProcessEventFunc: func(inputEvent InputEvent) {
@@ -5920,8 +5964,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 							case glfw.KeyEscape:
 								w.PopupTest = nil
 
-								// TODO: Restore view, caretPosition in a better way
-								w.caretPosition.TrySet(originalCaretPosition)
+								w.RestoreView(originalView)
 
 								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 								keyboardPointer.OriginMapping = originalMapping
