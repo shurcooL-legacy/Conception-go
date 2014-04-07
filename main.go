@@ -2136,6 +2136,7 @@ func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *FlowLayo
 		options = &FlowLayoutWidgetOptions{}
 	}
 	w := &FlowLayoutWidget{CompositeWidget: CompositeWidget{Widget: NewWidget(pos, mathgl.Vec2d{}), Widgets: Widgets}, options: *options}
+	// TODO: This is a hack, I'm manually overriding parents of each widget that were set in NewCompositeWidget()
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
 	}
@@ -2302,6 +2303,7 @@ func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter, title string) *Colla
 	w.label.SetParent(w)                                                              // For its Layout() to work...
 
 	// HACK: Set position of child
+	w.child.Pos()[0] = w.state.Size()[0] + 2
 	w.child.Pos()[1] = w.state.Size()[1] + 2
 
 	// TODO: This needs to be automated, easy to forget, moved into Layout2(), etc.
@@ -3955,7 +3957,7 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	title := NewTextLabelWidgetString(np, w.title+": ")
 	t := NewTextLabelWidgetString(np, fmt.Sprintf("%s{", getTypeString(v)))
 	header := NewFlowLayoutWidget(np, []Widgeter{title, t}, nil)
-	tab := mathgl.Vec2d{fontWidth * 4}
+	tab := mathgl.Vec2d{fontHeight + 2}
 
 	widgets := []Widgeter{header}
 
@@ -6982,7 +6984,7 @@ func main() {
 			// ---
 
 			// DEBUG: Goon widget of typeCheckedPackage
-			nextTool4 := NewCompositeWidget(np, []Widgeter{NewGoonWidget(mathgl.Vec2d{20, 0}, &typeCheckedPackage)})
+			nextTool4 := NewGoonWidget(np, &typeCheckedPackage)
 			nextTool4Collapsible := NewCollapsibleWidget(np, nextTool4, "goon of typeCheckedPackage")
 
 			// TEST: Add goto declaration extension to editor
@@ -7691,6 +7693,15 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	// Debug Panel
 	{
 		var w Widgeters
+		{
+			contentFunc := func() (out string) {
+				for _, widget := range mousePointer.Mapping {
+					out += fmt.Sprintf("%T\n", widget)
+				}
+				return TrimLastNewline(out)
+			}
+			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Mouse Mapping"))
+		}
 		w = append(w, NewGoonWidget(np, &mousePointer))
 		w = append(w, NewGoonWidget(np, &keyboardPointer))
 		w = append(w, NewGoonWidget(np, &widgets))
