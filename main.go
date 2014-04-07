@@ -2601,31 +2601,6 @@ func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
 	return w
 }
 
-/*func (w *ChannelExpeWidget) Render() {
-	gl.PushMatrix()
-	defer gl.PopMatrix()
-	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
-
-	LongestLine := uint32(0)
-	lines := GetLines(w.Content)
-	for _, line := range lines {
-		lineLength := ExpandedLength(line)
-		if lineLength > LongestLine {
-			LongestLine = lineLength
-		}
-	}
-
-	w.size = mathgl.Vec2d{float64(8 * LongestLine), float64(16 * len(lines))}
-
-	gl.Color3d(0.3, 0.3, 0.3)
-	gl.Rectd(0-1, 0-1, gl.Double(w.size[0]+1), gl.Double(w.size[1]+1))
-	gl.Color3d(1, 1, 1)
-	gl.Rectd(0, 0, gl.Double(w.size[0]), gl.Double(w.size[1]))
-
-	gl.Color3d(0, 0, 0)
-	PrintText(mathgl.Vec2d{}, w.Content)
-}*/
-
 func (w *ChannelExpeWidget) NotifyChange() {
 	select {
 	case b, ok := <-w.ch:
@@ -2643,7 +2618,6 @@ func (w *ChannelExpeWidget) NotifyChange() {
 type commandNode struct {
 	w        *LiveCmdExpeWidget
 	template CmdFactory
-	dst      *TextBoxWidget
 	DepNode2
 }
 
