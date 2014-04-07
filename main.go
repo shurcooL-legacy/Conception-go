@@ -25,6 +25,7 @@ import (
 	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/gostatus/status"
 	"github.com/shurcooL/markdownfmt/markdown"
+	"github.com/shurcooL/pipe"
 
 	"github.com/Jragonmiris/mathgl"
 
@@ -455,6 +456,8 @@ func (this *DepNode) NotifyAllListeners() {
 // ---
 
 type Widgeter interface {
+	PollLogic()
+	Close() error
 	Layout()
 	LayoutNeeded()
 	Render()
@@ -487,6 +490,8 @@ func NewWidget(pos, size mathgl.Vec2d) Widget {
 	return Widget{pos: pos, size: size, hoverPointers: map[*Pointer]bool{}}
 }
 
+func (_ *Widget) PollLogic()   {}
+func (_ *Widget) Close() error { return nil }
 func (w *Widget) Layout() {
 	if w.parent != nil {
 		w.parent.Layout()
@@ -1327,7 +1332,7 @@ func (this *GoCompileErrorsTest) Update() {
 		return GoCompilerError{FileUri: FileUri("file://" + fileUri), ErrorMessage: GoErrorMessage{LineIndex: lineIndex, Message: message}}
 	}
 
-	source := this.DepNode2.GetSources()[0].(*LiveCmdExpeWidget).Content
+	source := this.DepNode2.GetSources()[0].(*LivePipeExpeWidget).Content
 	outChan := GoReduceLinesFromReader(NewContentReader(source), 4, reduceFunc)
 	//outChan := GoReduceLinesFromReader(NewContentReader(this.DepNode2.Sources[0].(MultilineContentI)), 4, reduceFunc)
 
@@ -1614,6 +1619,18 @@ func NewWindowWidget(pos, size mathgl.Vec2d, child Widgeter) *WindowWidget {
 	w.child.SetParent(w)
 	w.Layout() // TODO: Should this be automatic from above SetParent()?
 	return w
+}
+
+func (w *WindowWidget) PollLogic() {
+	w.chrome.PollLogic()
+	w.child.PollLogic()
+}
+
+func (w *WindowWidget) Close() error {
+	// TODO: Errors.
+	_ = w.chrome.Close()
+	_ = w.child.Close()
+	return nil
 }
 
 func (w *WindowWidget) Layout() {
@@ -2043,6 +2060,20 @@ func (w *CompositeWidget) RemoveWidget(targetWidget Widgeter) {
 	}
 }
 
+func (w *CompositeWidget) PollLogic() {
+	for _, widget := range w.Widgets {
+		widget.PollLogic()
+	}
+}
+
+func (w *CompositeWidget) Close() error {
+	// TODO: Errors.
+	for _, widget := range w.Widgets {
+		_ = widget.Close()
+	}
+	return nil
+}
+
 func (w *CompositeWidget) Layout() {
 	w.size = np
 	for _, widget := range w.Widgets {
@@ -2279,6 +2310,23 @@ func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter, title string) *Colla
 	return w
 }
 
+func (w *CollapsibleWidget) PollLogic() {
+	w.state.PollLogic()
+	w.label.PollLogic()
+
+	if w.state.State() {
+		w.child.PollLogic()
+	}
+}
+
+func (w *CollapsibleWidget) Close() error {
+	// TODO: Errors.
+	_ = w.state.Close()
+	_ = w.label.Close()
+	_ = w.child.Close()
+	return nil
+}
+
 func (w *CollapsibleWidget) Layout() {
 	// HACK
 	Widgets := []Widgeter{w.state, w.label}
@@ -2344,6 +2392,16 @@ func NewScrollPaneWidget(pos, size mathgl.Vec2d, child Widgeter) *ScrollPaneWidg
 	w := &ScrollPaneWidget{Widget: NewWidget(pos, size), child: child}
 	w.child.SetParent(w)
 	return w
+}
+
+func (w *ScrollPaneWidget) PollLogic() {
+	w.child.PollLogic()
+}
+
+func (w *ScrollPaneWidget) Close() error {
+	// TODO: Errors.
+	_ = w.child.Close()
+	return nil
 }
 
 func (w *ScrollPaneWidget) Layout() {
@@ -2672,6 +2730,21 @@ func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, template CmdF
 	return w
 }
 
+func (w *LiveCmdExpeWidget) PollLogic() {
+	MakeUpdated(w.commandNode) // THINK: Is this a hack or is this the way to go?
+	w.layout2Test()
+
+	w.TextBoxWidget.PollLogic()
+}
+
+func (w *LiveCmdExpeWidget) Close() error {
+	// TODO: Kill live cmd...
+
+	// TODO: Errors.
+	_ = w.TextBoxWidget.Close()
+	return nil
+}
+
 func (w *LiveCmdExpeWidget) layout2Test() {
 	select {
 	case b, ok := <-w.stdoutChan:
@@ -2703,14 +2776,129 @@ func (w *LiveCmdExpeWidget) layout2Test() {
 	}
 }
 
-func (w *LiveCmdExpeWidget) LayoutNeeded() {
-	MakeUpdated(w.commandNode) // THINK: Is this a hack or is this the way to go?
-	w.layout2Test()
-
-	w.TextBoxWidget.LayoutNeeded()
+func (w *LiveCmdExpeWidget) Render() {
+	w.TextBoxWidget.Render()
 }
 
-func (w *LiveCmdExpeWidget) Render() {
+// ---
+
+type WriterNotifier struct {
+	io.Writer
+	n func()
+}
+
+func (wn *WriterNotifier) Write(p []byte) (n int, err error) {
+	wn.n()
+	n, err = wn.Writer.Write(p)
+	wn.n()
+	return
+}
+
+type pipeNode struct {
+	w *LivePipeExpeWidget
+	p pipe.Pipe
+	s *pipe.State
+	DepNode2
+}
+
+func (this *pipeNode) Update() {
+	if this.s != nil {
+		this.s.Kill()
+		this.s = nil
+	}
+
+	SetViewGroup(this.w.Content, "")
+
+	notify := func() {
+		//println("yo, notify, yo?")
+		//redraw = true
+		//glfw.PostEmptyEvent()
+	}
+	this.w.stdoutChan = &WriterNotifier{make(ChanWriter), notify}
+	this.w.stderrChan = &WriterNotifier{make(ChanWriter), notify}
+	this.s = pipe.NewState(this.w.stdoutChan, this.w.stderrChan)
+
+	go func() {
+		err := this.p(this.s)
+		if err == nil {
+			err = this.s.RunTasks()
+		}
+		//close(this.w.stdoutChan) // This is causing panics because pipe tries to write to closed channel.
+		//close(this.w.stderrChan)
+		this.w.finishedChan <- err
+	}()
+	fmt.Println("started new pipe")
+}
+
+type LivePipeExpeWidget struct {
+	*TextBoxWidget
+	pipeNode       *pipeNode
+	stdoutChan     *WriterNotifier
+	stderrChan     *WriterNotifier
+	finishedChan   chan error
+	DepNode2Manual // FinishedDepNode2
+}
+
+func NewLivePipeExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, p pipe.Pipe) *LivePipeExpeWidget {
+	w := &LivePipeExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan error)}
+
+	// THINK: The only reason to have a separate pipe node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
+	w.pipeNode = &pipeNode{w: w, p: p}
+	w.pipeNode.AddSources(dependees...)
+
+	return w
+}
+
+func (w *LivePipeExpeWidget) PollLogic() {
+	MakeUpdated(w.pipeNode) // THINK: Is this a hack or is this the way to go?
+	w.layout2Test()
+
+	w.TextBoxWidget.PollLogic()
+}
+
+func (w *LivePipeExpeWidget) Close() error {
+	if w.pipeNode.s != nil {
+		w.pipeNode.s.Kill()
+		w.pipeNode.s = nil
+	}
+
+	// TODO: Errors.
+	_ = w.TextBoxWidget.Close()
+	return nil
+}
+
+func (w *LivePipeExpeWidget) layout2Test() {
+	select {
+	case b, ok := <-w.stdoutChan.Writer.(ChanWriter):
+		if ok {
+			SetViewGroup(w.Content, w.Content.Content()+string(b))
+			redraw = true
+		}
+	default:
+	}
+
+	select {
+	case b, ok := <-w.stderrChan.Writer.(ChanWriter):
+		if ok {
+			SetViewGroup(w.Content, w.Content.Content()+string(b))
+			redraw = true
+		}
+	default:
+	}
+
+	select {
+	/*case processState := <-w.finishedChan:
+	if processState.Success() {
+		// TODO: Is ChangeListener stuff a good fit for these not-really-change events?
+		w.SuccessDepNode.NotifyAllListeners()
+	}*/
+	case <-w.finishedChan:
+		ExternallyUpdated(w)
+	default:
+	}
+}
+
+func (w *LivePipeExpeWidget) Render() {
 	w.TextBoxWidget.Render()
 }
 
@@ -2772,6 +2960,23 @@ func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, live bool, dependees []DepNode
 	return w
 }
 
+func (w *LiveGoroutineExpeWidget) PollLogic() {
+	if w.live {
+		MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
+	}
+	w.layout2Test()
+
+	w.FlowLayoutWidget.PollLogic()
+}
+
+func (w *LiveGoroutineExpeWidget) Close() error {
+	// TODO: Kill live goroutine?
+
+	// TODO: Errors.
+	_ = w.FlowLayoutWidget.Close()
+	return nil
+}
+
 func (w *LiveGoroutineExpeWidget) layout2Test() {
 	select {
 	case s, ok := <-w.outChan:
@@ -2785,15 +2990,6 @@ func (w *LiveGoroutineExpeWidget) layout2Test() {
 		}
 	default:
 	}
-}
-
-func (w *LiveGoroutineExpeWidget) LayoutNeeded() {
-	if w.live {
-		MakeUpdated(w.actionNode) // THINK: Is this a hack or is this the way to go?
-	}
-	w.layout2Test()
-
-	w.FlowLayoutWidget.LayoutNeeded()
 }
 
 func (w *LiveGoroutineExpeWidget) Render() {
@@ -6755,10 +6951,22 @@ func main() {
 			build := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template2)
 			nextTool2Collapsible := NewCollapsibleWidget(np, build, "go build")
 
+			// go build via pipe.
+			p := pipe.Script(
+				pipe.Println("Building."),
+				// TODO: Use correct import path.
+				pipe.Exec("go", "build", "-o", "./Con2RunBin", "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go"),
+				pipe.Println("Running."),
+				pipe.Exec("./Con2RunBin"), // TEST: Run.
+				pipe.Println("Done."),
+			)
+			build2 := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, p)
+			nextTool2bCollapsible := NewCollapsibleWidget(np, build2, "go build via pipe")
+
 			// Go Compile Errors hardcoded TEST
 			{
 				goCompileErrorsTest := GoCompileErrorsTest{}
-				goCompileErrorsTest.AddSources(build)
+				goCompileErrorsTest.AddSources(build2)
 				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
 			}
 
@@ -6850,7 +7058,7 @@ func main() {
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, nextTool2bCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
@@ -7539,6 +7747,8 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			MakeUpdated(keepUpdatedEntry)
 		}
 
+		widget.PollLogic()
+
 		if redraw && !*headlessFlag {
 			gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
@@ -7558,5 +7768,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		}
 	}
 
+	_ = widget.Close()
 	os.Remove("./Con2RunBin") // TODO: Generalize this
 }
