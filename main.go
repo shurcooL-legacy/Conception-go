@@ -5494,9 +5494,6 @@ type TextBoxWidget struct {
 	options TextBoxWidgetOptions
 
 	// TESTS
-	DiffsTest []diffmatchpatch.Diff
-	Side      int8
-
 	ValidChange TextBoxWidgetValidChange // TODO: This should probably be properly moved into DepNode2 or similar.
 
 	ExtensionsTest   []Widgeter
@@ -5702,7 +5699,7 @@ func (w *TextBoxWidget) Render() {
 		gl.PopMatrix()
 	}
 
-	if w.DiffsTest == nil || glfw.Release != globalWindow.GetKey(glfw.KeyLeftSuper) {
+	{
 		gl.Color3d(0, 0, 0)
 		if !w.options.Private {
 			// Render only visible lines.
@@ -5834,22 +5831,6 @@ func (w *TextBoxWidget) Render() {
 				contentLine := w.Content.Line(lineIndex)
 				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, strings.Repeat("*", int(contentLine.Length)))
 			}
-		}
-	} else {
-		gl.Color3d(0, 0, 0)
-		glt := NewOpenGlStream(w.pos)
-		//glt.PrintText(w.Content.Content())
-		for _, diff := range w.DiffsTest {
-			if diff.Type == w.Side && diff.Type == -1 {
-				glt.BackgroundColor = &mathgl.Vec3d{1, 0.8, 0.8}
-			} else if diff.Type == w.Side && diff.Type == +1 {
-				glt.BackgroundColor = &mathgl.Vec3d{0.8, 1, 0.8}
-			} else if diff.Type == 0 {
-				glt.BackgroundColor = nil
-			} else {
-				continue
-			}
-			glt.PrintText(diff.Text)
 		}
 	}
 
@@ -6713,7 +6694,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if !sublimeMode && false {
 
@@ -7456,37 +7437,10 @@ func main() {
 			out := NewTextLabelWidgetContentFunc(np, debugOutput, []DepNodeI{&UniversalClock})*/
 			out := NewLiveCmdExpeWidget(np, []DepNode2I{template}, template)
 
-			//out.AddChangeListener(ChangeListenerFunc(func() {
-			/*refresh := NewButtonWidget(np, func() {
-				dmp := diffmatchpatch.New()
-				diffs := dmp.DiffMain(in.Content.Content(), out.Content.Content(), true)
-				in.DiffsTest = diffs
-				in.Side = -1
-				out.DiffsTest = diffs
-				out.Side = +1
-				//contentWs.Set(goon.Sdump(dmp.DiffMain(in.Content.Content(), out.Content.Content(), true)))
-				out.Content.Set(out.Content.Content() + goon.SdumpExpr(template.NewCommand().Args))
-			})*/
-
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
 
 			box1 := in
 			box2 := out
-
-			doDiff := DepNode2Func{}
-			doDiff.UpdateFunc = func(this DepNode2I) {
-				left := this.GetSources()[0].(MultilineContentI)
-				right := this.GetSources()[1].(MultilineContentI)
-
-				dmp := diffmatchpatch.New()
-				diffs := dmp.DiffMain(left.Content(), right.Content(), true)
-				box1.DiffsTest = diffs
-				box1.Side = -1
-				box2.DiffsTest = diffs
-				box2.Side = +1
-			}
-			doDiff.AddSources(box1.Content, box2.Content)
-			keepUpdatedTEST = append(keepUpdatedTEST, &doDiff)
 
 			/*highlightedDiff1 := &highlightedDiff{leftSide: true}
 			highlightedDiff1.AddSources(box1.Content, box2.Content)
@@ -7642,21 +7596,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	}
 	gl.End()`), nil)
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 200}, []Widgeter{box1, box2}, nil))
-
-			doDiff := DepNode2Func{}
-			doDiff.UpdateFunc = func(this DepNode2I) {
-				left := this.GetSources()[0].(MultilineContentI)
-				right := this.GetSources()[1].(MultilineContentI)
-
-				dmp := diffmatchpatch.New()
-				diffs := dmp.DiffMain(left.Content(), right.Content(), true)
-				box1.DiffsTest = diffs
-				box1.Side = -1
-				box2.DiffsTest = diffs
-				box2.Side = +1
-			}
-			doDiff.AddSources(box1.Content, box2.Content)
-			keepUpdatedTEST = append(keepUpdatedTEST, &doDiff)
 
 			highlightedDiff1 := &highlightedDiff{leftSide: true}
 			highlightedDiff1.AddSources(box1.Content, box2.Content)
