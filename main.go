@@ -47,6 +47,7 @@ import (
 	. "gist.github.com/5639599.git"
 	. "gist.github.com/6418462.git"
 
+	"encoding/json"
 	"errors"
 
 	"io"
@@ -3229,6 +3230,33 @@ func NewSearchableListWidget(pos, size mathgl.Vec2d, entries SliceStringer) *Sea
 	return w
 }
 
+type entriesPlusOne struct {
+	SliceStringer
+	extra *TextBoxWidget
+}
+
+func (this *entriesPlusOne) Get(index uint64) fmt.Stringer {
+	if index < this.SliceStringer.Len() {
+		return this.SliceStringer.Get(index)
+	} else {
+		return json.Number("Create new \"" + this.extra.Content.Content() + "\"...") // HACK: Should use a better suited fmt.Stringer type.
+	}
+}
+
+func (this *entriesPlusOne) Len() uint64 {
+	return this.SliceStringer.Len() + 1
+}
+
+func NewSearchableListWidgetTest(pos, size mathgl.Vec2d, entries SliceStringer) *SearchableListWidget {
+	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
+	listWidget := NewFilterableSelecterWidget(np, &entriesPlusOne{entries, searchField}, searchField.Content)
+	listWidgetScrollPane := NewScrollPaneWidget(mathgl.Vec2d{0, fontHeight + 2}, size, listWidget)
+
+	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget}
+
+	return w
+}
+
 func (w *SearchableListWidget) OnSelectionChanged() Selecter {
 	return w.listWidget
 }
@@ -6067,7 +6095,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 
 				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugSliceStringer{entries: []string{"one", "two", "three"}})
-				w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, mathgl.Vec2d{600, 600}, globalGoSymbols)
+				w.PopupTest = NewSearchableListWidgetTest(mathgl.Vec2d{200, 0}, mathgl.Vec2d{600, 600}, globalGoSymbols)
 				// HACK: Not general at all
 				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
 					w.PopupTest.SetParent(scrollPane)
@@ -6083,7 +6111,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 							// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
 							//println("selected:", entry.String())
 
-							if declNode := entry.(*NodeStringer); true {
+							if declNode, ok := entry.(*NodeStringer); ok {
 
 								if file := globalTypeCheckedPackage.fset.File(declNode.Pos()); file != nil {
 									// TODO: Change folderListing selection if it's in a different file
@@ -6694,7 +6722,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if !sublimeMode && false {
 
