@@ -1048,16 +1048,31 @@ func findTypesObject(info *types.Info, ident *ast.Ident) (obj types.Object) {
 
 // ---
 
-func NewTest6OracleWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) Widgeter {
-	validFunc := func(c MultilineContentI) bool {
-		switch c.Content() {
-		case "callees", "callers", "callgraph", "callstack", "describe", "freevars", "implements", "peers", "referrers":
-			return true
-		default:
-			return false
-		}
+type SliceStringerS struct {
+	entries []fmt.Stringer
+	DepNode2Manual
+}
+
+func NewSliceStringerS(entries ...string) *SliceStringerS {
+	s := &SliceStringerS{}
+	for _, entry := range entries {
+		s.entries = append(s.entries, json.Number(entry))
 	}
-	mode := NewTextBoxValidationWidget(np, validFunc)
+	return s
+}
+
+func (this *SliceStringerS) Get(index uint64) fmt.Stringer {
+	return this.entries[index]
+}
+
+func (this *SliceStringerS) Len() uint64 {
+	return uint64(len(this.entries))
+}
+
+var oracleModes = NewSliceStringerS("callees", "callers", "callgraph", "callstack", "describe", "freevars", "implements", "peers", "referrers")
+
+func NewTest6OracleWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) Widgeter {
+	mode := NewFilterableSelecterWidget(np, oracleModes, NewMultilineContent())
 
 	params := func() interface{} {
 		fileUri, _ := source.Content.GetUriForProtocol("file://")
@@ -1065,7 +1080,7 @@ func NewTest6OracleWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter,
 			source.caretPosition.Logical(),
 			fileUri,
 			goPackageSelecter,
-			mode.Content.Content(),
+			mode.GetSelected().String(),
 		}
 	}
 
@@ -1087,7 +1102,7 @@ func NewTest6OracleWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter,
 		}
 	}
 
-	w := NewLiveGoroutineExpeWidget(pos, false, []DepNode2I{source.caretPosition, goPackageSelecter, &mode.ValidChange}, params, action)
+	w := NewLiveGoroutineExpeWidget(pos, false, []DepNode2I{source.caretPosition, goPackageSelecter, mode}, params, action)
 
 	return NewFlowLayoutWidget(pos, Widgeters{mode, w}, nil)
 }
@@ -3329,22 +3344,6 @@ func (this *FilterableSliceStringer) Update() {
 
 		this.filteredEntries = append(this.filteredEntries, source.Get(index))
 	}
-}
-
-// ---
-
-// HACK: Helper struct for testing popup menu
-type debugSliceStringer struct {
-	entries []string
-	DepNode2Manual
-}
-
-func (this *debugSliceStringer) Get(index uint64) fmt.Stringer {
-	return &NodeStringer{str: this.entries[index]}
-}
-
-func (this *debugSliceStringer) Len() uint64 {
-	return uint64(len(this.entries))
 }
 
 // ---
@@ -6094,7 +6093,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					break
 				}
 
-				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, &debugSliceStringer{entries: []string{"one", "two", "three"}})
+				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, NewSliceStringerS("one", "two", "three"))
 				w.PopupTest = NewSearchableListWidgetTest(mathgl.Vec2d{200, 0}, mathgl.Vec2d{600, 600}, globalGoSymbols)
 				// HACK: Not general at all
 				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
