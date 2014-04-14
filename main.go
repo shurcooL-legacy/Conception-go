@@ -4931,20 +4931,6 @@ func (this *MultilineContentFunc) NotifyChange() {
 
 // ---
 
-// HACK: This is hacky because of overlap between DepNode2Manual of MultilineContent and
-//       DepNode2 of DepNode2Func, but it kinda works for now. Replace with proper solution.
-type MultilineContentFunc2 struct {
-	*MultilineContent
-	DepNode2Func
-}
-
-func NewMultilineContentFunc2() *MultilineContentFunc2 {
-	this := &MultilineContentFunc2{MultilineContent: NewMultilineContent()}
-	return this
-}
-
-// ---
-
 type MultilineContentFuncInstant struct {
 	*MultilineContentFunc
 }
