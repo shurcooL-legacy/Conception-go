@@ -4192,7 +4192,7 @@ func (cp *caretPositionInternal) TryMoveV(amount int8) {
 	case -1:
 		if cp.lineIndex > 0 {
 			cp.lineIndex--
-			line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start : cp.w.Line(cp.lineIndex).Start+cp.w.Line(cp.lineIndex).Length]
+			line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
 			cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
 
 			ExternallyUpdated(&cp.DepNode2Manual)
@@ -4202,7 +4202,7 @@ func (cp *caretPositionInternal) TryMoveV(amount int8) {
 	case +1:
 		if cp.lineIndex < cp.w.LenLines()-1 {
 			cp.lineIndex++
-			line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start : cp.w.Line(cp.lineIndex).Start+cp.w.Line(cp.lineIndex).Length]
+			line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
 			cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
 
 			ExternallyUpdated(&cp.DepNode2Manual)
@@ -4279,7 +4279,7 @@ func (cp *caretPositionInternal) SetPositionFromPhysical(pos mathgl.Vec2d) {
 		cp.targetExpandedX = uint32((pos[0] + fontWidth/2) / fontWidth)
 	}
 
-	line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start : cp.w.Line(cp.lineIndex).Start+cp.w.Line(cp.lineIndex).Length]
+	line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
 	cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
 
 	ExternallyUpdated(&cp.DepNode2Manual)
@@ -4521,8 +4521,7 @@ func (cp *CaretPosition) RestoreState(state CaretPosition) {
 type MultilineContentI interface {
 	Content() string
 	LenContent() int
-	Lines() []contentLine // DEPRECATED
-	LongestLine() uint32  // Line length
+	LongestLine() uint32 // Line length
 
 	Line(lineIndex int) contentLine
 	LenLines() int
@@ -4537,6 +4536,10 @@ func NewContentReader(c MultilineContentI) io.Reader { return strings.NewReader(
 type contentLine struct {
 	Start  uint32
 	Length uint32
+}
+
+func (this *contentLine) End() uint32 {
+	return this.Start + this.Length
 }
 
 type MultilineContent struct {
@@ -4560,9 +4563,8 @@ func NewMultilineContentString(content string) *MultilineContent {
 	return mc
 }
 
-func (c *MultilineContent) Content() string      { return c.content }
-func (c *MultilineContent) Lines() []contentLine { return c.lines } // DEPRECATED
-func (c *MultilineContent) LongestLine() uint32  { return c.longestLine }
+func (c *MultilineContent) Content() string     { return c.content }
+func (c *MultilineContent) LongestLine() uint32 { return c.longestLine }
 
 func (c *MultilineContent) LenContent() int { return len(c.content) }
 
@@ -4923,9 +4925,6 @@ func NewMultilineContentFuncInstant(contentFunc func() string) *MultilineContent
 func (this *MultilineContentFuncInstant) Content() string {
 	this.MultilineContentFunc.NotifyChange()
 	return this.MultilineContentFunc.Content()
-}
-func (this *MultilineContentFuncInstant) Lines() []contentLine {
-	panic("MultilineContentFuncInstant.Lines(): DEPRECATED")
 }
 func (this *MultilineContentFuncInstant) LongestLine() uint32 {
 	this.MultilineContentFunc.NotifyChange()
@@ -5909,7 +5908,7 @@ func (w *TextBoxWidget) Render() {
 			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
 			for _, goErrorMessage := range goCompileErrorsManagerTest.All[uri] {
 				if goErrorMessage.LineIndex < w.Content.LenLines() {
-					expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Lines()[goErrorMessage.LineIndex].Start : w.Content.Lines()[goErrorMessage.LineIndex].Start+w.Content.Lines()[goErrorMessage.LineIndex].Length])
+					expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Line(goErrorMessage.LineIndex).Start:w.Content.Line(goErrorMessage.LineIndex).End()])
 					glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineIndex)}))
 					glt.PrintLine(goErrorMessage.Message)
 				}
