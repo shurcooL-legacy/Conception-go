@@ -25,7 +25,7 @@ import (
 	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/gostatus/status"
 	"github.com/shurcooL/markdownfmt/markdown"
-	"github.com/shurcooL/pipe"
+	"gopkg.in/pipe.v2"
 
 	"github.com/Jragonmiris/mathgl"
 
@@ -4538,7 +4538,7 @@ type contentLine struct {
 	Length uint32
 }
 
-func (this *contentLine) End() uint32 {
+func (this contentLine) End() uint32 {
 	return this.Start + this.Length
 }
 
