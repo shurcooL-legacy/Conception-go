@@ -3122,26 +3122,6 @@ func (this *DepDumper) Update() {
 
 // ---
 
-/*type MultilineContentDepDumper struct {
-	*MultilineContent
-	DepNode2
-}
-
-func NewMultilineContentDepDumper(sources ...DepNode2I) MultilineContentI {
-	this := &MultilineContentDepDumper{MultilineContent: NewMultilineContent()}
-	this.AddSources(sources...)
-	return this
-}
-
-func (this *MultilineContentDepDumper) Update() {
-	//content := TrimLastNewline(goon.Sdump(this.GetSources()[0].(*GoPackageListingPureWidget).GetSelected()))
-	//content := this.Content() + "+"
-	content := this.GetSources()[0].(*VcsStatus).GetSources()[0].(*VcsNode).vcs.RootPath() + "\n" + this.GetSources()[0].(*VcsStatus).status
-	SetViewGroup(this.MultilineContent, content)
-}*/
-
-// ---
-
 type SpinnerWidget struct {
 	Widget
 	Spinner uint32
@@ -6478,11 +6458,10 @@ func initHttpHandlers() {
 
 		var b string
 
+		// TODO: Try to lookup the GoPackage rather than creating a new one.
 		importPath := r.URL.Path[1:]
 		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
-			// TODO: Cache this via DepNode2I
 			goPackage.UpdateVcs()
-			goPackage.UpdateVcsFields()
 
 			// TODO: Cache this via DepNode2I
 			dpkg, err := GetDocPackageAll(goPackage.Bpkg, nil)
@@ -6505,6 +6484,9 @@ func initHttpHandlers() {
 			b += "\n---\n\n"
 
 			if goPackage.Dir.Repo != nil {
+				MakeUpdated(goPackage.Dir.Repo.VcsLocal)
+				MakeUpdated(goPackage.Dir.Repo.VcsRemote)
+
 				b += "```\n"
 				if goPackage.Dir.Repo.VcsLocal.Status == "" {
 					b += "nothing to commit, working directory clean\n\n"
@@ -7020,11 +7002,6 @@ func main() {
 
 			// ---
 
-			/*nextTool := NewTextBoxWidgetExternalContent(np, NewMultilineContentDepDumper(goPackageListing))
-			nextToolCollapsible := NewCollapsibleWidget(np, nextTool)*/
-
-			// ---
-
 			// go build
 			template2 := NewCmdTemplateDynamic2()
 			template2.UpdateFunc = func(this DepNode2I) {
@@ -7188,21 +7165,6 @@ func main() {
 
 			//widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 716 + 2}, &goCompileErrorsManagerTest.DepNode2.NeedToUpdate))
 			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 732 + 4}, &goCompileErrorsManagerTest.All))
-		}
-
-		// git diff
-		if true {
-			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget)
-			dir, file := filepath.Split(source.Path())
-			if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
-				template := NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
-				template.Dir = dir
-				w := NewLiveCmdExpeWidget(np, []DepNode2I{source.Content}, template)
-
-				widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
-				w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
-				widgets[2].(*FlowLayoutWidget).Layout()
-			}
 		}
 
 		// TEST: Render the Go code tokens with color highlighting
