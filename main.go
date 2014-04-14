@@ -5041,6 +5041,66 @@ func (w *TextLabelWidget) Render() {
 
 // ---
 
+type DepStringerI interface {
+	fmt.Stringer
+	DepNode2I
+}
+
+type DepStringerFunc struct {
+	content string
+	DepNode2Func
+}
+
+func (this *DepStringerFunc) String() string {
+	return this.content
+}
+
+// ---
+
+type StringerWidget struct {
+	Widget
+	content        DepStringerI
+	layoutDepNode2 DepNode2Func
+}
+
+func NewStringerWidget(pos mathgl.Vec2d, content DepStringerI) *StringerWidget {
+	w := &StringerWidget{
+		Widget:  NewWidget(pos, mathgl.Vec2d{0, 0}),
+		content: content,
+	}
+	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.Layout() }
+	w.layoutDepNode2.AddSources(content) // TODO: What about removing w when it's "deleted"?
+	return w
+}
+
+func (w *StringerWidget) Layout() {
+	// TODO: Multiline support?
+	longestLine := len(w.content.String())
+	if longestLine < 3 {
+		w.size[0] = float64(fontWidth * 3)
+	} else {
+		w.size[0] = float64(fontWidth * longestLine)
+	}
+	w.size[1] = float64(fontHeight * 1)
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *StringerWidget) LayoutNeeded() {
+	MakeUpdated(&w.layoutDepNode2)
+}
+
+func (w *StringerWidget) Render() {
+	DrawLGBox(w.pos, w.size)
+
+	gl.Color3d(0, 0, 0)
+	// TODO: Multiline support?
+	PrintLine(w.pos, w.content.String())
+}
+
+// ---
+
 type TextStyle struct {
 	TextColor       *mathgl.Vec3d
 	BackgroundColor **mathgl.Vec3d
@@ -6941,6 +7001,25 @@ func main() {
 
 			// ---
 
+			// Local Branch of selected GoPackage
+			localBranch := &DepStringerFunc{}
+			localBranch.UpdateFunc = func(this DepNode2I) {
+				localBranch.content = ""
+				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+					goPackage.UpdateVcs()
+					if goPackage.Dir.Repo != nil {
+						MakeUpdated(goPackage.Dir.Repo.VcsLocal)
+						localBranch.content = goPackage.Dir.Repo.VcsLocal.LocalBranch
+					}
+				}
+			}
+			localBranch.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
+
+			nextTool := NewStringerWidget(np, localBranch)
+			nextToolCollapsible := NewCollapsibleWidget(np, nextTool, "Local Branch")
+
+			// ---
+
 			/*nextTool := NewTextBoxWidgetExternalContent(np, NewMultilineContentDepDumper(goPackageListing))
 			nextToolCollapsible := NewCollapsibleWidget(np, nextTool)*/
 
@@ -7068,7 +7147,7 @@ func main() {
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, nextTool2bCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
