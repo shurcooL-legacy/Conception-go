@@ -1553,9 +1553,9 @@ func (w *TriButtonExternalStateWidget) Render() {
 	}
 
 	if w.state() {
-		DrawBorderlessBox(w.pos.Add(w.size.Mul(0.125)), w.size.Mul(0.75), mathgl.Vec3d{0.9, 0.3, 0.01})
+		DrawBorderlessBox(w.pos.Add(w.size.Mul(2.0/14)), w.size.Mul(10.0/14), mathgl.Vec3d{0.9, 0.3, 0.01})
 	} else {
-		DrawBorderlessBox(w.pos.Add(w.size.Mul(0.125)), w.size.Mul(0.75), mathgl.Vec3d{0.9, 0.9, 0.9})
+		DrawBorderlessBox(w.pos.Add(w.size.Mul(2.0/14)), w.size.Mul(10.0/14), mathgl.Vec3d{0.9, 0.9, 0.9})
 	}
 }
 
@@ -3012,6 +3012,63 @@ func (w *LiveGoroutineExpeWidget) layout2Test() {
 
 func (w *LiveGoroutineExpeWidget) Render() {
 	w.FlowLayoutWidget.Render()
+}
+
+// ---
+
+type ConnectionWidget struct {
+	Widget
+}
+
+func NewConnectionWidget(pos mathgl.Vec2d) *ConnectionWidget {
+	w := &ConnectionWidget{Widget: NewWidget(pos, mathgl.Vec2d{fontHeight, fontHeight})}
+	return w
+}
+
+func (w *ConnectionWidget) Render() {
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		DrawCircle(w.pos, w.size, highlightColor, nearlyWhiteColor)
+	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		DrawCircle(w.pos, w.size, highlightColor, nearlyWhiteColor)
+	} else {
+		DrawCircle(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor)
+	}
+
+	DrawCircle(w.pos, w.size.Mul(0.5625), mathgl.Vec3d{0.3, 0.3, 0.3}, mathgl.Vec3d{0.3, 0.3, 0.3})
+
+	if isOriginHit && mousePointer.State.IsActive() {
+		gl.PushMatrix()
+		defer gl.PopMatrix()
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+
+		globalPosition := mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]}
+		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
+
+		gl.Color3d(0, 0, 0)
+		gl.Begin(gl.LINES)
+		gl.Vertex2d(gl.Double(0), gl.Double(0))
+		gl.Vertex2d(gl.Double(localPosition[0]), gl.Double(localPosition[1]))
+		gl.End()
+	}
+}
+
+func (w *ConnectionWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+	if w.pos.Sub(ParentPosition).Len() <= w.size[0]/2 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
 }
 
 // ---
@@ -6577,7 +6634,7 @@ func main() {
 	//defer profile.Start(profile.CPUProfile).Stop()
 	//defer profile.Start(profile.MemProfile).Stop()
 
-	fmt.Printf("go version %s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("go version %s %s/%s.\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
 
@@ -6604,7 +6661,7 @@ func main() {
 		}
 		defer glfw.Terminate()
 
-		//glfw.WindowHint(glfw.Samples, 32) // Anti-aliasing
+		glfw.WindowHint(glfw.Samples, 8) // Anti-aliasing
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
 		var err error
 		window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
@@ -6615,8 +6672,13 @@ func main() {
 		if err := gl.Init(); nil != err {
 			log.Print(err)
 		}
-		fmt.Printf("glfw %d.%d.%d; %s %s %s\n", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision,
-			gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)))
+		{
+			var samples gl.Int
+			gl.GetIntegerv(gl.SAMPLES, &samples)
+			fmt.Printf("glfw %d.%d.%d; %s %s %s; %s; %v samples.\n", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision,
+				gl.GoStringUb(gl.GetString(gl.VENDOR)), gl.GoStringUb(gl.GetString(gl.RENDERER)), gl.GoStringUb(gl.GetString(gl.VERSION)),
+				gl.GoStringUb(gl.GetString(gl.SHADING_LANGUAGE_VERSION)), samples)
+		}
 
 		{
 			m, err := glfw.GetPrimaryMonitor()
@@ -6762,7 +6824,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if !sublimeMode && false {
 
@@ -7672,6 +7734,11 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			highlightedDiff2 := &highlightedDiff{}
 			highlightedDiff2.AddSources(box1.Content, box2.Content)
 			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+		}
+
+		{
+			w := NewConnectionWidget(mathgl.Vec2d{700, 500})
+			widgets = append(widgets, w)
 		}
 
 	} else if false {
