@@ -1868,7 +1868,7 @@ func NewKatWidget(pos mathgl.Vec2d) *KatWidget {
 
 func (w *KatWidget) Render() {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	/*hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	/*hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	isHit := len(w.HoverPointers()) > 0
 
@@ -1942,7 +1942,9 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		keyboardPointer.OriginMapping = []Widgeter{w}
+		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
+			keyboardPointer.OriginMapping = append(keyboardPointer.OriginMapping, w)
+		}
 	}
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
@@ -1974,7 +1976,7 @@ func (w *KatWidget) NotifyChange() {
 	var timePassed float64 = UniversalClock.TimePassed
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	var speed = float64(100.0)
 
@@ -2220,6 +2222,52 @@ func (w *CanvasWidget) AddWidget(widget Widgeter) {
 	w.Layout()
 }
 
+func (w *CanvasWidget) PollLogic() {
+	var timePassed float64 = UniversalClock.TimePassed
+
+	if w.options.Scrollable {
+		// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+		// HACK: Instead of checking for exclusive focus, should have a waterfall model with low priority checking.
+		hasExclusiveTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) == 1 && w == keyboardPointer.OriginMapping[0]
+
+		if hasExclusiveTypingFocus {
+			var speed = float64(1000.0)
+			if keyboardPointer.State.Button(int(glfw.KeyLeftShift)) || keyboardPointer.State.Button(int(glfw.KeyRightShift)) {
+				speed *= 0.4
+			} else if keyboardPointer.State.Button(int(glfw.KeySpace)) {
+				speed *= 10
+			}
+
+			var direction mathgl.Vec2d
+			if keyboardPointer.State.Button(int(glfw.KeyLeft)) && !keyboardPointer.State.Button(int(glfw.KeyRight)) {
+				direction[0] = +1
+				redraw = true
+			} else if keyboardPointer.State.Button(int(glfw.KeyRight)) && !keyboardPointer.State.Button(int(glfw.KeyLeft)) {
+				direction[0] = -1
+				redraw = true
+			}
+			if keyboardPointer.State.Button(int(glfw.KeyUp)) && !keyboardPointer.State.Button(int(glfw.KeyDown)) {
+				direction[1] = +1
+				redraw = true
+			} else if keyboardPointer.State.Button(int(glfw.KeyDown)) && !keyboardPointer.State.Button(int(glfw.KeyUp)) {
+				direction[1] = -1
+				redraw = true
+			}
+
+			if direction.Len() != 0 {
+				w.offset = w.offset.Add(direction.Normalize().Mul(speed * timePassed))
+			} else {
+				for i := range w.offset {
+					w.offset[i] = math.Floor(w.offset[i] + 0.5)
+				}
+			}
+		}
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.CompositeWidget.PollLogic()
+}
+
 func (w *CanvasWidget) Layout() {
 	// HACK
 	windowSize0, windowSize1 := globalWindow.GetSize()
@@ -2248,6 +2296,11 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
 			keyboardPointer.OriginMapping = append(keyboardPointer.OriginMapping, w)
+		}
+
+		// HACK: Set exclusive keyboard capture if Canvas is the only thing clicked.
+		if len(inputEvent.Pointer.OriginMapping) == 1 {
+			keyboardPointer.OriginMapping = []Widgeter{w}
 		}
 	}
 
@@ -3820,7 +3873,7 @@ func (w *FolderListingPureWidget) Render() {
 	DrawNBox(w.pos, w.size)
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	for i, v := range w.entries {
 		if w.selected == uint64(i+1) {
@@ -3862,7 +3915,7 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
@@ -6039,7 +6092,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	//hasTypingFocus := keyboardPointer != nil && len(keyboardPointer.OriginMapping) > 0 && w == keyboardPointer.OriginMapping[0]
+	//hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
 	if inputEvent.Pointer.VirtualCategory == POINTING {
 		if inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true { // On mouse button 0 down
@@ -6498,11 +6551,11 @@ func initHttpHandlers() {
 	http.Handle("/status/", http.StripPrefix("/status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// HACK: Handle .go files specially, just assume they're in "./GoLand"
-		if strings.HasSuffix(r.URL.Path, ".go") {
+		/*if strings.HasSuffix(r.URL.Path, ".go") {
 			w.Header().Set("Content-Type", "text/plain")
 			w.Write(MustReadFileB(filepath.Join("../../../", r.URL.Path)))
 			return
-		}
+		}*/
 
 		_, plain := r.URL.Query()["plain"]
 		switch plain {
@@ -6517,8 +6570,6 @@ func initHttpHandlers() {
 		// TODO: Try to lookup the GoPackage rather than creating a new one.
 		importPath := r.URL.Path[1:]
 		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
-			goPackage.UpdateVcs()
-
 			// TODO: Cache this via DepNode2I
 			dpkg, err := GetDocPackageAll(goPackage.Bpkg, nil)
 			if err == nil {
@@ -6535,14 +6586,17 @@ func initHttpHandlers() {
 
 			b += "\n---\n\n"
 
+			goPackage.UpdateVcs()
+			if goPackage.Dir.Repo != nil {
+				MakeUpdated(goPackage.Dir.Repo.VcsLocal)
+				MakeUpdated(goPackage.Dir.Repo.VcsRemote)
+			}
+
 			b += "```\n" + status.PorcelainPresenter(goPackage) + "\n```\n"
 
 			b += "\n---\n\n"
 
 			if goPackage.Dir.Repo != nil {
-				MakeUpdated(goPackage.Dir.Repo.VcsLocal)
-				MakeUpdated(goPackage.Dir.Repo.VcsRemote)
-
 				b += "```\n"
 				if goPackage.Dir.Repo.VcsLocal.Status == "" {
 					b += "nothing to commit, working directory clean\n\n"
