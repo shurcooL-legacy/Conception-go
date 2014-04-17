@@ -549,8 +549,17 @@ func (w WidgeterS) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mat
 
 type CustomWidget struct {
 	Widget
+	PollLogicFunc    func(this *CustomWidget)
 	RenderFunc       func()
 	ProcessEventFunc func(inputEvent InputEvent)
+}
+
+func (this *CustomWidget) PollLogic() {
+	if this.PollLogicFunc != nil {
+		this.PollLogicFunc(this)
+	} else {
+		this.Widget.PollLogic()
+	}
 }
 
 func (this *CustomWidget) Render() {
@@ -2199,6 +2208,8 @@ type CanvasWidget struct {
 	CompositeWidget
 	offset  mathgl.Vec2d
 	options CanvasWidgetOptions
+
+	PopupTest Widgeter
 }
 
 type CanvasWidgetOptions struct {
@@ -2264,6 +2275,10 @@ func (w *CanvasWidget) PollLogic() {
 		}
 	}
 
+	if w.PopupTest != nil {
+		w.PopupTest.PollLogic()
+	}
+
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.CompositeWidget.PollLogic()
 }
@@ -2278,6 +2293,15 @@ func (w *CanvasWidget) Layout() {
 	w.Widget.Layout()
 }
 
+func (w *CanvasWidget) LayoutNeeded() {
+	if w.PopupTest != nil {
+		w.PopupTest.LayoutNeeded()
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.CompositeWidget.LayoutNeeded()
+}
+
 func (w *CanvasWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
@@ -2285,6 +2309,13 @@ func (w *CanvasWidget) Render() {
 
 	for _, widget := range w.Widgets {
 		widget.Render()
+	}
+
+	if w.PopupTest != nil {
+		gl.PushMatrix()
+		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+		w.PopupTest.Render()
+		gl.PopMatrix()
 	}
 }
 
@@ -2313,19 +2344,70 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 
 	// TODO: Make this happen as a PostProcessEvent if it hasn't been processed by an earlier widget, etc.
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
 		// TEST, DEBUG: Cmd+O shortcut to open a new window, for testing purposes
-		if glfw.Key(inputEvent.InputId) == glfw.KeyO && inputEvent.ModifierKey&glfw.ModSuper != 0 {
-			w2 := NewWindowWidget(mathgl.Vec2d{600, 400}, mathgl.Vec2d{300, 60}, NewTextBoxWidget(np))
-			w2.Name = "New Window"
+		case glfw.KeyO:
+			if inputEvent.ModifierKey&glfw.ModSuper != 0 {
+				w2 := NewWindowWidget(mathgl.Vec2d{600, 400}, mathgl.Vec2d{300, 60}, NewTextBoxWidget(np))
+				w2.Name = "New Window"
 
-			// Add new widget to canvas
-			w.AddWidget(w2)
+				// Add new widget to canvas
+				w.AddWidget(w2)
 
-			// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-			keyboardPointer.OriginMapping = []Widgeter{w2}
-		}
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				keyboardPointer.OriginMapping = []Widgeter{w2}
+			}
 
-		if glfw.Key(inputEvent.InputId) == glfw.KeyEscape {
+		case glfw.KeyR:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				textBox := NewTextBoxWidget(np)
+				w.PopupTest = NewSpacerWidget(mathgl.Vec2d{200, 0}, textBox)
+
+				originalMapping := keyboardPointer.OriginMapping // HACK
+				closeOnEscape := &CustomWidget{
+					Widget: NewWidget(np, np),
+					PollLogicFunc: func(this *CustomWidget) {
+						if !keyboardPointer.OriginMapping.ContainsWidget(this.Parent()) {
+							w.PopupTest = nil
+
+							// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+							keyboardPointer.OriginMapping = originalMapping
+						}
+					},
+					ProcessEventFunc: func(inputEvent InputEvent) {
+						if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+							switch glfw.Key(inputEvent.InputId) {
+							case glfw.KeyEnter:
+								content := textBox.Content.Content()
+								{
+									fmt.Printf("%q\n", content)
+								}
+
+								w.PopupTest = nil
+
+								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+								keyboardPointer.OriginMapping = originalMapping
+							case glfw.KeyEscape:
+								w.PopupTest = nil
+
+								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+								keyboardPointer.OriginMapping = originalMapping
+							}
+						}
+					},
+				}
+
+				// TODO: textBox.AddExtension(closeOnEscape).
+				{
+					closeOnEscape.SetParent(textBox)
+					textBox.ExtensionsTest = append(textBox.ExtensionsTest, closeOnEscape)
+				}
+
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				keyboardPointer.OriginMapping = []Widgeter{textBox}
+			}
+
+		case glfw.KeyEscape:
 			keepRunning = false
 		}
 	}
@@ -2638,11 +2720,25 @@ func NewSpacerWidget(pos mathgl.Vec2d, child Widgeter) *SpacerWidget {
 	return w
 }
 
+func (w *SpacerWidget) PollLogic() {
+	w.child.PollLogic()
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.PollLogic()
+}
+
 func (w *SpacerWidget) Layout() {
 	w.Widget.size = w.child.Size().Add(mathgl.Vec2d{float64(w.border * 2), float64(w.border * 2)})
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
+}
+
+func (w *SpacerWidget) LayoutNeeded() {
+	w.child.LayoutNeeded()
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.LayoutNeeded()
 }
 
 func (w *SpacerWidget) Render() {
@@ -5790,6 +5886,15 @@ func (w *TextBoxWidget) NotifyChange() {
 // TODO: Remove after done testing...
 func (w *TextBoxWidget) IsValidTEST() bool {
 	return w.options.ValidFunc == nil || w.options.ValidFunc(w.Content)
+}
+
+func (w *TextBoxWidget) PollLogic() {
+	for _, extension := range w.ExtensionsTest {
+		extension.PollLogic()
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.PollLogic()
 }
 
 func (w *TextBoxWidget) Layout() {
