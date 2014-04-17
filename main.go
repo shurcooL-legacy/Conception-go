@@ -1649,6 +1649,13 @@ func NewWindowWidget(pos, size mathgl.Vec2d, child Widgeter) *WindowWidget {
 func (w *WindowWidget) PollLogic() {
 	w.chrome.PollLogic()
 	w.child.PollLogic()
+
+	for i := range w.pos {
+		w.pos[i] = math.Floor(w.pos[i] + 0.5)
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.PollLogic()
 }
 
 func (w *WindowWidget) Close() error {
@@ -1671,7 +1678,6 @@ func (w *WindowWidget) LayoutNeeded() {
 }
 
 func (w *WindowWidget) Render() {
-	DrawNBox(w.pos, w.size)
 	DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor, lightColor)
 
 	// Title
@@ -1686,7 +1692,7 @@ func (w *WindowWidget) Render() {
 	gl.PopMatrix()
 }
 func (w *WindowWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
-	LocalPosition := w.ParentToLocal(ParentPosition)
+	LocalPosition := w.Widget.ParentToLocal(ParentPosition) // HACK: Should use actual ParentToLocal properly.
 
 	Hit := (LocalPosition[0] >= 0 &&
 		LocalPosition[1] >= 0 &&
@@ -1700,6 +1706,10 @@ func (w *WindowWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	} else {
 		return w.child.Hit(LocalPosition.Sub(mathgl.Vec2d{0, fontHeight + 1}))
 	}
+}
+
+func (w *WindowWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+	return w.Widget.ParentToLocal(ParentPosition).Sub(mathgl.Vec2d{0, fontHeight + 1})
 }
 
 func (w *WindowWidget) ProcessEvent(inputEvent InputEvent) {
@@ -2358,7 +2368,7 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 				keyboardPointer.OriginMapping = []Widgeter{w2}
 			}
 
-		case glfw.KeyR:
+		case glfw.KeyP:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				textBox := NewTextBoxWidget(np)
 				w.PopupTest = NewSpacerWidget(mathgl.Vec2d{200, 0}, textBox)
@@ -2380,7 +2390,19 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 							case glfw.KeyEnter:
 								content := textBox.Content.Content()
 								{
-									fmt.Printf("%q\n", content)
+									globalPosition := mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]}
+									localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
+
+									body := NewTextFileWidget(np, content)
+
+									w2 := NewWindowWidget(localPosition, mathgl.Vec2d{}, body)
+									w2.Name = content
+
+									// Add new widget to canvas
+									w.AddWidget(w2)
+
+									// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+									keyboardPointer.OriginMapping = []Widgeter{w2}
 								}
 
 								w.PopupTest = nil
