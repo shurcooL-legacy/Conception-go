@@ -5342,14 +5342,21 @@ type HighlighterIterator interface {
 
 // ---
 
-type highlightedGoContentIterator struct {
-	hl     *highlightedGoContent
+type segmentHighlighter interface {
+	Segment(index uint32) highlightSegment
+	LenSegments() int
+
+	SegmentToTextStyle(index uint32) *TextStyle
+}
+
+type highlighterIterator struct {
+	hl     segmentHighlighter
 	offset uint32
 	index  uint32
 }
 
-func NewHighlightedGoContentIterator(hl *highlightedGoContent, offset uint32) *highlightedGoContentIterator {
-	return &highlightedGoContentIterator{
+func NewHighlighterIterator(hl segmentHighlighter, offset uint32) *highlighterIterator {
+	return &highlighterIterator{
 		hl:     hl,
 		offset: offset,
 		// Binary search for the first entry that ends past the beginning of visible text
@@ -5359,18 +5366,15 @@ func NewHighlightedGoContentIterator(hl *highlightedGoContent, offset uint32) *h
 	}
 }
 
-func (this *highlightedGoContentIterator) Next() uint32 {
+func (this *highlighterIterator) Next() uint32 {
 	return this.hl.Segment(this.index+1).offset - this.offset
 }
 
-func (this *highlightedGoContentIterator) Current() *TextStyle {
-	color := this.hl.Segment(this.index).color
-	return &TextStyle{
-		TextColor: &color,
-	}
+func (this *highlighterIterator) Current() *TextStyle {
+	return this.hl.SegmentToTextStyle(this.index)
 }
 
-func (this *highlightedGoContentIterator) Advance(span uint32) *TextStyle {
+func (this *highlighterIterator) Advance(span uint32) *TextStyle {
 	if span < this.Next() {
 		this.offset += span
 		return nil
@@ -5446,7 +5450,7 @@ type highlightedGoContent struct {
 }
 
 func (this *highlightedGoContent) NewIterator(offset uint32) HighlighterIterator {
-	return NewHighlightedGoContentIterator(this, offset)
+	return NewHighlighterIterator(this, offset)
 }
 
 func (this *highlightedGoContent) Update() {
@@ -5503,6 +5507,12 @@ func (this *highlightedGoContent) Segment(index uint32) highlightSegment {
 func (this *highlightedGoContent) LenSegments() int {
 	return len(this.segments)
 }
+func (this *highlightedGoContent) SegmentToTextStyle(index uint32) *TextStyle {
+	color := this.Segment(index).color
+	return &TextStyle{
+		TextColor: &color,
+	}
+}
 
 // ---
 
@@ -5514,7 +5524,7 @@ type highlightedDiff struct {
 }
 
 func (this *highlightedDiff) NewIterator(offset uint32) HighlighterIterator {
-	return NewHighlightedDiffIterator(this, offset)
+	return NewHighlighterIterator(this, offset)
 }
 
 func (this *highlightedDiff) Update() {
@@ -5563,49 +5573,14 @@ func (this *highlightedDiff) Segment(index uint32) highlightSegment {
 func (this *highlightedDiff) LenSegments() int {
 	return len(this.segments)
 }
-
-// ---
-
-type highlightedDiffIterator struct {
-	hl     *highlightedDiff
-	offset uint32
-	index  uint32
-}
-
-func NewHighlightedDiffIterator(hl *highlightedDiff, offset uint32) *highlightedDiffIterator {
-	return &highlightedDiffIterator{
-		hl:     hl,
-		offset: offset,
-		// Binary search for the first entry that ends past the beginning of visible text
-		index: uint32(sort.Search(hl.LenSegments()-1, func(i int) bool {
-			return hl.Segment(uint32(i)+1).offset > offset
-		})),
-	}
-}
-
-func (this *highlightedDiffIterator) Next() uint32 {
-	return this.hl.Segment(this.index+1).offset - this.offset
-}
-
-func (this *highlightedDiffIterator) Current() *TextStyle {
-	color := this.hl.Segment(this.index).color
+func (this *highlightedDiff) SegmentToTextStyle(index uint32) *TextStyle {
+	color := this.Segment(index).color
 	colorPtr := &color
 	if color.ApproxEqual(mathgl.Vec3d{}) {
 		colorPtr = nil
 	}
 	return &TextStyle{
 		BackgroundColor: &colorPtr,
-	}
-}
-
-func (this *highlightedDiffIterator) Advance(span uint32) *TextStyle {
-	if span < this.Next() {
-		this.offset += span
-		return nil
-	} else {
-		this.offset += span
-		this.index++
-		return this.Current()
 	}
 }
 
@@ -5637,6 +5612,7 @@ func (this *tokenizedGoContent) Update() {
 	s.Init(file, src, nil, scanner.ScanComments)
 
 	// Repeated calls to Scan yield the token sequence found in the input.
+	// TODO: Perhaps include whitespace in between tokens?
 	for {
 		pos, tok, lit := s.Scan()
 		if tok == token.EOF {
@@ -5667,6 +5643,8 @@ func (this *tokenizedGoContent) LenSegments() int {
 	return len(this.segments)
 }
 
+// ---
+
 type tokenizedDiffHelper struct {
 	left  *tokenizedGoContent
 	right *tokenizedGoContent
@@ -5685,7 +5663,7 @@ type tokenizedDiff struct {
 }
 
 func (this *tokenizedDiff) NewIterator(offset uint32) HighlighterIterator {
-	return NewTokenizedDiffIterator(this, offset)
+	return NewHighlighterIterator(this, offset)
 }
 
 func (this *tokenizedDiff) Update() {
@@ -5732,30 +5710,8 @@ func (this *tokenizedDiff) Segment(index uint32) highlightSegment {
 func (this *tokenizedDiff) LenSegments() int {
 	return len(this.segments)
 }
-
-type tokenizedDiffIterator struct {
-	hl     *tokenizedDiff
-	offset uint32
-	index  uint32
-}
-
-func NewTokenizedDiffIterator(hl *tokenizedDiff, offset uint32) *tokenizedDiffIterator {
-	return &tokenizedDiffIterator{
-		hl:     hl,
-		offset: offset,
-		// Binary search for the first entry that ends past the beginning of visible text
-		index: uint32(sort.Search(hl.LenSegments()-1, func(i int) bool {
-			return hl.Segment(uint32(i)+1).offset > offset
-		})),
-	}
-}
-
-func (this *tokenizedDiffIterator) Next() uint32 {
-	return this.hl.Segment(this.index+1).offset - this.offset
-}
-
-func (this *tokenizedDiffIterator) Current() *TextStyle {
-	color := this.hl.Segment(this.index).color
+func (this *tokenizedDiff) SegmentToTextStyle(index uint32) *TextStyle {
+	color := this.Segment(index).color
 	colorPtr := &color
 	if color.ApproxEqual(mathgl.Vec3d{}) {
 		colorPtr = nil
@@ -5765,14 +5721,83 @@ func (this *tokenizedDiffIterator) Current() *TextStyle {
 	}
 }
 
-func (this *tokenizedDiffIterator) Advance(span uint32) *TextStyle {
-	if span < this.Next() {
-		this.offset += span
-		return nil
+// ---
+
+type lineDiffHelper struct {
+	left  MultilineContentI
+	right MultilineContentI
+}
+
+func (this *lineDiffHelper) Equal(i, j int) bool {
+	line1 := this.left.Content()[this.left.Line(i).Start:this.left.Line(i).End()]
+	line2 := this.right.Content()[this.right.Line(j).Start:this.right.Line(j).End()]
+	return line1 == line2
+}
+
+// Line-based diff.
+type lineDiff struct {
+	leftSide bool
+	segments []highlightSegment
+
+	DepNode2
+}
+
+func (this *lineDiff) NewIterator(offset uint32) HighlighterIterator {
+	return NewHighlighterIterator(this, offset)
+}
+
+func (this *lineDiff) Update() {
+	left := this.GetSources()[0].(MultilineContentI)
+	right := this.GetSources()[1].(MultilineContentI)
+
+	this.segments = nil
+
+	dmp := lineDiffHelper{left: left, right: right}
+	diffs := diff.Diff(left.LenLines(), right.LenLines(), &dmp)
+
+	// Fake first element
+	this.segments = append(this.segments, highlightSegment{offset: 0})
+
+	for _, diff := range diffs {
+		if !this.leftSide && diff.Ins > 0 {
+			beginOffset := right.Line(diff.B).Start
+			endOffset := right.Line(diff.B + diff.Ins).Start
+			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: mathgl.Vec3d{0.8, 1, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: endOffset})
+		} else if this.leftSide && diff.Del > 0 {
+			beginOffset := left.Line((diff.A)).Start
+			endOffset := left.Line((diff.A + diff.Del)).Start
+			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: mathgl.Vec3d{1, 0.8, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: endOffset})
+		}
+	}
+
+	// Fake last element
+	this.segments = append(this.segments, highlightSegment{offset: uint32(500000000)}) // TODO, HACK
+}
+
+func (this *lineDiff) Segment(index uint32) highlightSegment {
+	if index < 0 {
+		//fmt.Println("warning: Segment < 0")
+		return highlightSegment{offset: 0}
+	} else if index >= uint32(len(this.segments)) {
+		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
+		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
 	} else {
-		this.offset += span
-		this.index++
-		return this.Current()
+		return this.segments[index]
+	}
+}
+func (this *lineDiff) LenSegments() int {
+	return len(this.segments)
+}
+func (this *lineDiff) SegmentToTextStyle(index uint32) *TextStyle {
+	color := this.Segment(index).color
+	colorPtr := &color
+	if color.ApproxEqual(mathgl.Vec3d{}) {
+		colorPtr = nil
+	}
+	return &TextStyle{
+		BackgroundColor: &colorPtr,
 	}
 }
 
@@ -7774,8 +7799,6 @@ func main() {
 			tokenizedDiff2 := &tokenizedDiff{}
 			tokenizedDiff2.AddSources(tokenizedGoContent1, tokenizedGoContent2)
 
-			//box1.HighlightersTest = append(box1.HighlightersTest, tokenizedDiffSide1{tokenizedDiff})
-			//box2.HighlightersTest = append(box2.HighlightersTest, tokenizedDiffSide2{tokenizedDiff})
 			box1.HighlightersTest = append(box1.HighlightersTest, tokenizedDiff1)
 			box2.HighlightersTest = append(box2.HighlightersTest, tokenizedDiff2)
 		}
@@ -7907,14 +7930,24 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	gl.End()`), nil)
 			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 200}, []Widgeter{box1, box2}, nil))
 
-			highlightedDiff1 := &highlightedDiff{leftSide: true}
+			/*highlightedDiff1 := &highlightedDiff{leftSide: true}
 			highlightedDiff1.AddSources(box1.Content, box2.Content)
 			box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
 
 			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
 			highlightedDiff2 := &highlightedDiff{}
 			highlightedDiff2.AddSources(box1.Content, box2.Content)
-			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)*/
+
+			lineDiff1 := &lineDiff{leftSide: true}
+			lineDiff1.AddSources(box1.Content, box2.Content)
+
+			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+			lineDiff2 := &lineDiff{}
+			lineDiff2.AddSources(box1.Content, box2.Content)
+
+			box1.HighlightersTest = append(box1.HighlightersTest, lineDiff1)
+			box2.HighlightersTest = append(box2.HighlightersTest, lineDiff2)
 		}
 
 		{
