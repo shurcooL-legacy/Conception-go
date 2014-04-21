@@ -1961,9 +1961,7 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
-			keyboardPointer.OriginMapping = append(keyboardPointer.OriginMapping, w)
-		}
+		keyboardPointer.OriginMapping = []Widgeter{w}
 	}
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
@@ -2330,19 +2328,13 @@ func (w *CanvasWidget) Render() {
 }
 
 func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
+		// HACK: Give exclusive keyboard capture if Canvas is the only thing clicked, and assume others will steal/add focus if they want.
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
-			keyboardPointer.OriginMapping = append(keyboardPointer.OriginMapping, w)
-		}
-
-		// HACK: Set exclusive keyboard capture if Canvas is the only thing clicked.
-		if len(inputEvent.Pointer.OriginMapping) == 1 {
-			keyboardPointer.OriginMapping = []Widgeter{w}
-		}
+		keyboardPointer.OriginMapping = []Widgeter{w}
 	}
 
 	if w.options.Scrollable {
@@ -5734,7 +5726,7 @@ func (this *lineDiffHelper) Equal(i, j int) bool {
 	return line1 == line2
 }
 
-// Line-based diff.
+// Line-based differ.
 type lineDiff struct {
 	leftSide bool
 	segments []highlightSegment
@@ -7988,6 +7980,15 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				return TrimLastNewline(out)
 			}
 			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Mouse Mapping"))
+		}
+		{
+			contentFunc := func() (out string) {
+				for _, widget := range keyboardPointer.OriginMapping {
+					out += fmt.Sprintf("%T\n", widget)
+				}
+				return TrimLastNewline(out)
+			}
+			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Keyboard Origin Mapping"))
 		}
 		w = append(w, NewGoonWidget(np, &mousePointer))
 		w = append(w, NewGoonWidget(np, &keyboardPointer))
