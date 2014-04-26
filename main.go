@@ -156,6 +156,11 @@ var (
 
 	selectedTextColor         = mathgl.Vec3d{195 / 255.0, 212 / 255.0, 242 / 255.0}
 	selectedTextInactiveColor = mathgl.Vec3d{240 / 255.0, 240 / 255.0, 240 / 255.0}
+
+	lightRedColor   = mathgl.Vec3d{1, 0.9, 0.9}
+	lightGreenColor = mathgl.Vec3d{0.9, 1, 0.9}
+	darkRedColor    = mathgl.Vec3d{1, 0.8, 0.8}
+	darkGreenColor  = mathgl.Vec3d{0.8, 1, 0.8}
 )
 
 var np = mathgl.Vec2d{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
@@ -958,6 +963,8 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, sourc
 			out += buf.String()
 
 			out += goon.Sdump(smallestV)
+
+			out += goon.SdumpExpr(fset)
 		}
 		return out
 	}
@@ -5532,10 +5539,10 @@ func (this *highlightedDiff) Update() {
 
 	for _, diff := range diffs {
 		if this.leftSide && diff.Type == -1 {
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{1, 0.8, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: darkRedColor})
 			offset += uint32(len(diff.Text))
 		} else if !this.leftSide && diff.Type == +1 {
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.8, 1, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: darkGreenColor})
 			offset += uint32(len(diff.Text))
 		} else if diff.Type == 0 {
 			this.segments = append(this.segments, highlightSegment{offset: offset})
@@ -5674,12 +5681,12 @@ func (this *tokenizedDiff) Update() {
 		if !this.leftSide && diff.Ins > 0 {
 			beginOffset := right.Segment(uint32(diff.B)).offset
 			endOffset := right.Segment(uint32(diff.B + diff.Ins)).offset
-			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: mathgl.Vec3d{0.8, 1, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: darkGreenColor})
 			this.segments = append(this.segments, highlightSegment{offset: endOffset})
 		} else if this.leftSide && diff.Del > 0 {
 			beginOffset := left.Segment(uint32(diff.A)).offset
 			endOffset := left.Segment(uint32(diff.A + diff.Del)).offset
-			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: mathgl.Vec3d{1, 0.8, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: darkRedColor})
 			this.segments = append(this.segments, highlightSegment{offset: endOffset})
 		}
 	}
@@ -5754,12 +5761,12 @@ func (this *lineDiff) Update() {
 		if !this.leftSide && diff.Ins > 0 {
 			beginOffset := right.Line(diff.B).Start
 			endOffset := right.Line(diff.B + diff.Ins).Start
-			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: mathgl.Vec3d{0.8, 1, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: darkGreenColor})
 			this.segments = append(this.segments, highlightSegment{offset: endOffset})
 		} else if this.leftSide && diff.Del > 0 {
 			beginOffset := left.Line((diff.A)).Start
 			endOffset := left.Line((diff.A + diff.Del)).Start
-			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: mathgl.Vec3d{1, 0.8, 0.8}})
+			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: darkRedColor})
 			this.segments = append(this.segments, highlightSegment{offset: endOffset})
 		}
 	}
@@ -5809,6 +5816,7 @@ type TextBoxWidget struct {
 
 	ExtensionsTest   []Widgeter
 	HighlightersTest []Highlighter
+	LineHighlighter  func(content MultilineContentI, lineIndex int) (BackgroundColor *mathgl.Vec3d)
 	PopupTest        *SearchableListWidget
 }
 
@@ -5989,9 +5997,9 @@ func (w *TextBoxWidget) Render() {
 	} else {
 		var background mathgl.Vec3d
 		if w.options.ValidFunc(w.Content) {
-			background = mathgl.Vec3d{0.9, 1, 0.9}
+			background = lightGreenColor
 		} else {
-			background = mathgl.Vec3d{1, 0.9, 0.9}
+			background = lightRedColor
 		}
 
 		// HACK: Assumes mousePointer rather than considering all connected pointing pointers
@@ -6006,9 +6014,31 @@ func (w *TextBoxWidget) Render() {
 		}
 	}
 
+	// Line Highlighter
+	if w.LineHighlighter != nil {
+		// Render only visible lines.
+		// TODO: Generalize this.
+		const debugSmallerViewport = fontHeight
+		beginLineIndex, endLineIndex := 0, w.Content.LenLines()
+		if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+			beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
+		}
+		_, height := globalWindow.GetSize() // HACK: Should be some viewport
+		height -= debugSmallerViewport
+		if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
+			endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
+		}
+
+		for lineIndex := beginLineIndex; lineIndex < endLineIndex; lineIndex++ {
+			if backgroundColor := w.LineHighlighter(w.Content, lineIndex); backgroundColor != nil {
+				DrawBorderlessBox(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, mathgl.Vec2d{w.size[0], fontHeight}, *backgroundColor)
+			}
+		}
+	}
+
 	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
 	//if !hasTypingFocus {
-	if w.options.ValidFunc == nil { // TEST: Try to always highlight in subtly darker white (unless there's validation).
+	if w.options.ValidFunc == nil && w.LineHighlighter == nil { // TEST: Try to always highlight in subtly darker white (unless there's validation).
 		_, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Highlight line
@@ -7022,7 +7052,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if !sublimeMode && false {
 
@@ -7237,7 +7267,21 @@ func main() {
 			}
 			template.AddSources(folderListing)
 
+			lineHighlighter := func(content MultilineContentI, lineIndex int) (BackgroundColor *mathgl.Vec3d) {
+				if content.Line(lineIndex).Length > 0 {
+					lineFirstChar := content.Content()[content.Line(lineIndex).Start]
+					switch lineFirstChar {
+					case '+':
+						return &lightGreenColor
+					case '-':
+						return &lightRedColor
+					}
+				}
+				return nil
+			}
+
 			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
+			gitDiff.LineHighlighter = lineHighlighter
 			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff, "git diff")
 
 			// ---
