@@ -1303,15 +1303,18 @@ type GoCompileErrorsManagerTest struct {
 	//Sources []*GoCompileErrorsTest // TODO: Migrate to using DepNode2
 	DepNode2
 
-	All map[FileUri][]GoErrorMessage
+	All map[FileUri]map[int][]string // FileUri -> LineIndex -> []Message.
 }
 
 func (this *GoCompileErrorsManagerTest) Update() {
-	this.All = make(map[FileUri][]GoErrorMessage)
+	this.All = make(map[FileUri]map[int][]string)
 
 	for _, source := range this.GetSources() {
 		for _, goCompilerError := range source.(*GoCompileErrorsTest).Out {
-			this.All[goCompilerError.FileUri] = append(this.All[goCompilerError.FileUri], goCompilerError.ErrorMessage)
+			if _, ok := this.All[goCompilerError.FileUri]; !ok {
+				this.All[goCompilerError.FileUri] = make(map[int][]string)
+			}
+			this.All[goCompilerError.FileUri][goCompilerError.ErrorMessage.LineIndex] = append(this.All[goCompilerError.FileUri][goCompilerError.ErrorMessage.LineIndex], goCompilerError.ErrorMessage.Message)
 		}
 	}
 
@@ -1453,13 +1456,13 @@ func (w *ButtonWidget) Render() {
 	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
 	if isOriginHit && mousePointer.State.IsActive() && isHit {
 		//DrawGBox(w.pos, w.size)
-		DrawInnerBox(w.pos, w.size, highlightColor, grayColor)
+		DrawInnerRoundedBox(w.pos, w.size, highlightColor, grayColor)
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
 		//DrawYBox(w.pos, w.size)
-		DrawInnerBox(w.pos, w.size, highlightColor, nearlyWhiteColor)
+		DrawInnerRoundedBox(w.pos, w.size, highlightColor, nearlyWhiteColor)
 	} else {
 		//DrawNBox(w.pos, w.size)
-		DrawInnerBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor)
+		DrawInnerRoundedBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor)
 	}
 
 	// Tooltip
@@ -1780,7 +1783,7 @@ func DrawGradientBox(pos, size mathgl.Vec2d, borderColor, topColor, bottomColor 
 	DrawBorderlessGradientBox(pos, size, topColor, bottomColor)
 }
 
-func DrawInnerBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
+func DrawInnerRoundedBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
 	if size[0] == 0 || size[1] == 0 {
 		return
 	}
@@ -6189,14 +6192,15 @@ func (w *TextBoxWidget) Render() {
 	// Go Errors
 	for _, uri := range w.Content.GetAllUris() {
 		if _, ok := goCompileErrorsManagerTest.All[uri]; ok {
-			gl.Color3d(0, 0, 0)
 			glt := NewOpenGlStream(np)
-			glt.BackgroundColor = &mathgl.Vec3d{1, 0.5, 0.5}
-			for _, goErrorMessage := range goCompileErrorsManagerTest.All[uri] {
-				if goErrorMessage.LineIndex < w.Content.LenLines() {
-					expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Line(goErrorMessage.LineIndex).Start:w.Content.Line(goErrorMessage.LineIndex).End()])
-					glt.SetPos(w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(goErrorMessage.LineIndex)}))
-					glt.PrintLine(goErrorMessage.Message)
+			for lineIndex, messages := range goCompileErrorsManagerTest.All[uri] {
+				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Line(lineIndex).Start:w.Content.Line(lineIndex).End()])
+				for sameLineIndex, message := range messages {
+					pos := w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(lineIndex+sameLineIndex)})
+					DrawInnerRoundedBox(pos, mathgl.Vec2d{fontWidth * float64(len(message)), fontHeight}, darkColor, mathgl.Vec3d{1, 0.5, 0.5})
+					gl.Color3d(0, 0, 0)
+					glt.SetPos(pos)
+					glt.PrintLine(message)
 				}
 			}
 		}
