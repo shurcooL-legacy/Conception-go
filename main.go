@@ -28,6 +28,7 @@ import (
 	"gopkg.in/pipe.v2"
 
 	"github.com/Jragonmiris/mathgl"
+	"github.com/bradfitz/iter"
 
 	"github.com/shurcooL/go-goon"
 
@@ -2984,7 +2985,7 @@ func (wn *WriterNotifier) Write(p []byte) (n int, err error) {
 
 type pipeNode struct {
 	w *LivePipeExpeWidget
-	p pipe.Pipe
+	p PipeFactory
 	s *pipe.State
 	DepNode2
 }
@@ -3004,17 +3005,18 @@ func (this *pipeNode) Update() {
 	}
 	this.w.stdoutChan = &WriterNotifier{make(ChanWriter), notify}
 	this.w.stderrChan = &WriterNotifier{make(ChanWriter), notify}
-	this.s = pipe.NewState(this.w.stdoutChan, this.w.stderrChan)
+	var p pipe.Pipe
+	this.s, p = this.p.NewPipe(this.w.stdoutChan, this.w.stderrChan)
 
-	go func() {
-		err := this.p(this.s)
+	go func(s *pipe.State, p pipe.Pipe) {
+		err := p(s)
 		if err == nil {
 			err = this.s.RunTasks()
 		}
 		//close(this.w.stdoutChan) // This is causing panics because pipe tries to write to closed channel.
 		//close(this.w.stderrChan)
 		this.w.finishedChan <- err
-	}()
+	}(this.s, p)
 	fmt.Println("started new pipe")
 }
 
@@ -3027,7 +3029,7 @@ type LivePipeExpeWidget struct {
 	DepNode2Manual // FinishedDepNode2
 }
 
-func NewLivePipeExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, p pipe.Pipe) *LivePipeExpeWidget {
+func NewLivePipeExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, p PipeFactory) *LivePipeExpeWidget {
 	w := &LivePipeExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan error)}
 
 	// THINK: The only reason to have a separate pipe node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
@@ -7253,14 +7255,30 @@ func main() {
 		// View sidebar
 		{
 			// git diff
-			template := NewCmdTemplateDynamic2()
+			template := NewPipeTemplateDynamic()
 			template.UpdateFunc = func(this DepNode2I) {
-				template.Template = NewCmdTemplate("echo", "-n", "No git diff available.")
+				template.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "No git diff available."))
 
 				if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); path != "" && strings.HasSuffix(path, ".go") {
 					dir, file := filepath.Split(path)
 					if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
-						template.Template = NewCmdTemplate("git", "diff", "--no-ext-diff", "--", file)
+						template.Template = NewPipeTemplate(pipe.Line(
+							pipe.Exec("git", "diff", "--no-ext-diff", "--", file),
+							pipe.TaskFunc(func(s *pipe.State) error {
+								r := bufio.NewReader(s.Stdin)
+								for _ = range iter.N(4) {
+									r.ReadBytes('\n')
+								}
+								var b bytes.Buffer
+								b.ReadFrom(r)
+								if b.Len() == 0 {
+									return nil
+								}
+								b.Truncate(b.Len() - 1)
+								b.WriteTo(s.Stdout)
+								return nil
+							}),
+						))
 						template.Template.Dir = dir
 					}
 				}
@@ -7280,7 +7298,7 @@ func main() {
 				return nil
 			}
 
-			gitDiff := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
+			gitDiff := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
 			gitDiff.LineHighlighter = lineHighlighter
 			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff, "git diff")
 
@@ -7329,7 +7347,7 @@ func main() {
 				pipe.Exec("./Con2RunBin"), // TEST: Run.
 				pipe.Println("Done."),
 			)
-			build2 := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, p)
+			build2 := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, PipeStatic(p))
 			nextTool2bCollapsible := NewCollapsibleWidget(np, build2, "go build via pipe")
 
 			// Go Compile Errors hardcoded TEST
