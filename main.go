@@ -22,6 +22,7 @@ import (
 	"github.com/shurcooL/go/exp/12"
 	"github.com/shurcooL/go/exp/13"
 	"github.com/shurcooL/go/exp/14"
+	"github.com/shurcooL/go/pipe_util"
 	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/gostatus/status"
 	"github.com/shurcooL/markdownfmt/markdown"
@@ -1368,7 +1369,7 @@ func (this *GoCompileErrorsTest) Update() {
 		return GoCompilerError{FileUri: FileUri("file://" + fileUri), ErrorMessage: GoErrorMessage{LineIndex: lineIndex, Message: message}}
 	}
 
-	source := this.DepNode2.GetSources()[0].(*LivePipeExpeWidget).Content
+	source := this.DepNode2.GetSources()[0].(MultilineContentI)
 	outChan := GoReduceLinesFromReader(NewContentReader(source), 4, reduceFunc)
 	//outChan := GoReduceLinesFromReader(NewContentReader(this.DepNode2.Sources[0].(MultilineContentI)), 4, reduceFunc)
 
@@ -7327,13 +7328,35 @@ func main() {
 
 			// ---
 
+			// Build Output.
+			buildOutput := NewMultilineContent()
+			nextTool2cCollapsible := NewCollapsibleWidget(np, NewTextBoxWidgetExternalContent(np, buildOutput, nil), "Build Output")
+
+			// Go Compile Errors hardcoded TEST
+			{
+				goCompileErrorsTest := GoCompileErrorsTest{}
+				goCompileErrorsTest.AddSources(buildOutput)
+				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
+			}
+
+			// ---
+
 			// go build.
 			template2 := NewPipeTemplateDynamic()
 			template2.UpdateFunc = func(this DepNode2I) {
 				template2.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "Nothing to go build."))
 
 				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
-					template2.Template = NewPipeTemplate(pipe.Exec("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath))
+					template2.Template = NewPipeTemplate(pipe.Line(
+						pipe_util.ExecCombinedOutput("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath),
+						pipe.TaskFunc(func(s *pipe.State) error {
+							var b bytes.Buffer
+							b.ReadFrom(s.Stdin)
+							SetViewGroup(buildOutput, b.String())
+							b.WriteTo(s.Stdout)
+							return nil
+						}),
+					))
 					//template2.Template.Dir = ""
 				}
 			}
@@ -7350,7 +7373,16 @@ func main() {
 				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
 					template3.Template = NewPipeTemplate(pipe.Script(
 						pipe.Println(fmt.Sprintf("Building %q.", goPackage.Bpkg.ImportPath)),
-						pipe.Exec("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath),
+						pipe.Line(
+							pipe_util.ExecCombinedOutput("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath),
+							pipe.TaskFunc(func(s *pipe.State) error {
+								var b bytes.Buffer
+								b.ReadFrom(s.Stdin)
+								SetViewGroup(buildOutput, b.String())
+								b.WriteTo(s.Stdout)
+								return nil
+							}),
+						),
 						pipe.Println("Running."),
 						pipe.Exec("./Con2RunBin"),
 						pipe.Println("Done."),
@@ -7362,13 +7394,6 @@ func main() {
 
 			run := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template3)
 			nextTool2bCollapsible := NewCollapsibleWidget(np, run, "go run")
-
-			// Go Compile Errors hardcoded TEST
-			{
-				goCompileErrorsTest := GoCompileErrorsTest{}
-				goCompileErrorsTest.AddSources(build)
-				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
-			}
 
 			// ---
 
@@ -7458,7 +7483,7 @@ func main() {
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2cCollapsible, nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
 			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
 		}
