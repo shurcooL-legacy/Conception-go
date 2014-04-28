@@ -3021,7 +3021,6 @@ func (this *pipeNode) Update() {
 		//close(this.w.stderrChan)
 		this.w.finishedChan <- err
 	}(this.s, p)
-	fmt.Println("started new pipe")
 }
 
 type LivePipeExpeWidget struct {
@@ -6198,7 +6197,7 @@ func (w *TextBoxWidget) Render() {
 				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Line(lineIndex).Start:w.Content.Line(lineIndex).End()])
 				for sameLineIndex, message := range messages {
 					pos := w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(lineIndex+sameLineIndex)})
-					DrawInnerRoundedBox(pos, mathgl.Vec2d{fontWidth * float64(len(message)), fontHeight}, darkColor, mathgl.Vec3d{1, 0.5, 0.5})
+					DrawInnerRoundedBox(pos, mathgl.Vec2d{fontWidth * float64(len(message)), fontHeight}, darkColor, darkRedColor)
 					gl.Color3d(0, 0, 0)
 					glt.SetPos(pos)
 					glt.PrintLine(message)
