@@ -3259,7 +3259,7 @@ func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
 	action := func() {
 		if !w.started {
 			go func() {
-				err := ListenAndServeStoppable("localhost:8080", nil, w.stopServerChan)
+				err := ListenAndServeStoppable("localhost:8060", nil, w.stopServerChan)
 				CheckError(err)
 			}()
 		} else {
@@ -7234,7 +7234,7 @@ func main() {
 		widgets = append(widgets, goPackageListing)
 
 		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
-		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{0, 200 + 500 + 2}, mathgl.Vec2d{200, float64(windowSize1 - 602 - 2)}, folderListing))
+		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{0, 200 + 500 + 2}, mathgl.Vec2d{200, float64(windowSize1 - 702 - 2)}, folderListing))
 
 		// TEST, HACK: Open the folder listing to the folder of the Go package
 		folderListingDirChanger := DepNode2Func{}
@@ -7327,37 +7327,46 @@ func main() {
 
 			// ---
 
-			// go build
-			template2 := NewCmdTemplateDynamic2()
+			// go build.
+			template2 := NewPipeTemplateDynamic()
 			template2.UpdateFunc = func(this DepNode2I) {
-				template2.Template = NewCmdTemplate("echo", "-n", "Nothing to go build.")
+				template2.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "Nothing to go build."))
 
 				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
-					template2.Template = NewCmdTemplate("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath)
+					template2.Template = NewPipeTemplate(pipe.Exec("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath))
 					//template2.Template.Dir = ""
 				}
 			}
 			template2.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 
-			build := NewLiveCmdExpeWidget(np, []DepNode2I{editorContent}, template2)
+			build := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template2)
 			nextTool2Collapsible := NewCollapsibleWidget(np, build, "go build")
 
-			// go build via pipe.
-			p := pipe.Script(
-				pipe.Println("Building."),
-				// TODO: Use correct import path.
-				pipe.Exec("go", "build", "-o", "./Con2RunBin", "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go"),
-				pipe.Println("Running."),
-				pipe.Exec("./Con2RunBin"), // TEST: Run.
-				pipe.Println("Done."),
-			)
-			build2 := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, PipeStatic(p))
-			nextTool2bCollapsible := NewCollapsibleWidget(np, build2, "go build via pipe")
+			// go run.
+			template3 := NewPipeTemplateDynamic()
+			template3.UpdateFunc = func(this DepNode2I) {
+				template3.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "Nothing to go run."))
+
+				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+					template3.Template = NewPipeTemplate(pipe.Script(
+						pipe.Println(fmt.Sprintf("Building %q.", goPackage.Bpkg.ImportPath)),
+						pipe.Exec("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath),
+						pipe.Println("Running."),
+						pipe.Exec("./Con2RunBin"),
+						pipe.Println("Done."),
+					))
+					//template3.Template.Dir = ""
+				}
+			}
+			template3.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
+
+			run := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template3)
+			nextTool2bCollapsible := NewCollapsibleWidget(np, run, "go run")
 
 			// Go Compile Errors hardcoded TEST
 			{
 				goCompileErrorsTest := GoCompileErrorsTest{}
-				goCompileErrorsTest.AddSources(build2)
+				goCompileErrorsTest.AddSources(build)
 				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
 			}
 
