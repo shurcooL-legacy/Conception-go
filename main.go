@@ -6829,7 +6829,7 @@ func initHttpHandlers() {
 		exp11.InlineDotImports(buf, importPath)
 		buf.WriteString("\n```")
 
-		WriteGitHubFlavoredMarkdown(w, buf)
+		WriteGitHubFlavoredMarkdown(w, buf.Bytes())
 	})))
 }
 
