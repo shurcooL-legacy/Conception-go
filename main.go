@@ -160,7 +160,7 @@ var (
 
 	selectedTextColor         = mathgl.Vec3d{195 / 255.0, 212 / 255.0, 242 / 255.0}
 	selectedTextDarkColor     = selectedTextColor.Mul(0.75)
-	selectedTextInactiveColor = mathgl.Vec3d{240 / 255.0, 240 / 255.0, 240 / 255.0}
+	selectedTextInactiveColor = mathgl.Vec3d{225 / 255.0, 235 / 255.0, 250 / 255.0}
 
 	lightRedColor   = mathgl.Vec3d{1, 0.9, 0.9}
 	lightGreenColor = mathgl.Vec3d{0.9, 1, 0.9}
@@ -5428,15 +5428,17 @@ func (this *highlighterIterator) Advance(span uint32) *TextStyle {
 // ---
 
 type selectionHighlighterIterator struct {
-	offset   uint32
-	min, max uint32
+	offset         uint32
+	min, max       uint32
+	hasTypingFocus bool
 }
 
-func NewSelectionHighlighterIterator(offset, min, max uint32) *selectionHighlighterIterator {
+func NewSelectionHighlighterIterator(offset, min, max uint32, hasTypingFocus bool) *selectionHighlighterIterator {
 	return &selectionHighlighterIterator{
-		offset: offset,
-		min:    min,
-		max:    max,
+		offset:         offset,
+		min:            min,
+		max:            max,
+		hasTypingFocus: hasTypingFocus,
 	}
 }
 
@@ -5459,6 +5461,10 @@ func (this *selectionHighlighterIterator) Current() *TextStyle {
 
 	borderColor := &selectedTextDarkColor
 	color := &selectedTextColor
+	if !this.hasTypingFocus {
+		borderColor = &selectedTextColor
+		color = &selectedTextInactiveColor
+	}
 	if this.offset < this.min || this.offset >= this.max {
 		borderColor = nil
 		color = nil
@@ -6120,7 +6126,7 @@ func (w *TextBoxWidget) Render() {
 				// HACK, TODO: Manually add NewSelectionHighlighter for now, need to make this better
 				if true {
 					min, max := w.caretPosition.SelectionRange()
-					hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max))
+					hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max, hasTypingFocus))
 				} else {
 					// Test text border style rendering via DrawInnerRoundedBox.
 
