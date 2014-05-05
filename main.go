@@ -6840,14 +6840,16 @@ func WriteGitHubFlavoredMarkdown(w io.Writer, markdown []byte) {
 }
 
 func writeGitHubFlavoredMarkdownViaLocal(w io.Writer, markdown []byte) {
-	io.WriteString(w, `<html><head><meta charset="utf-8"></head><body>`)
+	// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
+	// TODO: Use github.com/sourcegraph/syntaxhighlight to add missing syntax highlighting.
+	io.WriteString(w, `<html><head><meta charset="utf-8"><style>code { tab-size: 4; }</style><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
 	w.Write(u1.MarkdownGfm(markdown))
-	io.WriteString(w, `</body></html>`)
+	io.WriteString(w, `</article></body></html>`)
 }
 
 func writeGitHubFlavoredMarkdownViaGitHub(w io.Writer, markdown []byte) {
 	// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
-	io.WriteString(w, `<html><head><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
+	io.WriteString(w, `<html><head><meta charset="utf-8"><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
 
 	// TODO: Do this locally via a native Go library... That's not too much to ask for, is it?
 	// Convert GitHub-Flavored-Markdown to HTML (includes syntax highlighting for diff, Go, etc.)
