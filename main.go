@@ -6115,39 +6115,35 @@ func (w *TextBoxWidget) Render() {
 				endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 			}
 
-			if len(w.HighlightersTest) > 0 {
+			hlIters := []HighlighterIterator{}
+			for _, highlighter := range w.HighlightersTest {
+				hlIters = append(hlIters, highlighter.NewIterator(w.Content.Line(beginLineIndex).Start))
+			}
 
-				hlIters := []HighlighterIterator{}
+			// HACK, TODO: Manually add NewSelectionHighlighter for now, need to make this better
+			{
+				min, max := w.caretPosition.SelectionRange()
+				hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max, hasTypingFocus))
+			}
 
-				for _, highlighter := range w.HighlightersTest {
-					hlIters = append(hlIters, highlighter.NewIterator(w.Content.Line(beginLineIndex).Start))
+			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
+
+			for _, hlIter := range hlIters {
+				textStyle := hlIter.Current()
+				textStyle.Apply(glt)
+			}
+
+			for contentOffset, contentSpan := w.Content.Line(beginLineIndex).Start, uint32(0); contentOffset < w.Content.Line(endLineIndex).Start; contentOffset += contentSpan {
+				contentSpan = w.Content.Line(endLineIndex).Start - contentOffset
+				for _, hlIter := range hlIters {
+					contentSpan = intmath.MinUint32(contentSpan, hlIter.Next())
 				}
 
-				// HACK, TODO: Manually add NewSelectionHighlighter for now, need to make this better
-				{
-					min, max := w.caretPosition.SelectionRange()
-					hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max, hasTypingFocus))
-				}
-
-				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
+				glt.PrintText(w.Content.Content()[contentOffset : contentOffset+contentSpan])
 
 				for _, hlIter := range hlIters {
-					textStyle := hlIter.Current()
+					textStyle := hlIter.Advance(contentSpan)
 					textStyle.Apply(glt)
-				}
-
-				for contentOffset, contentSpan := w.Content.Line(beginLineIndex).Start, uint32(0); contentOffset < w.Content.Line(endLineIndex).Start; contentOffset += contentSpan {
-					contentSpan = w.Content.Line(endLineIndex).Start - contentOffset
-					for _, hlIter := range hlIters {
-						contentSpan = intmath.MinUint32(contentSpan, hlIter.Next())
-					}
-
-					glt.PrintText(w.Content.Content()[contentOffset : contentOffset+contentSpan])
-
-					for _, hlIter := range hlIters {
-						textStyle := hlIter.Advance(contentSpan)
-						textStyle.Apply(glt)
-					}
 				}
 			}
 		} else {
