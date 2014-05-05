@@ -28,6 +28,8 @@ import (
 	"github.com/shurcooL/markdownfmt/markdown"
 	"gopkg.in/pipe.v2"
 
+	"github.com/shurcooL/go/u/u1"
+
 	"github.com/Jragonmiris/mathgl"
 	"github.com/bradfitz/iter"
 
@@ -6815,9 +6817,7 @@ func initHttpHandlers() {
 		if plain {
 			w.Write([]byte(b))
 		} else {
-			//w.Write(blackfriday.MarkdownCommon([]byte(b)))
-
-			WriteGitHubFlavoredMarkdown(w, strings.NewReader(b))
+			WriteGitHubFlavoredMarkdown(w, []byte(b))
 		}
 	})))
 	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -6833,13 +6833,25 @@ func initHttpHandlers() {
 	})))
 }
 
-func WriteGitHubFlavoredMarkdown(w io.Writer, body io.Reader) {
+func WriteGitHubFlavoredMarkdown(w io.Writer, markdown []byte) {
+	// TODO: Do GitHub, fallback to local if it fails.
+	writeGitHubFlavoredMarkdownViaGitHub(w, markdown)
+	//writeGitHubFlavoredMarkdownViaLocal(w, markdown)
+}
+
+func writeGitHubFlavoredMarkdownViaLocal(w io.Writer, markdown []byte) {
+	io.WriteString(w, `<html><head><meta charset="utf-8"></head><body>`)
+	w.Write(u1.MarkdownGfm(markdown))
+	io.WriteString(w, `</body></html>`)
+}
+
+func writeGitHubFlavoredMarkdownViaGitHub(w io.Writer, markdown []byte) {
 	// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
 	io.WriteString(w, `<html><head><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
 
 	// TODO: Do this locally via a native Go library... That's not too much to ask for, is it?
 	// Convert GitHub-Flavored-Markdown to HTML (includes syntax highlighting for diff, Go, etc.)
-	resp, err := http.Post("https://api.github.com/markdown/raw", "text/x-markdown", body)
+	resp, err := http.Post("https://api.github.com/markdown/raw", "text/x-markdown", bytes.NewReader(markdown))
 	CheckError(err)
 	defer resp.Body.Close()
 	_, err = io.Copy(w, resp.Body)
