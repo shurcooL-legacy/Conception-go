@@ -159,6 +159,7 @@ var (
 	highlightColor = mathgl.Vec3d{0.898, 0.765, 0.396}
 
 	selectedTextColor         = mathgl.Vec3d{195 / 255.0, 212 / 255.0, 242 / 255.0}
+	selectedTextDarkColor     = selectedTextColor.Mul(0.75)
 	selectedTextInactiveColor = mathgl.Vec3d{240 / 255.0, 240 / 255.0, 240 / 255.0}
 
 	lightRedColor   = mathgl.Vec3d{1, 0.9, 0.9}
@@ -229,7 +230,8 @@ type OpenGlStream struct {
 	lineStartX float64
 	advance    uint32
 
-	BackgroundColor *mathgl.Vec3d // nil means no background color
+	BorderColor     *mathgl.Vec3d // nil means no border color.
+	BackgroundColor *mathgl.Vec3d // nil means no background color.
 }
 
 func NewOpenGlStream(pos mathgl.Vec2d) *OpenGlStream {
@@ -264,7 +266,7 @@ func (o *OpenGlStream) PrintText(s string) {
 			//o.NewLine()
 			o.PrintSegment(" ") // Newline
 			o.pos[1] += fontHeight
-			o.advance = 0
+			o.advanceReset()
 			s = s[end+1:]
 		}
 	}
@@ -272,15 +274,42 @@ func (o *OpenGlStream) PrintText(s string) {
 
 // Input shouldn't have newlines
 func (o *OpenGlStream) PrintLine(s string) {
+	if o.BorderColor != nil {
+		gl.PushAttrib(gl.CURRENT_BIT)
+
+		expandedLineLength := ExpandedLength(s)
+
+		backgroundColor := nearlyWhiteColor
+		if o.BackgroundColor != nil {
+			backgroundColor = *o.BackgroundColor
+		}
+
+		DrawInnerRoundedBox(o.pos, mathgl.Vec2d{fontWidth * float64(expandedLineLength), fontHeight}, *o.BorderColor, backgroundColor)
+
+		gl.PopAttrib()
+	}
+
 	segments := strings.Split(s, "\t")
 	for index, segment := range segments {
 		o.PrintSegment(segment)
-		o.advance += uint32(len(segment))
+		o.advanceBy(uint32(len(segment)))
 		if index+1 < len(segments) {
 			o.PrintSegment(strings.Repeat(" ", 4-int(o.advance%4))) // Tab
-			o.advance += 4 - (o.advance % 4)
+			o.advanceBy(4 - (o.advance % 4))
 		}
 	}
+}
+
+func (o *OpenGlStream) advanceBy(amount uint32) {
+	o.advance += amount
+	o.afterAdvance()
+}
+func (o *OpenGlStream) advanceReset() {
+	o.advance = 0
+	o.afterAdvance()
+}
+func (o *OpenGlStream) afterAdvance() {
+	o.pos[0] = o.lineStartX + float64(fontWidth*o.advance)
 }
 
 // Shouldn't have tabs nor newlines
@@ -289,9 +318,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 		return
 	}
 
-	o.pos[0] = o.lineStartX + float64(fontWidth*o.advance)
-
-	if o.BackgroundColor != nil {
+	if o.BackgroundColor != nil && o.BorderColor == nil {
 		gl.PushAttrib(gl.CURRENT_BIT)
 		gl.Color3dv((*gl.Double)(&o.BackgroundColor[0]))
 		gl.PushMatrix()
@@ -4276,7 +4303,7 @@ func setupInternals3(pos mathgl.Vec2d, titleString string, a reflect.Value) Widg
 
 // ---
 
-func ExpandedLength(s string) uint32 {
+func ExpandedLength(s string) (expandedLineLength uint32) {
 	segments := strings.Split(s, "\t")
 	var advance uint32
 	for segmentIndex, segment := range segments {
@@ -4825,9 +4852,9 @@ func (w *MultilineContent) updateLines() {
 	w.lines = make([]contentLine, len(lines))
 	w.longestLine = 0
 	for lineIndex, line := range lines {
-		lineLength := ExpandedLength(line)
-		if lineLength > w.longestLine {
-			w.longestLine = lineLength
+		expandedLineLength := ExpandedLength(line)
+		if expandedLineLength > w.longestLine {
+			w.longestLine = expandedLineLength
 		}
 		if lineIndex >= 1 {
 			w.lines[lineIndex].Start = w.lines[lineIndex-1].Start + w.lines[lineIndex-1].Length + 1
@@ -5316,19 +5343,26 @@ func (w *StringerWidget) Render() {
 
 type TextStyle struct {
 	TextColor       *mathgl.Vec3d
+	BorderColor     **mathgl.Vec3d
 	BackgroundColor **mathgl.Vec3d
 }
 
 func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
-	if textStyle != nil {
-		if textStyle.TextColor != nil {
-			color := *textStyle.TextColor
-			gl.Color3dv((*gl.Double)(&color[0]))
-		}
-		if textStyle.BackgroundColor != nil {
-			color := *textStyle.BackgroundColor
-			glt.BackgroundColor = color
-		}
+	if textStyle == nil {
+		return
+	}
+
+	if textStyle.TextColor != nil {
+		textColor := *textStyle.TextColor
+		gl.Color3dv((*gl.Double)(&textColor[0]))
+	}
+	if textStyle.BorderColor != nil {
+		borderColor := *textStyle.BorderColor
+		glt.BorderColor = borderColor
+	}
+	if textStyle.BackgroundColor != nil {
+		backgroundColor := *textStyle.BackgroundColor
+		glt.BackgroundColor = backgroundColor
 	}
 }
 
@@ -5423,11 +5457,14 @@ func (this *selectionHighlighterIterator) Current() *TextStyle {
 		return nil
 	}
 
+	borderColor := &selectedTextDarkColor
 	color := &selectedTextColor
 	if this.offset < this.min || this.offset >= this.max {
+		borderColor = nil
 		color = nil
 	}
 	return &TextStyle{
+		BorderColor:     &borderColor,
 		BackgroundColor: &color,
 	}
 }
@@ -6081,9 +6118,20 @@ func (w *TextBoxWidget) Render() {
 				}
 
 				// HACK, TODO: Manually add NewSelectionHighlighter for now, need to make this better
-				{
+				if true {
 					min, max := w.caretPosition.SelectionRange()
 					hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max))
+				} else {
+					// Test text border style rendering via DrawInnerRoundedBox.
+
+					min, max := w.caretPosition.SelectionRange()
+
+					if min != max {
+						tempCaretPosition := &caretPositionInternal{w: w.Content}
+						x, y := tempCaretPosition.SetHint(min, beginLineIndex)
+						pos := w.pos.Add(mathgl.Vec2d{fontWidth * float64(x), fontHeight * float64(y)})
+						DrawInnerRoundedBox(pos, mathgl.Vec2d{fontWidth * float64(max-min), fontHeight}, darkColor, nearlyWhiteColor)
+					}
 				}
 
 				glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
