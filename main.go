@@ -5875,7 +5875,7 @@ type TextBoxWidget struct {
 	ExtensionsTest   []Widgeter
 	HighlightersTest []Highlighter
 	LineHighlighter  func(content MultilineContentI, lineIndex int) (BackgroundColor *mathgl.Vec3d)
-	PopupTest        *SearchableListWidget
+	PopupsTest       []Widgeter
 }
 
 type TextBoxWidgetValidChange struct {
@@ -6018,8 +6018,8 @@ func (w *TextBoxWidget) LayoutNeeded() {
 	MakeUpdated(&w.layoutDepNode2)
 	MakeUpdated(&w.scrollToCaret)
 
-	if w.PopupTest != nil {
-		w.PopupTest.LayoutNeeded()
+	for _, widget := range w.PopupsTest {
+		widget.LayoutNeeded()
 	}
 }
 
@@ -6190,13 +6190,13 @@ func (w *TextBoxWidget) Render() {
 		gl.PopMatrix()
 	}
 
-	if w.PopupTest != nil {
+	for _, widget := range w.PopupsTest {
 		gl.PushMatrix()
 		// HACK: Not general at all
 		if _, insideScrollPane := w.Parent().(*ScrollPaneWidget); !insideScrollPane {
 			gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		}
-		w.PopupTest.Render()
+		widget.Render()
 		gl.PopMatrix()
 	}
 }
@@ -6210,15 +6210,15 @@ func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		hits := []Widgeter{w}
-		if w.PopupTest != nil {
+		for _, widget := range w.PopupsTest {
 			// HACK: Not general at all
 			if _, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
-				popupHits := w.PopupTest.Hit(ParentPosition)
+				popupHits := widget.Hit(ParentPosition)
 				if len(popupHits) > 0 {
 					return popupHits
 				}
 			} else {
-				popupHits := w.PopupTest.Hit(LocalPosition)
+				popupHits := widget.Hit(LocalPosition)
 				if len(popupHits) > 0 {
 					return popupHits
 				}
@@ -6397,13 +6397,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					break
 				}
 
-				//w.PopupTest = NewSearchableListWidget(mathgl.Vec2d{200, 0}, NewSliceStringerS("one", "two", "three"))
-				w.PopupTest = NewSearchableListWidgetTest(mathgl.Vec2d{200, 0}, mathgl.Vec2d{600, 600}, globalGoSymbols)
+				popupTest := NewSearchableListWidgetTest(mathgl.Vec2d{200, 0}, mathgl.Vec2d{600, 600}, globalGoSymbols)
 				// HACK: Not general at all
 				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
-					w.PopupTest.SetParent(scrollPane)
+					popupTest.SetParent(scrollPane)
 				} else {
-					w.PopupTest.SetParent(w)
+					popupTest.SetParent(w)
 				}
 
 				// HACK: Duplicated code, need to refactor
@@ -6427,7 +6426,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 							}
 						}
 					}
-					scrollToSymbolB.AddSources(w.PopupTest.OnSelectionChanged())
+					scrollToSymbolB.AddSources(popupTest.OnSelectionChanged())
 					keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
 				}
 
@@ -6439,12 +6438,24 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 						if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 							switch glfw.Key(inputEvent.InputId) {
 							case glfw.KeyEnter:
-								w.PopupTest = nil
+								// Remove popupTest from w.PopupsTest.
+								for i, widget := range w.PopupsTest {
+									if widget == popupTest {
+										w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
+										break
+									}
+								}
 
 								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 								keyboardPointer.OriginMapping = originalMapping
 							case glfw.KeyEscape:
-								w.PopupTest = nil
+								// Remove popupTest from w.PopupsTest.
+								for i, widget := range w.PopupsTest {
+									if widget == popupTest {
+										w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
+										break
+									}
+								}
 
 								w.RestoreView(originalView)
 
@@ -6454,10 +6465,76 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 						}
 					},
 				}
-				w.PopupTest.ExtensionsTest = append(w.PopupTest.ExtensionsTest, closeOnEscape)
+				popupTest.ExtensionsTest = append(popupTest.ExtensionsTest, closeOnEscape)
 
 				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-				w.PopupTest.SetKeyboardFocus()
+				popupTest.SetKeyboardFocus()
+
+				w.PopupsTest = append(w.PopupsTest, popupTest)
+			}
+		// Find panel.
+		case glfw.KeyF:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
+				if !w.options.PopupTest {
+					break
+				}
+
+				// TODO: Find panel.
+				popupTest := NewSearchableListWidget(mathgl.Vec2d{200, 800}, mathgl.Vec2d{600, 600}, NewSliceStringerS("one", "two", "three"))
+				// HACK: Not general at all
+				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
+					popupTest.SetParent(scrollPane)
+				} else {
+					popupTest.SetParent(w)
+				}
+
+				originalMapping := keyboardPointer.OriginMapping // HACK
+				originalView := w.SaveView()
+				closeOnEscape := &CustomWidget{
+					Widget: NewWidget(np, np),
+					ProcessEventFunc: func(inputEvent InputEvent) {
+						if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+							switch glfw.Key(inputEvent.InputId) {
+							case glfw.KeyEnter:
+								// Remove popupTest from w.PopupsTest.
+								for i, widget := range w.PopupsTest {
+									if widget == popupTest {
+										w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
+										break
+									}
+								}
+
+								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+								keyboardPointer.OriginMapping = originalMapping
+							case glfw.KeyEscape:
+								// Remove popupTest from w.PopupsTest.
+								for i, widget := range w.PopupsTest {
+									if widget == popupTest {
+										w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
+										break
+									}
+								}
+
+								w.RestoreView(originalView)
+
+								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+								keyboardPointer.OriginMapping = originalMapping
+							}
+						}
+					},
+				}
+				popupTest.ExtensionsTest = append(popupTest.ExtensionsTest, closeOnEscape)
+
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				popupTest.SetKeyboardFocus()
+
+				w.PopupsTest = append(w.PopupsTest, popupTest)
+			}
+		case glfw.KeyEscape:
+			// Close the last popup, if any.
+			if len(w.PopupsTest) > 0 {
+				w.PopupsTest = w.PopupsTest[:len(w.PopupsTest)-1]
 			}
 		// TEST: Closing this widget...
 		case glfw.KeyW:
