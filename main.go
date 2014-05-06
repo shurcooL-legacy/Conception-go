@@ -4738,6 +4738,14 @@ func (cp *CaretPosition) CreateSelectionIfNone(amount int32) {
 	}
 }
 
+func (cp *CaretPosition) CreateSelectionLineIfNone() {
+	if !cp.anySelection() {
+		cp.selectionPosition.Move(-2)
+		cp.caretPosition.Move(+2)
+		cp.caretPosition.TryMoveH(+1, false)
+	}
+}
+
 // Replaces selection with string s and moves caret to end of s.
 func (cp *CaretPosition) ReplaceSelectionWith(s string) {
 	selStart, selEnd := cp.SelectionRange2()
@@ -6324,6 +6332,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			if !w.options.Private &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
+				w.caretPosition.CreateSelectionLineIfNone()
 				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
 					globalWindow.SetClipboardString(selectionContent) // TODO: Don't use globalWindow
 					w.caretPosition.ReplaceSelectionWith("")
@@ -6333,6 +6342,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			if !w.options.Private &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
+				w.caretPosition.CreateSelectionLineIfNone()
 				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
 					globalWindow.SetClipboardString(selectionContent) // TODO: Don't use globalWindow
 				}
