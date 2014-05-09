@@ -6480,56 +6480,61 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					break
 				}
 
-				// TODO: Find panel.
-				popupTest := NewSearchableListWidget(mathgl.Vec2d{200, 800}, mathgl.Vec2d{600, 600}, NewSliceStringerS("one", "two", "three"))
-				// HACK: Not general at all
-				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
-					popupTest.SetParent(scrollPane)
-				} else {
-					popupTest.SetParent(w)
+				var popupTest *TextBoxWidget
+
+				for _, widget := range w.PopupsTest {
+					if widget, ok := widget.(*TextBoxWidget); ok {
+						popupTest = widget
+						break
+					}
 				}
 
-				originalMapping := keyboardPointer.OriginMapping // HACK
-				originalView := w.SaveView()
-				closeOnEscape := &CustomWidget{
-					Widget: NewWidget(np, np),
-					ProcessEventFunc: func(inputEvent InputEvent) {
-						if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
-							switch glfw.Key(inputEvent.InputId) {
-							case glfw.KeyEnter:
-								// Remove popupTest from w.PopupsTest.
-								for i, widget := range w.PopupsTest {
-									if widget == popupTest {
-										w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
-										break
+				if popupTest == nil {
+					// TODO: Find panel.
+					popupTest = NewTextBoxWidget(mathgl.Vec2d{200, 800})
+
+					originalMapping := keyboardPointer.OriginMapping // HACK
+					originalView := w.SaveView()
+					closeOnEscape := &CustomWidget{
+						Widget: NewWidget(np, np),
+						ProcessEventFunc: func(inputEvent InputEvent) {
+							if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+								switch glfw.Key(inputEvent.InputId) {
+								case glfw.KeyEnter:
+									// Remove popupTest from w.PopupsTest.
+									for i, widget := range w.PopupsTest {
+										if widget == popupTest {
+											w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
+											break
+										}
 									}
-								}
 
-								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-								keyboardPointer.OriginMapping = originalMapping
-							case glfw.KeyEscape:
-								// Remove popupTest from w.PopupsTest.
-								for i, widget := range w.PopupsTest {
-									if widget == popupTest {
-										w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
-										break
+									// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+									keyboardPointer.OriginMapping = originalMapping
+								case glfw.KeyEscape:
+									// Remove popupTest from w.PopupsTest.
+									for i, widget := range w.PopupsTest {
+										if widget == popupTest {
+											w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
+											break
+										}
 									}
+
+									w.RestoreView(originalView)
+
+									// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+									keyboardPointer.OriginMapping = originalMapping
 								}
-
-								w.RestoreView(originalView)
-
-								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-								keyboardPointer.OriginMapping = originalMapping
 							}
-						}
-					},
+						},
+					}
+					popupTest.ExtensionsTest = append(popupTest.ExtensionsTest, closeOnEscape)
+
+					w.PopupsTest = append(w.PopupsTest, popupTest)
 				}
-				popupTest.ExtensionsTest = append(popupTest.ExtensionsTest, closeOnEscape)
 
 				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-				popupTest.SetKeyboardFocus()
-
-				w.PopupsTest = append(w.PopupsTest, popupTest)
+				keyboardPointer.OriginMapping = []Widgeter{popupTest}
 			}
 		case glfw.KeyEscape:
 			// Close the last popup, if any.
