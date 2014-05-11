@@ -1917,7 +1917,7 @@ func (mode KatMode) String() string {
 			}
 		}
 	}
-	panic(nil)
+	panic(0)
 }
 
 func NewKatWidget(pos mathgl.Vec2d) *KatWidget {
@@ -6096,7 +6096,7 @@ func (w *TextBoxWidget) Render() {
 
 	// DEBUG, HACK: Temporarily use cursor to highlight entire line when inactive, etc.
 	//if !hasTypingFocus {
-	if w.options.ValidFunc == nil && w.LineHighlighter == nil { // TEST: Try to always highlight in subtly darker white (unless there's validation).
+	if w.options.ValidFunc == nil && w.LineHighlighter == nil && !w.caretPosition.anySelection() { // TEST: Try to always highlight in subtly darker white (unless there's validation).
 		_, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		// Highlight line
@@ -7547,7 +7547,6 @@ func main() {
 
 			nextTool6 := NewTest6OracleWidget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor)
 			nextTool6Collapsible := NewCollapsibleWidget(np, nextTool6, "Oracle Tool")
-			nextTool6Collapsible.state.state = true // HACK
 
 			// =====
 
