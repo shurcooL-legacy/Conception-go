@@ -6064,7 +6064,7 @@ func (w *TextBoxWidget) RestoreView(view TextBoxScrollPaneView) {
 
 func (w *TextBoxWidget) isFindPanelVisible() bool {
 	for _, widget := range w.PopupsTest {
-		if _, ok := widget.(*TextBoxWidget); ok {
+		if widget, ok := widget.(*TextBoxWidget); ok && widget == w.findPanel {
 			return true
 		}
 	}
