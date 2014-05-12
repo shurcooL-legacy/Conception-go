@@ -3668,7 +3668,7 @@ func (w *FilterableSelecterWidget) NotifyChange() {
 // Pre-condition: w.entries.Len() > 0
 func (w *FilterableSelecterWidget) selectionChangedTest() {
 	// TEST
-	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
 		scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
 	}
 
@@ -5552,7 +5552,7 @@ func (this *highlightedGoContent) Update() {
 		}
 	}
 
-	// Fake last element
+	// HACK: Fake last element.
 	this.segments = append(this.segments, highlightSegment{offset: uint32(content.LenContent())})
 }
 
@@ -5614,7 +5614,7 @@ func (this *highlightedDiff) Update() {
 		}
 	}
 
-	// Fake last element
+	// HACK: Fake last element.
 	if this.leftSide {
 		this.segments = append(this.segments, highlightSegment{offset: uint32(left.LenContent())})
 	} else {
@@ -5687,7 +5687,7 @@ func (this *tokenizedGoContent) Update() {
 		this.segments = append(this.segments, tokLit{offset: offset, tok: tok, lit: lit})
 	}
 
-	// Fake last element
+	// HACK: Fake last element.
 	this.segments = append(this.segments, tokLit{offset: uint32(content.LenContent())})
 }
 
@@ -5738,7 +5738,7 @@ func (this *tokenizedDiff) Update() {
 	dmp := tokenizedDiffHelper{left: left, right: right}
 	diffs := diff.Diff(left.LenSegments(), right.LenSegments(), &dmp)
 
-	// Fake first element
+	// HACK: Fake first element.
 	this.segments = append(this.segments, highlightSegment{offset: 0})
 
 	for _, diff := range diffs {
@@ -5755,7 +5755,7 @@ func (this *tokenizedDiff) Update() {
 		}
 	}
 
-	// Fake last element
+	// HACK: Fake last element.
 	this.segments = append(this.segments, highlightSegment{offset: uint32(500000000)}) // TODO, HACK
 }
 
@@ -5818,7 +5818,7 @@ func (this *lineDiff) Update() {
 	dmp := lineDiffHelper{left: left, right: right}
 	diffs := diff.Diff(left.LenLines(), right.LenLines(), &dmp)
 
-	// Fake first element
+	// HACK: Fake first element.
 	this.segments = append(this.segments, highlightSegment{offset: 0})
 
 	for _, diff := range diffs {
@@ -5835,7 +5835,7 @@ func (this *lineDiff) Update() {
 		}
 	}
 
-	// Fake last element
+	// HACK: Fake last element.
 	this.segments = append(this.segments, highlightSegment{offset: uint32(500000000)}) // TODO, HACK
 }
 
@@ -5877,13 +5877,77 @@ func NewFindPanel(pos mathgl.Vec2d) *TextBoxWidget {
 
 // ---
 
+type FindResults struct {
+	segments []highlightSegment
+
+	DepNode2
+}
+
+func (this *FindResults) Update() {
+	content := this.GetSources()[0].(MultilineContentI).Content()
+	findTarget := this.GetSources()[1].(MultilineContentI).Content()
+
+	this.segments = nil
+
+	// HACK: Fake first element.
+	this.segments = append(this.segments, highlightSegment{offset: 0})
+
+	if findTarget != "" {
+		var offset uint32
+		nonresults := strings.Split(content, findTarget)
+		for _, nonresult := range nonresults {
+			offset += uint32(len(nonresult))
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{1, 1, 1}})
+			offset += uint32(len(findTarget))
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
+		}
+	}
+
+	// HACK: Fake last element.
+	this.segments = append(this.segments, highlightSegment{offset: uint32(len(content))})
+}
+
+func (this *FindResults) NewIterator(offset uint32) HighlighterIterator {
+	return NewHighlighterIterator(this, offset)
+}
+
+func (this *FindResults) Segment(index uint32) highlightSegment {
+	if index < 0 {
+		//fmt.Println("warning: Segment < 0")
+		return highlightSegment{offset: 0}
+	} else if index >= uint32(len(this.segments)) {
+		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
+		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+	} else {
+		return this.segments[index]
+	}
+}
+func (this *FindResults) LenSegments() int {
+	return len(this.segments)
+}
+func (this *FindResults) SegmentToTextStyle(index uint32) *TextStyle {
+	highlight := this.Segment(index).color[0] != 0
+
+	borderColor := &darkColor
+	if !highlight {
+		borderColor = nil
+	}
+	return &TextStyle{
+		BorderColor: &borderColor,
+	}
+}
+
+// ---
+
 type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
 	caretPosition  *CaretPosition
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
-	findPanel      *TextBoxWidget
+
+	findPanel   *TextBoxWidget
+	findResults *FindResults
 
 	options TextBoxWidgetOptions
 
@@ -5936,7 +6000,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, opt
 
 	// TEST
 	w.scrollToCaret.UpdateFunc = func(DepNode2I) {
-		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
 			expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 			scrollPane.ScrollToArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
@@ -5956,7 +6020,9 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, opt
 
 	if w.options.FindPanel {
 		w.findPanel = NewFindPanel(mathgl.Vec2d{200, 800})
-		w.findPanel.SetParent(w)
+
+		w.findResults = &FindResults{}
+		w.findResults.AddSources(w.Content, w.findPanel.Content)
 	}
 
 	return w
@@ -5966,7 +6032,7 @@ func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
 	w.caretPosition.TrySet(caretPosition)
 
 	// HACK: This kinda conflicts/overlaps with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
-	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
 		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		scrollPane.CenterOnArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
@@ -5981,7 +6047,7 @@ type TextBoxScrollPaneView struct {
 func (w *TextBoxWidget) SaveView() (view TextBoxScrollPaneView) {
 	view.caretPosition = w.caretPosition.SaveState()
 
-	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
 		view.scrollPaneChildPos = *scrollPane.child.Pos()
 	}
 
@@ -5991,9 +6057,18 @@ func (w *TextBoxWidget) SaveView() (view TextBoxScrollPaneView) {
 func (w *TextBoxWidget) RestoreView(view TextBoxScrollPaneView) {
 	w.caretPosition.RestoreState(view.caretPosition)
 
-	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok {
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
 		*scrollPane.child.Pos() = view.scrollPaneChildPos
 	}
+}
+
+func (w *TextBoxWidget) isFindPanelVisible() bool {
+	for _, widget := range w.PopupsTest {
+		if _, ok := widget.(*TextBoxWidget); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *TextBoxWidget) NotifyChange() {
@@ -6022,6 +6097,10 @@ func (w *TextBoxWidget) PollLogic() {
 		extension.PollLogic()
 	}
 
+	if w.isFindPanelVisible() && w.findResults != nil {
+		MakeUpdated(w.findResults)
+	}
+
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.PollLogic()
 }
@@ -6039,6 +6118,16 @@ func (w *TextBoxWidget) Layout() {
 }
 
 func (w *TextBoxWidget) LayoutNeeded() {
+	// HACK: Set parent of findPanel. Can't do this in constructor because insideScrollPane may not be true yet, etc. But is this really the place to do this?
+	if w.findPanel != nil && w.findPanel.Parent() == nil {
+		// HACK: Not general at all
+		if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane && scrollPane.child == w {
+			w.findPanel.SetParent(scrollPane)
+		} else {
+			w.findPanel.SetParent(w)
+		}
+	}
+
 	MakeUpdated(&w.layoutDepNode2)
 	MakeUpdated(&w.scrollToCaret)
 
@@ -6048,6 +6137,7 @@ func (w *TextBoxWidget) LayoutNeeded() {
 }
 
 func (w *TextBoxWidget) Render() {
+	// HACK: This is an update operation, so it should happen in PollLogic(). However, it seems putting it there causes crashes. Need to improve this.
 	for _, highlighter := range w.HighlightersTest {
 		MakeUpdated(highlighter)
 	}
@@ -6152,6 +6242,11 @@ func (w *TextBoxWidget) Render() {
 				hlIters = append(hlIters, highlighter.NewIterator(w.Content.Line(beginLineIndex).Start))
 			}
 
+			// Highlight search results.
+			if w.isFindPanelVisible() {
+				hlIters = append(hlIters, w.findResults.NewIterator(w.Content.Line(beginLineIndex).Start))
+			}
+
 			// HACK, TODO: Manually add NewSelectionHighlighter for now, need to make this better
 			{
 				min, max := w.caretPosition.SelectionRange()
@@ -6236,7 +6331,7 @@ func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 		hits := []Widgeter{w}
 		for _, widget := range w.PopupsTest {
 			// HACK: Not general at all
-			if _, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
+			if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane && scrollPane.child == w {
 				popupHits := widget.Hit(ParentPosition)
 				if len(popupHits) > 0 {
 					return popupHits
@@ -6501,18 +6596,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					break
 				}
 
-				var popupTest *TextBoxWidget
+				popupTest := w.findPanel
 
-				for _, widget := range w.PopupsTest {
-					if widget, ok := widget.(*TextBoxWidget); ok {
-						popupTest = widget
-						break
-					}
-				}
-
-				if popupTest == nil {
-					popupTest = w.findPanel
-
+				if !w.isFindPanelVisible() {
 					originalMapping := keyboardPointer.OriginMapping // HACK
 					originalView := w.SaveView()
 					closeOnEscape := &CustomWidget{
