@@ -4728,6 +4728,12 @@ func (cp *CaretPosition) Backspace() {
 	cp.ReplaceSelectionWith("")
 }
 
+func (cp *CaretPosition) SelectAll() {
+	// TODO: Not move the view
+	cp.Move(-3)
+	cp.Move(+3, true)
+}
+
 func (cp *CaretPosition) CreateSelectionIfNone(amount int32) {
 	if !cp.anySelection() {
 		if (amount < 0 && cp.caretPosition.Logical() >= uint32(-amount)) ||
@@ -5860,12 +5866,24 @@ func (this *lineDiff) SegmentToTextStyle(index uint32) *TextStyle {
 
 // ---
 
+func NewFindPanel(pos mathgl.Vec2d) *TextBoxWidget {
+	/*return NewFlowLayoutWidget(pos, []Widgeter{
+		NewSpacerWidget(np, NewTextBoxWidget(np)),
+		NewSpacerWidget(np, NewButtonWidget(np, nil)),
+		NewSpacerWidget(np, NewButtonWidget(np, nil)),
+	}, nil)*/
+	return NewTextBoxWidget(pos)
+}
+
+// ---
+
 type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
 	caretPosition  *CaretPosition
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
+	findPanel      *TextBoxWidget
 
 	options TextBoxWidgetOptions
 
@@ -5888,6 +5906,7 @@ type TextBoxWidgetOptions struct {
 	Private    bool
 	PopupTest  bool
 	ValidFunc  func(MultilineContentI) bool
+	FindPanel  bool
 }
 
 func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
@@ -5933,6 +5952,11 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, opt
 		highlightedGoContent.AddSources(mc)
 
 		w.HighlightersTest = append(w.HighlightersTest, highlightedGoContent)
+	}
+
+	if w.options.FindPanel {
+		w.findPanel = NewFindPanel(mathgl.Vec2d{200, 800})
+		w.findPanel.SetParent(w)
 	}
 
 	return w
@@ -6323,10 +6347,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyA:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				// TODO: Not move the view
-				// Select all
-				w.caretPosition.Move(-3)
-				w.caretPosition.Move(+3, true)
+				w.caretPosition.SelectAll()
 			}
 		case glfw.KeyX:
 			if !w.options.Private &&
@@ -6476,7 +6497,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyF:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
-				if !w.options.PopupTest {
+				if !(w.options.PopupTest && w.options.FindPanel) {
 					break
 				}
 
@@ -6490,8 +6511,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 
 				if popupTest == nil {
-					// TODO: Find panel.
-					popupTest = NewTextBoxWidget(mathgl.Vec2d{200, 800})
+					popupTest = w.findPanel
 
 					originalMapping := keyboardPointer.OriginMapping // HACK
 					originalView := w.SaveView()
@@ -6528,13 +6548,15 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 							}
 						},
 					}
-					popupTest.ExtensionsTest = append(popupTest.ExtensionsTest, closeOnEscape)
+					popupTest.ExtensionsTest = []Widgeter{closeOnEscape} // HACK: Since I'm reusing an existing object, I need to update its extension rather than add new one. But doing it this way effectively prevents any other extensions to be added elsewhere, etc.
 
 					w.PopupsTest = append(w.PopupsTest, popupTest)
 				}
 
 				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 				keyboardPointer.OriginMapping = []Widgeter{popupTest}
+
+				w.findPanel.caretPosition.SelectAll()
 			}
 		case glfw.KeyEscape:
 			// Close the last popup, if any.
@@ -7322,7 +7344,7 @@ func main() {
 		editorFileOpener := NewFileOpener(editorContent)
 		editorFileOpener.AddSources(folderListing, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
-		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true})
+		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true, FindPanel: true})
 		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, editor))
 
 		// View sidebar
