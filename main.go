@@ -4477,6 +4477,8 @@ func (cp *caretPositionInternal) MoveTo(other *caretPositionInternal) {
 	cp.lineIndex = other.lineIndex
 	cp.positionWithinLine = other.positionWithinLine
 	cp.targetExpandedX = other.targetExpandedX
+
+	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
 func (cp *caretPositionInternal) Compare(other *caretPositionInternal) int8 {
@@ -5939,6 +5941,41 @@ func (this *FindResults) SegmentToTextStyle(index uint32) *TextStyle {
 
 // ---
 
+type WholeWordHighlighter struct {
+	wholeWord bool
+
+	DepNode2
+}
+
+func (this *WholeWordHighlighter) Update() {
+	content := this.GetSources()[0].(MultilineContentI)
+	caretPosition := this.GetSources()[1].(*CaretPosition)
+
+	this.wholeWord = false
+
+	if !caretPosition.anySelection() {
+		return
+	}
+
+	start, end := caretPosition.SelectionRange2()
+
+	// Figure out if the selection is a whole word.
+	x := &caretPositionInternal{w: content}
+	y := &caretPositionInternal{w: content}
+	x.MoveTo(start)
+	y.MoveTo(end)
+	x.TryMoveH(+1, true)
+	y.TryMoveH(-1, true)
+
+	this.wholeWord = y.Compare(start) == 0 && x.Compare(end) == 0
+}
+
+func (this *WholeWordHighlighter) IsWholeWord() bool {
+	return this.wholeWord
+}
+
+// ---
+
 type TextBoxWidget struct {
 	Widget
 	Content        MultilineContentI
@@ -5946,8 +5983,9 @@ type TextBoxWidget struct {
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
 
-	findPanel   *TextBoxWidget
-	findResults *FindResults
+	findPanel            *TextBoxWidget
+	findResults          *FindResults
+	wholeWordHighlighter *WholeWordHighlighter
 
 	options TextBoxWidgetOptions
 
@@ -6023,6 +6061,9 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, opt
 
 		w.findResults = &FindResults{}
 		w.findResults.AddSources(w.Content, w.findPanel.Content)
+
+		w.wholeWordHighlighter = &WholeWordHighlighter{}
+		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition)
 	}
 
 	return w
@@ -6097,7 +6138,16 @@ func (w *TextBoxWidget) PollLogic() {
 		extension.PollLogic()
 	}
 
-	if w.isFindPanelVisible() && w.findResults != nil {
+	if w.wholeWordHighlighter != nil {
+		MakeUpdated(w.wholeWordHighlighter)
+
+		// TODO: Improve. Don't override find panel search box.
+		if w.wholeWordHighlighter.IsWholeWord() {
+			SetViewGroup(w.findPanel.Content, w.caretPosition.GetSelectionContent())
+		}
+	}
+
+	if w.findResults != nil && (w.isFindPanelVisible() || (w.wholeWordHighlighter != nil && w.wholeWordHighlighter.IsWholeWord())) {
 		MakeUpdated(w.findResults)
 	}
 
@@ -6243,7 +6293,7 @@ func (w *TextBoxWidget) Render() {
 			}
 
 			// Highlight search results.
-			if w.isFindPanelVisible() {
+			if w.isFindPanelVisible() || (w.wholeWordHighlighter != nil && w.wholeWordHighlighter.IsWholeWord()) {
 				hlIters = append(hlIters, w.findResults.NewIterator(w.Content.Line(beginLineIndex).Start))
 			}
 
@@ -6642,6 +6692,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 				keyboardPointer.OriginMapping = []Widgeter{popupTest}
 
+				if w.caretPosition.anySelection() {
+					SetViewGroup(w.findPanel.Content, w.caretPosition.GetSelectionContent())
+				}
 				w.findPanel.caretPosition.SelectAll()
 			}
 		case glfw.KeyEscape:
