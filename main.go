@@ -4448,13 +4448,24 @@ func (cp *caretPositionInternal) willMoveH(amount int32) {
 }
 
 // TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
-func (cp *caretPositionInternal) TryMoveV(amount int8) {
+func (cp *caretPositionInternal) TryMoveV(amount int8, jumpWords bool) {
 	switch amount {
 	case -1:
 		if cp.lineIndex > 0 {
-			cp.lineIndex--
-			line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
-			cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
+			if jumpWords {
+				for cp.lineIndex > 0 {
+					cp.lineIndex--
+					line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
+					if line == "" {
+						break
+					}
+				}
+				cp.positionWithinLine = 0
+			} else {
+				cp.lineIndex--
+				line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
+				cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
+			}
 
 			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
@@ -4462,9 +4473,20 @@ func (cp *caretPositionInternal) TryMoveV(amount int8) {
 		}
 	case +1:
 		if cp.lineIndex < cp.w.LenLines()-1 {
-			cp.lineIndex++
-			line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
-			cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
+			if jumpWords {
+				for cp.lineIndex < cp.w.LenLines()-1 {
+					cp.lineIndex++
+					line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
+					if line == "" {
+						break
+					}
+				}
+				cp.positionWithinLine = 0
+			} else {
+				cp.lineIndex++
+				line := cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).End()]
+				cp.positionWithinLine = ExpandedToLogical(line, cp.targetExpandedX)
+			}
 
 			ExternallyUpdated(&cp.DepNode2Manual)
 		} else {
@@ -4703,11 +4725,8 @@ func (cp *CaretPosition) MoveTo(target *caretPositionInternal) {
 }
 
 // TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
-func (cp *CaretPosition) TryMoveV(amount int8, leaveSelectionOptional ...bool) {
-	// HACK, TODO: Make leaveSelection a required parameter?
-	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
-
-	cp.caretPosition.TryMoveV(amount)
+func (cp *CaretPosition) TryMoveV(amount int8, leaveSelection, jumpWords bool) {
+	cp.caretPosition.TryMoveV(amount, jumpWords)
 
 	if !leaveSelection {
 		cp.selectionPosition.MoveTo(cp.caretPosition)
@@ -6481,14 +6500,14 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
 				w.caretPosition.Move(-3, inputEvent.ModifierKey&glfw.ModShift != 0)
-			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
-				w.caretPosition.TryMoveV(-1, inputEvent.ModifierKey&glfw.ModShift != 0)
+			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
+				w.caretPosition.TryMoveV(-1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
 				w.caretPosition.Move(+3, inputEvent.ModifierKey&glfw.ModShift != 0)
-			} else if inputEvent.ModifierKey & ^glfw.ModShift == 0 {
-				w.caretPosition.TryMoveV(+1, inputEvent.ModifierKey&glfw.ModShift != 0)
+			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
+				w.caretPosition.TryMoveV(+1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
 			}
 		case glfw.KeyA:
 			if inputEvent.ModifierKey == glfw.ModSuper {
