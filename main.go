@@ -5899,6 +5899,8 @@ func NewFindPanel(pos mathgl.Vec2d) *TextBoxWidget {
 // ---
 
 type FindResults struct {
+	Owner *TextBoxWidget
+
 	segments []highlightSegment
 
 	DepNode2
@@ -5907,6 +5909,12 @@ type FindResults struct {
 func (this *FindResults) Update() {
 	content := this.GetSources()[0].(MultilineContentI).Content()
 	findTarget := this.GetSources()[1].(MultilineContentI).Content()
+	wholeWordHighlighter := this.GetSources()[2].(*WholeWordHighlighter)
+
+	// If the find panel is not visible, but a whole word is selected, use it as the find target instead.
+	if !this.Owner.isFindPanelVisible() && wholeWordHighlighter.IsWholeWord() {
+		findTarget = this.Owner.caretPosition.GetSelectionContent()
+	}
 
 	this.segments = nil
 
@@ -6078,11 +6086,11 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, opt
 	if w.options.FindPanel {
 		w.findPanel = NewFindPanel(mathgl.Vec2d{200, 800})
 
-		w.findResults = &FindResults{}
-		w.findResults.AddSources(w.Content, w.findPanel.Content)
-
 		w.wholeWordHighlighter = &WholeWordHighlighter{}
 		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition)
+
+		w.findResults = &FindResults{Owner: w}
+		w.findResults.AddSources(w.Content, w.findPanel.Content, w.wholeWordHighlighter)
 	}
 
 	return w
@@ -6159,11 +6167,6 @@ func (w *TextBoxWidget) PollLogic() {
 
 	if w.wholeWordHighlighter != nil {
 		MakeUpdated(w.wholeWordHighlighter)
-
-		// TODO: Improve. Don't override find panel search box.
-		if w.wholeWordHighlighter.IsWholeWord() {
-			SetViewGroup(w.findPanel.Content, w.caretPosition.GetSelectionContent())
-		}
 	}
 
 	if w.findResults != nil && (w.isFindPanelVisible() || (w.wholeWordHighlighter != nil && w.wholeWordHighlighter.IsWholeWord())) {
@@ -6312,7 +6315,7 @@ func (w *TextBoxWidget) Render() {
 			}
 
 			// Highlight search results.
-			if w.isFindPanelVisible() || (w.wholeWordHighlighter != nil && w.wholeWordHighlighter.IsWholeWord()) {
+			if w.findResults != nil && (w.isFindPanelVisible() || (w.wholeWordHighlighter != nil && w.wholeWordHighlighter.IsWholeWord())) {
 				hlIters = append(hlIters, w.findResults.NewIterator(w.Content.Line(beginLineIndex).Start))
 			}
 
