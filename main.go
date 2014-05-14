@@ -7506,7 +7506,7 @@ func main() {
 		editorFileOpener.AddSources(folderListing, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
 		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true, FindPanel: true})
-		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{1000, float64(windowSize1 - 2)}, editor))
+		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{750, float64(windowSize1 - 2)}, editor))
 
 		// View sidebar
 		{
@@ -7734,8 +7734,7 @@ func main() {
 			// =====
 
 			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2cCollapsible, nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
-			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{1200 + 4, 0}, mathgl.Vec2d{330, float64(windowSize1 - 2)}, tools))
-			//widgets = append(widgets, NewLiveCmdExpeWidget(mathgl.Vec2d{1200 + 4, 0}, []DepNode2I{folderListing}, template))
+			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{950 + 4, 0}, mathgl.Vec2d{580, float64(windowSize1 - 2)}, tools))
 		}
 
 	} else if false { // Deleted test widget instances
