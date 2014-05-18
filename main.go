@@ -29,6 +29,7 @@ import (
 	"gopkg.in/pipe.v2"
 
 	"github.com/shurcooL/go/u/u1"
+	"github.com/shurcooL/go/u/u5"
 
 	"github.com/Jragonmiris/mathgl"
 	"github.com/bradfitz/iter"
@@ -6023,6 +6024,7 @@ type TextBoxWidget struct {
 	HighlightersTest []Highlighter
 	LineHighlighter  func(content MultilineContentI, lineIndex int) (BackgroundColor *mathgl.Vec3d)
 	PopupsTest       []Widgeter
+	DepsTest         []DepNode2I // Temporary solution until there's a better MultilineContentFunc.
 }
 
 type TextBoxWidgetValidChange struct {
@@ -6163,6 +6165,10 @@ func (w *TextBoxWidget) IsValidTEST() bool {
 func (w *TextBoxWidget) PollLogic() {
 	for _, extension := range w.ExtensionsTest {
 		extension.PollLogic()
+	}
+
+	for _, dep := range w.DepsTest {
+		MakeUpdated(dep)
 	}
 
 	if w.wholeWordHighlighter != nil {
@@ -7688,9 +7694,26 @@ func main() {
 			nextTool6 := NewTest6OracleWidget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor)
 			nextTool6Collapsible := NewCollapsibleWidget(np, nextTool6, "Oracle Tool")
 
+			// ---
+
+			godocOrgImporters := &DepStringerFunc{}
+			godocOrgImporters.UpdateFunc = func(this DepNode2I) {
+				//fmt.Print("\x07")
+				godocOrgImporters.content = ""
+				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+					godocOrgImporters.content = goon.Sdump(u5.GetGodocOrgImporters(goPackage))
+				}
+			}
+			godocOrgImporters.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
+
+			// TODO: This needs to be refactored to use more modern DepNode2I, which will make this simpler and reduce duplication.
+			nextTool7 := NewTextBoxWidgetExternalContent(np, NewMultilineContentFunc(func() string { return godocOrgImporters.String() }, []DepNodeI{&UniversalClock}), nil)
+			nextTool7.DepsTest = append(nextTool7.DepsTest, godocOrgImporters)
+			nextTool7Collapsible := NewCollapsibleWidget(np, nextTool7, "godoc.org Importers")
+
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2cCollapsible, nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2cCollapsible, nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{950 + 4, 0}, mathgl.Vec2d{580, float64(windowSize1 - 2)}, tools))
 		}
 
