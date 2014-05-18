@@ -6761,20 +6761,6 @@ func (w *TextFileWidget) Path() string {
 
 // ---
 
-func NewTextBoxWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string, dependees []DepNodeI) *TextBoxWidget {
-	mc := NewMultilineContentFunc(contentFunc, dependees)
-	w := NewTextBoxWidgetExternalContent(pos, mc, nil)
-	return w
-}
-
-func NewTextLabelWidgetContentFunc(pos mathgl.Vec2d, contentFunc func() string, dependees []DepNodeI) *TextLabelWidget {
-	mc := NewMultilineContentFunc(contentFunc, dependees)
-	w := NewTextLabelWidgetExternalContent(pos, mc)
-	return w
-}
-
-// ---
-
 func NewTextBoxValidationWidget(pos mathgl.Vec2d, validFunc func(MultilineContentI) bool) *TextBoxWidget {
 	w := NewTextBoxWidgetOptions(pos, TextBoxWidgetOptions{ValidFunc: validFunc})
 	return w
@@ -7829,10 +7815,6 @@ func main() {
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content, nil)) // HACK: Manual test
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content))    // HACK: Manual test
 
-		if false {
-			contentFunc := func() string { return TrimLastNewline(goon.Sdump(widgets[7])) }
-			widgets = append(widgets, NewTextBoxWidgetContentFunc(mathgl.Vec2d{390, -1525}, contentFunc, []DepNodeI{&UniversalClock}))
-		}
 		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{240, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
 
 		type Inner struct {
