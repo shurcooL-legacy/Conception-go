@@ -1321,7 +1321,7 @@ func (this *GoPackageSelecterAdapter) GetSelectedGoPackage() *GoPackage {
 }
 
 func NewGoPackageListingWidget(pos, size mathgl.Vec2d) *SearchableListWidget {
-	goPackagesSliceStringer := &goPackagesSliceStringer{&exp14.GoPackages{}}
+	goPackagesSliceStringer := &goPackagesSliceStringer{&exp14.GoPackages{SkipGoroot: false}}
 
 	w := NewSearchableListWidget(pos, size, goPackagesSliceStringer)
 	return w
@@ -3280,11 +3280,11 @@ func (w *ConnectionWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 type HttpServerTestWidget struct {
 	*FlowLayoutWidget
 	started        bool
-	stopServerChan chan bool
+	stopServerChan chan struct{}
 }
 
 func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
-	w := &HttpServerTestWidget{stopServerChan: make(chan bool)}
+	w := &HttpServerTestWidget{stopServerChan: make(chan struct{})}
 	action := func() {
 		if !w.started {
 			go func() {
@@ -3292,7 +3292,7 @@ func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
 				CheckError(err)
 			}()
 		} else {
-			w.stopServerChan <- true
+			w.stopServerChan <- struct{}{}
 		}
 		w.started = !w.started // TODO: Factor this out to toggle-button?
 	}
@@ -6958,26 +6958,26 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 // ---
 
 func initHttpHandlers() {
-	http.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/close", func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintln(w, "Closing.")
 		keepRunning = false
 	})
-	/*http.HandleFunc("/widgets", func(w http.ResponseWriter, r *http.Request) {
+	/*http.HandleFunc("/widgets", func(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(goon.SdumpExpr(len(widgets))))
 		fmt.Fprintln(w)
 		fmt.Fprintf(w, "%#v\n", widgets)
 	})*/
 	http.Handle("/favicon.ico", http.NotFoundHandler())
-	http.Handle("/status/", http.StripPrefix("/status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/status/", http.StripPrefix("/status", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
 		// HACK: Handle .go files specially, just assume they're in "./GoLand"
-		/*if strings.HasSuffix(r.URL.Path, ".go") {
+		/*if strings.HasSuffix(req.URL.Path, ".go") {
 			w.Header().Set("Content-Type", "text/plain")
-			w.Write(MustReadFileB(filepath.Join("../../../", r.URL.Path)))
+			w.Write(MustReadFileB(filepath.Join("../../../", req.URL.Path)))
 			return
 		}*/
 
-		_, plain := r.URL.Query()["plain"]
+		_, plain := req.URL.Query()["plain"]
 		switch plain {
 		case true:
 			w.Header().Set("Content-Type", "text/plain")
@@ -6988,7 +6988,7 @@ func initHttpHandlers() {
 		var b string
 
 		// TODO: Try to lookup the GoPackage rather than creating a new one.
-		importPath := r.URL.Path[1:]
+		importPath := req.URL.Path[1:]
 		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
 			// TODO: Cache this via DepNode2I
 			dpkg, err := GetDocPackageAll(goPackage.Bpkg, nil)
@@ -7055,11 +7055,11 @@ func initHttpHandlers() {
 		if plain {
 			w.Write([]byte(b))
 		} else {
-			WriteGitHubFlavoredMarkdown(w, []byte(b))
+			u1.WriteMarkdownGfmAsHtmlPage(w, []byte(b))
 		}
 	})))
-	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		importPath := r.URL.Path[1:]
+	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		importPath := req.URL.Path[1:]
 
 		// TODO: Cache this via DepNode2I
 		buf := new(bytes.Buffer)
@@ -7067,37 +7067,8 @@ func initHttpHandlers() {
 		exp11.InlineDotImports(buf, importPath)
 		buf.WriteString("\n```")
 
-		WriteGitHubFlavoredMarkdown(w, buf.Bytes())
+		u1.WriteMarkdownGfmAsHtmlPage(w, buf.Bytes())
 	})))
-}
-
-func WriteGitHubFlavoredMarkdown(w io.Writer, markdown []byte) {
-	// TODO: Do GitHub, fallback to local if it fails.
-	writeGitHubFlavoredMarkdownViaGitHub(w, markdown)
-	//writeGitHubFlavoredMarkdownViaLocal(w, markdown)
-}
-
-func writeGitHubFlavoredMarkdownViaLocal(w io.Writer, markdown []byte) {
-	// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
-	// TODO: Use github.com/sourcegraph/syntaxhighlight to add missing syntax highlighting.
-	io.WriteString(w, `<html><head><meta charset="utf-8"><style>code { tab-size: 4; }</style><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
-	w.Write(u1.MarkdownGfm(markdown))
-	io.WriteString(w, `</article></body></html>`)
-}
-
-func writeGitHubFlavoredMarkdownViaGitHub(w io.Writer, markdown []byte) {
-	// TODO: Don't hotlink the css file from github.com, serve it locally (it's needed for the GFM html to appear properly)
-	io.WriteString(w, `<html><head><meta charset="utf-8"><link href="https://github.com/assets/github.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
-
-	// TODO: Do this locally via a native Go library... That's not too much to ask for, is it?
-	// Convert GitHub-Flavored-Markdown to HTML (includes syntax highlighting for diff, Go, etc.)
-	resp, err := http.Post("https://api.github.com/markdown/raw", "text/x-markdown", bytes.NewReader(markdown))
-	CheckError(err)
-	defer resp.Body.Close()
-	_, err = io.Copy(w, resp.Body)
-	CheckError(err)
-
-	io.WriteString(w, `</article></body></html>`)
 }
 
 // ---
@@ -7956,7 +7927,7 @@ func main() {
 
 		contentWs := NewMultilineContent()
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800 - 50, 30}, contentWs, nil))
-		http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
+		http.HandleFunc("/websocket", func(w http.ResponseWriter, req *http.Request) {
 			io.WriteString(w, `<html>
 	<body>
 		<script type="text/javascript">
