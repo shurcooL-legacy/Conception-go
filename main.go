@@ -7711,9 +7711,24 @@ func main() {
 			nextTool7.DepsTest = append(nextTool7.DepsTest, godocOrgImporters)
 			nextTool7Collapsible := NewCollapsibleWidget(np, nextTool7, "godoc.org Importers")
 
+			// ---
+
+			caretPositionStringer := &DepStringerFunc{}
+			caretPositionStringer.UpdateFunc = func(this DepNode2I) {
+				caretPosition := this.GetSources()[0].(*CaretPosition)
+				caretPositionStringer.content = fmt.Sprint("Caret Position: ", caretPosition.Logical())
+				if caretPosition.anySelection() {
+					start, end := caretPosition.SelectionRange()
+					caretPositionStringer.content += fmt.Sprintf(", %d characters selected", end-start)
+				}
+			}
+			caretPositionStringer.AddSources(editor.caretPosition)
+
+			nextTool8 := NewStringerWidget(np, caretPositionStringer)
+
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool2cCollapsible, nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool2cCollapsible, nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{950 + 4, 0}, mathgl.Vec2d{580, float64(windowSize1 - 2)}, tools))
 		}
 
