@@ -8409,4 +8409,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 
 	_ = widget.Close()
 	os.Remove("./Con2RunBin") // TODO: Generalize this
+
+	fmt.Println("Graceful exit.")
 }
