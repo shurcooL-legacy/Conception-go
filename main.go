@@ -16,7 +16,7 @@ import (
 	_ "github.com/ftrvxmtrx/tga"
 
 	gl "github.com/chsc/gogl/gl21"
-	glfw "github.com/go-gl/glfw3"
+	glfw "github.com/go-gl/glfw3" // devel branch with GLFW tip.
 
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
@@ -7093,10 +7093,6 @@ func main() {
 	if !*headlessFlag {
 		runtime.LockOSThread()
 
-		glfw.SetErrorCallback(func(err glfw.ErrorCode, desc string) {
-			panic(fmt.Sprintf("glfw.ErrorCallback: %v: %v\n", err, desc))
-		})
-
 		// Verify the GLFW library and header versions match
 		{
 			major, minor, revision := glfw.GetVersion()
@@ -7105,8 +7101,8 @@ func main() {
 				panic("Error: GLFW library and header versions do not match.")
 			}
 		}
-		if !glfw.Init() {
-			panic("glfw.Init()")
+		if err := glfw.Init(); err != nil {
+			log.Panicln("glfw.Init():", err)
 		}
 		defer glfw.Terminate()
 
@@ -7239,7 +7235,7 @@ func main() {
 			redraw = true // HACK
 		})
 
-		window.SetCharacterCallback(func(w *glfw.Window, char uint) {
+		window.SetCharacterCallback(func(w *glfw.Window, char rune) {
 			// HACK: Ignore characters when Super key is held down
 			if window.GetKey(glfw.KeyLeftSuper) != glfw.Release || window.GetKey(glfw.KeyRightSuper) != glfw.Release {
 				return
