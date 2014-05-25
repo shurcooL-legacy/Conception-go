@@ -7273,7 +7273,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if !sublimeMode && false {
 
@@ -7562,7 +7562,7 @@ func main() {
 
 				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
 					template2.Template = NewPipeTemplate(pipe.Line(
-						pipe_util.ExecCombinedOutput("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath),
+						pipe_util.ExecCombinedOutput("go", "build", "-o", "/dev/null", goPackage.Bpkg.ImportPath),
 						pipe.TaskFunc(func(s *pipe.State) error {
 							var b bytes.Buffer
 							b.ReadFrom(s.Stdin)
@@ -8260,18 +8260,18 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), ...)
 	}
 	gl.End()`), nil)
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 200}, []Widgeter{box1, box2}, nil))
+			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 200}, []Widgeter{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}))
 
-			/*highlightedDiff1 := &highlightedDiff{leftSide: true}
+			highlightedDiff1 := &highlightedDiff{leftSide: true}
 			highlightedDiff1.AddSources(box1.Content, box2.Content)
 			box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
 
 			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
 			highlightedDiff2 := &highlightedDiff{}
 			highlightedDiff2.AddSources(box1.Content, box2.Content)
-			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)*/
+			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
 
-			lineDiff1 := &lineDiff{leftSide: true}
+			/*lineDiff1 := &lineDiff{leftSide: true}
 			lineDiff1.AddSources(box1.Content, box2.Content)
 
 			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
@@ -8279,7 +8279,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			lineDiff2.AddSources(box1.Content, box2.Content)
 
 			box1.HighlightersTest = append(box1.HighlightersTest, lineDiff1)
-			box2.HighlightersTest = append(box2.HighlightersTest, lineDiff2)
+			box2.HighlightersTest = append(box2.HighlightersTest, lineDiff2)*/
 		}
 
 		{
