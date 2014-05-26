@@ -7067,15 +7067,8 @@ func initHttpHandlers() {
 		var goPackagesInRepo = make(map[string][]*GoPackage)
 
 		MakeUpdated(goPackages)
-		// TODO: This is slow and should be done in parallel.
-		started2 := time.Now()
-		if false {
-			for _, goPackage := range goPackages.Entries {
-				if rootPath := getRootPath(goPackage); rootPath != "" {
-					goPackagesInRepo[rootPath] = append(goPackagesInRepo[rootPath], goPackage)
-				}
-			}
-		} else {
+		// TODO: Factor this out somewhere. A cached GoPackagesInRepo type similar to exp14.GoPackages? Or something?
+		{
 			inChan := make(chan interface{})
 			go func() { // This needs to happen in the background because sending input will be blocked on reading output.
 				for _, goPackage := range goPackages.Entries {
@@ -7096,7 +7089,6 @@ func initHttpHandlers() {
 				goPackagesInRepo[repo.rootPath] = append(goPackagesInRepo[repo.rootPath], repo.goPackages[0])
 			}
 		}
-		fmt.Printf("This is slow and should be done in parallel: %v ms.\n", time.Since(started2).Seconds()*1000)
 
 		reduceFunc := func(in interface{}) interface{} {
 			repo := in.(Repo)
@@ -7139,7 +7131,7 @@ func initHttpHandlers() {
 
 		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
 
-		u1.WriteGitHubFlavoredMarkdownViaLocal(w, buf.Bytes())
+		u1.WriteMarkdownGfmAsHtmlPage(w, buf.Bytes())
 	}))
 	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		importPath := req.URL.Path[1:]
