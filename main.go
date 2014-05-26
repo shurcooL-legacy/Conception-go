@@ -30,6 +30,7 @@ import (
 
 	"github.com/shurcooL/go/u/u1"
 	"github.com/shurcooL/go/u/u5"
+	"github.com/shurcooL/go/u/u6"
 
 	"github.com/Jragonmiris/mathgl"
 	"github.com/bradfitz/iter"
@@ -1321,8 +1322,11 @@ func (this *GoPackageSelecterAdapter) GetSelectedGoPackage() *GoPackage {
 	}
 }
 
+// TODO: Move to the right place.
+var goPackages = &exp14.GoPackages{SkipGoroot: false}
+
 func NewGoPackageListingWidget(pos, size mathgl.Vec2d) *SearchableListWidget {
-	goPackagesSliceStringer := &goPackagesSliceStringer{&exp14.GoPackages{SkipGoroot: false}}
+	goPackagesSliceStringer := &goPackagesSliceStringer{goPackages}
 
 	w := NewSearchableListWidget(pos, size, goPackagesSliceStringer)
 	return w
@@ -2335,7 +2339,10 @@ func (w *CanvasWidget) PollLogic() {
 
 func (w *CanvasWidget) Layout() {
 	// HACK
-	windowSize0, windowSize1 := globalWindow.GetSize()
+	var windowSize0, windowSize1 int
+	if globalWindow != nil {
+		windowSize0, windowSize1 = globalWindow.GetSize()
+	}
 	windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 	w.size = windowSize
 
@@ -7020,6 +7027,7 @@ func initHttpHandlers() {
 				b += "Remote: " + goPackage.Dir.Repo.VcsRemote.RemoteRev + "\n"
 				b += "```\n"
 
+				// TODO: Reuse u6.GoPackageWorkingDiff.
 				// git diff
 				if goPackage.Dir.Repo.VcsLocal.Status != "" {
 					if goPackage.Dir.Repo.Vcs.Type() == vcs.Git {
@@ -7050,6 +7058,65 @@ func initHttpHandlers() {
 			u1.WriteMarkdownGfmAsHtmlPage(w, []byte(b))
 		}
 	})))
+	http.Handle("/status", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		started := time.Now()
+
+		_, short := req.URL.Query()["short"]
+
+		// rootPath -> []*GoPackage
+		var goPackagesInRepo = make(map[string][]*GoPackage)
+
+		MakeUpdated(goPackages)
+		// TODO: This is slow and should be done in parallel.
+		for _, goPackage := range goPackages.Entries {
+			if rootPath := getRootPath(goPackage); rootPath != "" {
+				goPackagesInRepo[rootPath] = append(goPackagesInRepo[rootPath], goPackage)
+			}
+		}
+
+		reduceFunc := func(in interface{}) interface{} {
+			repo := in.(Repo)
+
+			goPackage := repo.goPackages[0]
+			if goPackage.Dir.Repo != nil {
+				// HACK: Invalidate cache, always.
+				ExternallyUpdated(goPackage.Dir.Repo.VcsLocal.GetSources()[1].(DepNode2ManualI))
+
+				MakeUpdated(goPackage.Dir.Repo.VcsLocal)
+			}
+
+			return repo
+		}
+
+		inChan := make(chan interface{})
+		go func() { // This needs to happen in the background because sending input will be blocked on reading output.
+			for rootPath, goPackages := range goPackagesInRepo {
+				inChan <- Repo{rootPath, goPackages}
+			}
+			close(inChan)
+		}()
+		outChan := GoReduce(inChan, 8, reduceFunc)
+
+		var buf = new(bytes.Buffer)
+
+		for out := range outChan {
+			repo := out.(Repo)
+
+			goPackage := repo.goPackages[0]
+
+			if goPackage.Dir.Repo.VcsLocal.Status != "" {
+				fmt.Fprint(buf, "### "+strings.TrimPrefix(repo.rootPath, goPackage.Bpkg.SrcRoot+"/")+"/..."+"\n\n")
+				fmt.Fprint(buf, "```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n\n")
+				if !short {
+					fmt.Fprint(buf, "```diff\n"+u6.GoPackageWorkingDiff(goPackage)+"```\n\n")
+				}
+			}
+		}
+
+		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
+
+		u1.WriteGitHubFlavoredMarkdownViaLocal(w, buf.Bytes())
+	}))
 	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		importPath := req.URL.Path[1:]
 
@@ -7061,6 +7128,24 @@ func initHttpHandlers() {
 
 		u1.WriteMarkdownGfmAsHtmlPage(w, buf.Bytes())
 	})))
+}
+
+func getRootPath(goPackage *GoPackage) (rootPath string) {
+	if goPackage.Standard {
+		return ""
+	}
+
+	goPackage.UpdateVcs()
+	if goPackage.Dir.Repo == nil {
+		return ""
+	} else {
+		return goPackage.Dir.Repo.Vcs.RootPath()
+	}
+}
+
+type Repo struct {
+	rootPath   string
+	goPackages []*GoPackage
 }
 
 // ---
@@ -7269,7 +7354,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if !sublimeMode && false {
 
@@ -7437,7 +7522,10 @@ func main() {
 
 	} else if sublimeMode {
 
-		windowSize0, windowSize1 := window.GetSize()
+		var windowSize0, windowSize1 int
+		if window != nil {
+			windowSize0, windowSize1 = window.GetSize()
+		}
 		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 		_ = windowSize
 
@@ -8306,7 +8394,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	//widgets = append(widgets, NewLifeFormWidget(mathgl.Vec2d{400, 400}))
 
 	// Debug Panel
-	{
+	if !*headlessFlag {
 		var w Widgeters
 		{
 			contentFunc := func() (out string) {
