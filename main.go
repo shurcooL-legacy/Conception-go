@@ -7628,7 +7628,7 @@ func main() {
 
 			// Build Output.
 			buildOutput := NewMultilineContent()
-			nextTool2cCollapsible := NewCollapsibleWidget(np, NewTextBoxWidgetExternalContent(np, buildOutput, nil), "Build Output")
+			nextTool9Collapsible := NewCollapsibleWidget(np, NewTextBoxWidgetExternalContent(np, buildOutput, nil), "Build Output")
 
 			// Go Compile Errors hardcoded TEST
 			{
@@ -7663,6 +7663,8 @@ func main() {
 			build := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template2)
 			nextTool2Collapsible := NewCollapsibleWidget(np, build, "go build")
 
+			// ---
+
 			// go run.
 			template3 := NewPipeTemplateDynamic()
 			template3.UpdateFunc = func(this DepNode2I) {
@@ -7692,6 +7694,23 @@ func main() {
 
 			run := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template3)
 			nextTool2bCollapsible := NewCollapsibleWidget(np, run, "go run")
+
+			// ---
+
+			// go test.
+			template4 := NewPipeTemplateDynamic()
+			template4.UpdateFunc = func(this DepNode2I) {
+				template4.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "Nothing to go test."))
+				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+					template4.Template = NewPipeTemplate(pipe.Script(
+						pipe_util.ExecCombinedOutput("go", "test", goPackage.Bpkg.ImportPath),
+					))
+				}
+			}
+			template4.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
+
+			goTest := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template4)
+			nextTool2cCollapsible := NewCollapsibleWidget(np, goTest, "go test")
 
 			// ---
 
@@ -7812,7 +7831,7 @@ func main() {
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool2cCollapsible, nextTool2Collapsible, nextTool2bCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool9Collapsible, nextTool2Collapsible, nextTool2bCollapsible, nextTool2cCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{950 + 4, 0}, mathgl.Vec2d{580, float64(windowSize1 - 2)}, tools))
 		}
 
