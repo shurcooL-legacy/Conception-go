@@ -7068,11 +7068,35 @@ func initHttpHandlers() {
 
 		MakeUpdated(goPackages)
 		// TODO: This is slow and should be done in parallel.
-		for _, goPackage := range goPackages.Entries {
-			if rootPath := getRootPath(goPackage); rootPath != "" {
-				goPackagesInRepo[rootPath] = append(goPackagesInRepo[rootPath], goPackage)
+		started2 := time.Now()
+		if false {
+			for _, goPackage := range goPackages.Entries {
+				if rootPath := getRootPath(goPackage); rootPath != "" {
+					goPackagesInRepo[rootPath] = append(goPackagesInRepo[rootPath], goPackage)
+				}
+			}
+		} else {
+			inChan := make(chan interface{})
+			go func() { // This needs to happen in the background because sending input will be blocked on reading output.
+				for _, goPackage := range goPackages.Entries {
+					inChan <- goPackage
+				}
+				close(inChan)
+			}()
+			reduceFunc := func(in interface{}) interface{} {
+				goPackage := in.(*GoPackage)
+				if rootPath := getRootPath(goPackage); rootPath != "" {
+					return Repo{rootPath, []*GoPackage{goPackage}}
+				}
+				return nil
+			}
+			outChan := GoReduce(inChan, 64, reduceFunc)
+			for out := range outChan {
+				repo := out.(Repo)
+				goPackagesInRepo[repo.rootPath] = append(goPackagesInRepo[repo.rootPath], repo.goPackages[0])
 			}
 		}
+		fmt.Printf("This is slow and should be done in parallel: %v ms.\n", time.Since(started2).Seconds()*1000)
 
 		reduceFunc := func(in interface{}) interface{} {
 			repo := in.(Repo)
