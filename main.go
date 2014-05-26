@@ -7631,6 +7631,31 @@ func main() {
 
 			// ---
 
+			// git show HEAD.
+			var nextTool10Collapsible Widgeter
+			{
+				template := NewPipeTemplateDynamic()
+				template.UpdateFunc = func(this DepNode2I) {
+					template.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "No luck."))
+
+					if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); path != "" && strings.HasSuffix(path, ".go") {
+						dir, file := filepath.Split(path)
+						if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
+							template.Template = NewPipeTemplate(pipe.Line(
+								pipe.Exec("git", "show", "HEAD:./"+file),
+							))
+							template.Template.Dir = dir
+						}
+					}
+				}
+				template.AddSources(folderListing)
+
+				gitHead := NewLivePipeExpeWidget(np, []DepNode2I{folderListing}, template)
+				nextTool10Collapsible = NewCollapsibleWidget(np, gitHead, "git show HEAD")
+			}
+
+			// ---
+
 			// Local Branch of selected GoPackage
 			localBranch := &DepStringerFunc{}
 			localBranch.UpdateFunc = func(this DepNode2I) {
@@ -7855,7 +7880,7 @@ func main() {
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool9Collapsible, nextTool2Collapsible, nextTool2bCollapsible, nextTool2cCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool9Collapsible, nextTool2Collapsible, nextTool2bCollapsible, nextTool2cCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool10Collapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{950 + 4, 0}, mathgl.Vec2d{580, float64(windowSize1 - 2)}, tools))
 		}
 
