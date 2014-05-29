@@ -7128,6 +7128,9 @@ func initHttpHandlers() {
 				}
 			}
 		}
+		if buf.Len() == 0 {
+			fmt.Fprint(buf, "### working directory clean (across GOPATH workspaces)")
+		}
 
 		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
 
@@ -7582,6 +7585,7 @@ func main() {
 					dir, file := filepath.Split(path)
 					if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
 						template.Template = NewPipeTemplate(pipe.Line(
+							// TODO: Reuse u6.GoPackageWorkingDiff.
 							pipe.Exec("git", "diff", "--no-ext-diff", "--", file),
 							pipe.TaskFunc(func(s *pipe.State) error {
 								r := bufio.NewReader(s.Stdin)
