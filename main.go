@@ -17,6 +17,7 @@ import (
 
 	gl "github.com/chsc/gogl/gl21"
 	glfw "github.com/go-gl/glfw3" // devel branch with GLFW tip.
+	"github.com/go-gl/mathgl/mgl64"
 
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
@@ -32,7 +33,6 @@ import (
 	"github.com/shurcooL/go/u/u5"
 	"github.com/shurcooL/go/u/u6"
 
-	"github.com/Jragonmiris/mathgl"
 	"github.com/bradfitz/iter"
 
 	"github.com/shurcooL/go-goon"
@@ -151,26 +151,26 @@ var booVcs *exp12.Directory
 
 // Colors
 var (
-	nearlyWhiteColor = mathgl.Vec3d{0.975, 0.975, 0.975}
-	veryLightColor   = mathgl.Vec3d{0.95, 0.95, 0.95}
-	lightColor       = mathgl.Vec3d{0.85, 0.85, 0.85}
-	grayColor        = mathgl.Vec3d{0.75, 0.75, 0.75}
-	darkColor        = mathgl.Vec3d{0.35, 0.35, 0.35}
-	nearlyBlackColor = mathgl.Vec3d{0.025, 0.025, 0.025}
+	nearlyWhiteColor = mgl64.Vec3{0.975, 0.975, 0.975}
+	veryLightColor   = mgl64.Vec3{0.95, 0.95, 0.95}
+	lightColor       = mgl64.Vec3{0.85, 0.85, 0.85}
+	grayColor        = mgl64.Vec3{0.75, 0.75, 0.75}
+	darkColor        = mgl64.Vec3{0.35, 0.35, 0.35}
+	nearlyBlackColor = mgl64.Vec3{0.025, 0.025, 0.025}
 
-	highlightColor = mathgl.Vec3d{0.898, 0.765, 0.396}
+	highlightColor = mgl64.Vec3{0.898, 0.765, 0.396}
 
-	selectedTextColor         = mathgl.Vec3d{195 / 255.0, 212 / 255.0, 242 / 255.0}
+	selectedTextColor         = mgl64.Vec3{195 / 255.0, 212 / 255.0, 242 / 255.0}
 	selectedTextDarkColor     = selectedTextColor.Mul(0.75)
-	selectedTextInactiveColor = mathgl.Vec3d{225 / 255.0, 235 / 255.0, 250 / 255.0}
+	selectedTextInactiveColor = mgl64.Vec3{225 / 255.0, 235 / 255.0, 250 / 255.0}
 
-	lightRedColor   = mathgl.Vec3d{1, 0.9, 0.9}
-	lightGreenColor = mathgl.Vec3d{0.9, 1, 0.9}
-	darkRedColor    = mathgl.Vec3d{1, 0.8, 0.8}
-	darkGreenColor  = mathgl.Vec3d{0.8, 1, 0.8}
+	lightRedColor   = mgl64.Vec3{1, 0.9, 0.9}
+	lightGreenColor = mgl64.Vec3{0.9, 1, 0.9}
+	darkRedColor    = mgl64.Vec3{1, 0.8, 0.8}
+	darkGreenColor  = mgl64.Vec3{0.8, 1, 0.8}
 )
 
-var np = mathgl.Vec2d{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
+var np = mgl64.Vec2{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
 
 // TODO: Remove these
 var globalWindow *glfw.Window
@@ -187,26 +187,26 @@ func CheckGLError() {
 
 // ---
 
-func PrintText(pos mathgl.Vec2d, s string) {
+func PrintText(pos mgl64.Vec2, s string) {
 	lines := GetLines(s)
 	for lineIndex, line := range lines {
-		PrintLine(pos.Add(mathgl.Vec2d{0, float64(fontHeight * lineIndex)}), line)
+		PrintLine(pos.Add(mgl64.Vec2{0, float64(fontHeight * lineIndex)}), line)
 	}
 }
 
 // Input shouldn't have newlines
-func PrintLine(pos mathgl.Vec2d, s string) {
+func PrintLine(pos mgl64.Vec2, s string) {
 	segments := strings.Split(s, "\t")
 	var advance uint32
 	for _, segment := range segments {
-		PrintSegment(mathgl.Vec2d{pos[0] + float64(fontWidth*advance), pos[1]}, segment)
+		PrintSegment(mgl64.Vec2{pos[0] + float64(fontWidth*advance), pos[1]}, segment)
 		advance += uint32(len(segment))
 		advance += 4 - (advance % 4)
 	}
 }
 
 // Shouldn't have tabs nor newlines
-func PrintSegment(pos mathgl.Vec2d, s string) {
+func PrintSegment(pos mgl64.Vec2, s string) {
 	if s == "" {
 		return
 	}
@@ -228,26 +228,26 @@ func PrintSegment(pos mathgl.Vec2d, s string) {
 // ---
 
 type OpenGlStream struct {
-	pos        mathgl.Vec2d
+	pos        mgl64.Vec2
 	lineStartX float64
 	advance    uint32
 
-	BorderColor     *mathgl.Vec3d // nil means no border color.
-	BackgroundColor *mathgl.Vec3d // nil means no background color.
+	BorderColor     *mgl64.Vec3 // nil means no border color.
+	BackgroundColor *mgl64.Vec3 // nil means no background color.
 }
 
-func NewOpenGlStream(pos mathgl.Vec2d) *OpenGlStream {
+func NewOpenGlStream(pos mgl64.Vec2) *OpenGlStream {
 	return &OpenGlStream{pos: pos, lineStartX: pos[0]}
 }
 
-func (o *OpenGlStream) SetPos(pos mathgl.Vec2d) {
+func (o *OpenGlStream) SetPos(pos mgl64.Vec2) {
 	o.pos = pos
 	o.lineStartX = pos[0]
 	o.advance = 0
 }
 
-func (o *OpenGlStream) SetPosWithExpandedPosition(pos mathgl.Vec2d, x, y uint32) {
-	o.pos = pos.Add(mathgl.Vec2d{float64(x * fontWidth), float64(y * fontHeight)})
+func (o *OpenGlStream) SetPosWithExpandedPosition(pos mgl64.Vec2, x, y uint32) {
+	o.pos = pos.Add(mgl64.Vec2{float64(x * fontWidth), float64(y * fontHeight)})
 	o.lineStartX = pos[0]
 	o.advance = x
 }
@@ -286,7 +286,7 @@ func (o *OpenGlStream) PrintLine(s string) {
 			backgroundColor = *o.BackgroundColor
 		}
 
-		DrawInnerRoundedBox(o.pos, mathgl.Vec2d{fontWidth * float64(expandedLineLength), fontHeight}, *o.BorderColor, backgroundColor)
+		DrawInnerRoundedBox(o.pos, mgl64.Vec2{fontWidth * float64(expandedLineLength), fontHeight}, *o.BorderColor, backgroundColor)
 
 		gl.PopAttrib()
 	}
@@ -500,16 +500,16 @@ type Widgeter interface {
 	Layout()
 	LayoutNeeded()
 	Render()
-	Hit(mathgl.Vec2d) []Widgeter
+	Hit(mgl64.Vec2) []Widgeter
 	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
 
-	Pos() *mathgl.Vec2d
-	Size() *mathgl.Vec2d
+	Pos() *mgl64.Vec2
+	Size() *mgl64.Vec2
 	HoverPointers() map[*Pointer]bool
 	Parent() Widgeter
 	SetParent(Widgeter)
 
-	ParentToLocal(mathgl.Vec2d) mathgl.Vec2d
+	ParentToLocal(mgl64.Vec2) mgl64.Vec2
 
 	DepNodeI
 }
@@ -517,15 +517,15 @@ type Widgeter interface {
 type Widgeters []Widgeter
 
 type Widget struct {
-	pos           mathgl.Vec2d
-	size          mathgl.Vec2d
+	pos           mgl64.Vec2
+	size          mgl64.Vec2
 	hoverPointers map[*Pointer]bool
 	parent        Widgeter
 
 	DepNode
 }
 
-func NewWidget(pos, size mathgl.Vec2d) Widget {
+func NewWidget(pos, size mgl64.Vec2) Widget {
 	return Widget{pos: pos, size: size, hoverPointers: map[*Pointer]bool{}}
 }
 
@@ -538,7 +538,7 @@ func (w *Widget) Layout() {
 }
 func (_ *Widget) LayoutNeeded() {}
 func (_ *Widget) Render()       {}
-func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *Widget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
 
 	Hit := (LocalPosition[0] >= 0 &&
@@ -554,8 +554,8 @@ func (w *Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 }
 func (w *Widget) ProcessEvent(inputEvent InputEvent) {}
 
-func (w *Widget) Pos() *mathgl.Vec2d  { return &w.pos }
-func (w *Widget) Size() *mathgl.Vec2d { return &w.size }
+func (w *Widget) Pos() *mgl64.Vec2  { return &w.pos }
+func (w *Widget) Size() *mgl64.Vec2 { return &w.size }
 
 func (w *Widget) HoverPointers() map[*Pointer]bool {
 	return w.hoverPointers
@@ -564,13 +564,13 @@ func (w *Widget) HoverPointers() map[*Pointer]bool {
 func (w *Widget) Parent() Widgeter     { return w.parent }
 func (w *Widget) SetParent(p Widgeter) { w.parent = p }
 
-func (w *Widget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+func (w *Widget) ParentToLocal(ParentPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
 	return ParentPosition.Sub(w.pos)
 }
 
 type WidgeterS struct{ Widgeter }
 
-func (w WidgeterS) GlobalToParent(GlobalPosition mathgl.Vec2d) (ParentPosition mathgl.Vec2d) {
+func (w WidgeterS) GlobalToParent(GlobalPosition mgl64.Vec2) (ParentPosition mgl64.Vec2) {
 	switch w.Parent() {
 	case nil:
 		ParentPosition = GlobalPosition
@@ -579,7 +579,7 @@ func (w WidgeterS) GlobalToParent(GlobalPosition mathgl.Vec2d) (ParentPosition m
 	}
 	return ParentPosition
 }
-func (w WidgeterS) GlobalToLocal(GlobalPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+func (w WidgeterS) GlobalToLocal(GlobalPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
 	return w.ParentToLocal(WidgeterS{w}.GlobalToParent(GlobalPosition))
 }
 
@@ -622,8 +622,8 @@ type Test1Widget struct {
 	Widget
 }
 
-func NewTest1Widget(pos mathgl.Vec2d) *Test1Widget {
-	return &Test1Widget{Widget: NewWidget(pos, mathgl.Vec2d{300, 300})}
+func NewTest1Widget(pos mgl64.Vec2) *Test1Widget {
+	return &Test1Widget{Widget: NewWidget(pos, mgl64.Vec2{300, 300})}
 }
 
 func (w *Test1Widget) Render() {
@@ -670,11 +670,11 @@ type Test2Widget struct {
 	field *float64
 }
 
-func NewTest2Widget(pos mathgl.Vec2d, field *float64) *Test2Widget {
+func NewTest2Widget(pos mgl64.Vec2, field *float64) *Test2Widget {
 	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, NewMultilineContentFuncInstant(func() string { return TrimLastNewline(goon.Sdump(*field)) }), nil), field: field}
 }
 
-func (w *Test2Widget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *Test2Widget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -738,7 +738,7 @@ func (t *parsedFile) Update() {
 	_ = err
 }
 
-func NewTest3Widget(pos mathgl.Vec2d, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *parsedFile) {
+func NewTest3Widget(pos mgl64.Vec2, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *parsedFile) {
 	parsedFile := &parsedFile{}
 	parsedFile.AddSources(source.Content)
 
@@ -865,7 +865,7 @@ func FindFileAst(fset *token.FileSet, file *token.File, fileAsts []*ast.File) *a
 	return nil
 }
 
-func NewTest4Widget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
+func NewTest4Widget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) (*LiveGoroutineExpeWidget, *typeCheckedPackage) {
 	typeCheckedPackage := &typeCheckedPackage{}
 	typeCheckedPackage.AddSources(goPackageSelecter, source.Content)
 
@@ -1006,7 +1006,7 @@ func NewTest4Widget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, sourc
 	return w, typeCheckedPackage
 }
 
-func NewTypeUnderCaretWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget, typeCheckedPackage *typeCheckedPackage) *LiveGoroutineExpeWidget {
+func NewTypeUnderCaretWidget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source *TextBoxWidget, typeCheckedPackage *typeCheckedPackage) *LiveGoroutineExpeWidget {
 	params := func() interface{} {
 		fileUri, _ := source.Content.GetUriForProtocol("file://")
 		return []interface{}{
@@ -1120,7 +1120,7 @@ func (this *SliceStringerS) Len() uint64 {
 
 var oracleModes = NewSliceStringerS("callees", "callers", "callgraph", "callstack", "describe", "freevars", "implements", "peers", "referrers")
 
-func NewTest6OracleWidget(pos mathgl.Vec2d, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) Widgeter {
+func NewTest6OracleWidget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) Widgeter {
 	mode := NewFilterableSelecterWidget(np, oracleModes, NewMultilineContent())
 
 	params := func() interface{} {
@@ -1280,11 +1280,11 @@ func (this *goSymbolsB) Update() {
 	}
 }
 
-func NewTest5BWidget(pos mathgl.Vec2d, typeCheckedPackage *typeCheckedPackage) (*SearchableListWidget, *goSymbolsB) {
+func NewTest5BWidget(pos mgl64.Vec2, typeCheckedPackage *typeCheckedPackage) (*SearchableListWidget, *goSymbolsB) {
 	goSymbols := &goSymbolsB{}
 	goSymbols.AddSources(typeCheckedPackage)
 
-	w := NewSearchableListWidget(np, mathgl.Vec2d{200, 200}, goSymbols)
+	w := NewSearchableListWidget(np, mgl64.Vec2{200, 200}, goSymbols)
 	return w, goSymbols
 }
 
@@ -1325,7 +1325,7 @@ func (this *GoPackageSelecterAdapter) GetSelectedGoPackage() *GoPackage {
 // TODO: Move to the right place.
 var goPackages = &exp14.GoPackages{SkipGoroot: false}
 
-func NewGoPackageListingWidget(pos, size mathgl.Vec2d) *SearchableListWidget {
+func NewGoPackageListingWidget(pos, size mgl64.Vec2) *SearchableListWidget {
 	goPackagesSliceStringer := &goPackagesSliceStringer{goPackages}
 
 	w := NewSearchableListWidget(pos, size, goPackagesSliceStringer)
@@ -1420,8 +1420,8 @@ type GpcFileWidget struct {
 	p Polygon
 }
 
-func NewGpcFileWidget(pos mathgl.Vec2d, path string) *GpcFileWidget {
-	return &GpcFileWidget{Widget: NewWidget(pos, mathgl.Vec2d{0, 0}), p: ReadGpcFile(path)}
+func NewGpcFileWidget(pos mgl64.Vec2, path string) *GpcFileWidget {
+	return &GpcFileWidget{Widget: NewWidget(pos, mgl64.Vec2{0, 0}), p: ReadGpcFile(path)}
 }
 
 func (w *GpcFileWidget) Render() {
@@ -1446,7 +1446,7 @@ type ButtonTriggerWidget struct {
 	DepNode2Manual
 }
 
-func NewButtonTriggerWidget(pos mathgl.Vec2d) *ButtonTriggerWidget {
+func NewButtonTriggerWidget(pos mgl64.Vec2) *ButtonTriggerWidget {
 	w := &ButtonTriggerWidget{}
 	w.ButtonWidget = NewButtonWidget(pos, func() { ExternallyUpdated(&w.DepNode2Manual) })
 
@@ -1461,8 +1461,8 @@ type ButtonWidget struct {
 	tooltip Widgeter
 }
 
-func NewButtonWidget(pos mathgl.Vec2d, action func()) *ButtonWidget {
-	w := &ButtonWidget{Widget: NewWidget(pos, mathgl.Vec2d{fontHeight, fontHeight})}
+func NewButtonWidget(pos mgl64.Vec2, action func()) *ButtonWidget {
+	w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{fontHeight, fontHeight})}
 	w.setAction(action)
 
 	return w
@@ -1497,18 +1497,18 @@ func (w *ButtonWidget) Render() {
 		DrawInnerRoundedBox(w.pos, w.size, highlightColor, nearlyWhiteColor)
 	} else {
 		//DrawNBox(w.pos, w.size)
-		DrawInnerRoundedBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor)
+		DrawInnerRoundedBox(w.pos, w.size, mgl64.Vec3{0.3, 0.3, 0.3}, nearlyWhiteColor)
 	}
 
 	// Tooltip
 	if w.tooltip != nil && isHit {
-		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
-		tooltipOffset := mathgl.Vec2d{0, 16}
+		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mgl64.Vec2{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		tooltipOffset := mgl64.Vec2{0, 16}
 		*w.tooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		w.tooltip.Render()
 	}
 }
-func (w *ButtonWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -1538,7 +1538,7 @@ type TriButtonWidget struct {
 	state bool
 }
 
-func NewTriButtonWidget(pos mathgl.Vec2d, action func()) *TriButtonWidget {
+func NewTriButtonWidget(pos mgl64.Vec2, action func()) *TriButtonWidget {
 	w := &TriButtonWidget{ButtonWidget: NewButtonWidget(pos, nil)}
 	w.setAction(action)
 
@@ -1581,7 +1581,7 @@ type TriButtonExternalStateWidget struct {
 	state func() bool
 }
 
-func NewTriButtonExternalStateWidget(pos mathgl.Vec2d, state func() bool, action func()) *TriButtonExternalStateWidget {
+func NewTriButtonExternalStateWidget(pos mgl64.Vec2, state func() bool, action func()) *TriButtonExternalStateWidget {
 	w := &TriButtonExternalStateWidget{ButtonWidget: NewButtonWidget(pos, action), state: state}
 
 	return w
@@ -1608,9 +1608,9 @@ func (w *TriButtonExternalStateWidget) Render() {
 	}
 
 	if w.state() {
-		DrawBorderlessBox(w.pos.Add(w.size.Mul(2.0/14)), w.size.Mul(10.0/14), mathgl.Vec3d{0.9, 0.3, 0.01})
+		DrawBorderlessBox(w.pos.Add(w.size.Mul(2.0/14)), w.size.Mul(10.0/14), mgl64.Vec3{0.9, 0.3, 0.01})
 	} else {
-		DrawBorderlessBox(w.pos.Add(w.size.Mul(2.0/14)), w.size.Mul(10.0/14), mathgl.Vec3d{0.9, 0.9, 0.9})
+		DrawBorderlessBox(w.pos.Add(w.size.Mul(2.0/14)), w.size.Mul(10.0/14), mgl64.Vec3{0.9, 0.9, 0.9})
 	}
 }
 
@@ -1645,13 +1645,13 @@ func (w *BoxWidget) Render() {
 
 	// Tooltip
 	if isHit {
-		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
-		tooltipOffset := mathgl.Vec2d{0, -4 - boxWidgetTooltip.Size()[1]}
+		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mgl64.Vec2{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		tooltipOffset := mgl64.Vec2{0, -4 - boxWidgetTooltip.Size()[1]}
 		*boxWidgetTooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		boxWidgetTooltip.Render()
 	}
 }
-func (w *BoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *BoxWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -1679,7 +1679,7 @@ type WindowWidget struct {
 	child  Widgeter
 }
 
-func NewWindowWidget(pos, size mathgl.Vec2d, child Widgeter) *WindowWidget {
+func NewWindowWidget(pos, size mgl64.Vec2, child Widgeter) *WindowWidget {
 	w := &WindowWidget{Widget: NewWidget(pos, size), child: child}
 	closeButton := NewButtonWidget(np, func() {
 		w.Parent().(RemoveWidgeter).RemoveWidget(w)
@@ -1724,11 +1724,11 @@ func (w *WindowWidget) LayoutNeeded() {
 }
 
 func (w *WindowWidget) Render() {
-	DrawGradientBox(w.pos, mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor, lightColor)
+	DrawGradientBox(w.pos, mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.3, 0.3, 0.3}, nearlyWhiteColor, lightColor)
 
 	// Title
 	gl.Color3dv((*gl.Double)(&nearlyBlackColor[0]))
-	PrintSegment(w.pos.Add(mathgl.Vec2d{60}), w.Name)
+	PrintSegment(w.pos.Add(mgl64.Vec2{60}), w.Name)
 
 	gl.PushMatrix()
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
@@ -1737,7 +1737,7 @@ func (w *WindowWidget) Render() {
 	w.child.Render()
 	gl.PopMatrix()
 }
-func (w *WindowWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *WindowWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	LocalPosition := w.Widget.ParentToLocal(ParentPosition) // HACK: Should use actual ParentToLocal properly.
 
 	Hit := (LocalPosition[0] >= 0 &&
@@ -1750,12 +1750,12 @@ func (w *WindowWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 		hits = append(hits, w.chrome.Hit(LocalPosition)...)
 		return hits
 	} else {
-		return w.child.Hit(LocalPosition.Sub(mathgl.Vec2d{0, fontHeight + 1}))
+		return w.child.Hit(LocalPosition.Sub(mgl64.Vec2{0, fontHeight + 1}))
 	}
 }
 
-func (w *WindowWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
-	return w.Widget.ParentToLocal(ParentPosition).Sub(mathgl.Vec2d{0, fontHeight + 1})
+func (w *WindowWidget) ParentToLocal(ParentPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
+	return w.Widget.ParentToLocal(ParentPosition).Sub(mgl64.Vec2{0, fontHeight + 1})
 }
 
 func (w *WindowWidget) ProcessEvent(inputEvent InputEvent) {
@@ -1778,12 +1778,12 @@ func (widgets Widgeters) ContainsWidget(targetWidget Widgeter) bool {
 
 // ---
 
-func DrawBorderlessBox(pos, size mathgl.Vec2d, backgroundColor mathgl.Vec3d) {
+func DrawBorderlessBox(pos, size mgl64.Vec2, backgroundColor mgl64.Vec3) {
 	gl.Color3dv((*gl.Double)(&backgroundColor[0]))
 	gl.Rectd(gl.Double(pos[0]), gl.Double(pos[1]), gl.Double(pos.Add(size)[0]), gl.Double(pos.Add(size)[1]))
 }
 
-func DrawBorderlessGradientBox(pos, size mathgl.Vec2d, topColor, bottomColor mathgl.Vec3d) {
+func DrawBorderlessGradientBox(pos, size mgl64.Vec2, topColor, bottomColor mgl64.Vec3) {
 	gl.Begin(gl.TRIANGLE_STRIP)
 	gl.Color3dv((*gl.Double)(&topColor[0]))
 	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
@@ -1794,31 +1794,31 @@ func DrawBorderlessGradientBox(pos, size mathgl.Vec2d, topColor, bottomColor mat
 	gl.End()
 }
 
-func DrawBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
+func DrawBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
 	DrawBorderlessBox(pos, size, backgroundColor)
 }
-func DrawNBox(pos, size mathgl.Vec2d) {
-	DrawBox(pos, size, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor)
+func DrawNBox(pos, size mgl64.Vec2) {
+	DrawBox(pos, size, mgl64.Vec3{0.3, 0.3, 0.3}, nearlyWhiteColor)
 }
-func DrawYBox(pos, size mathgl.Vec2d) {
+func DrawYBox(pos, size mgl64.Vec2) {
 	DrawBox(pos, size, highlightColor, nearlyWhiteColor)
 }
-func DrawGBox(pos, size mathgl.Vec2d) {
+func DrawGBox(pos, size mgl64.Vec2) {
 	DrawBox(pos, size, highlightColor, grayColor)
 }
-func DrawLGBox(pos, size mathgl.Vec2d) {
-	DrawBox(pos, size, mathgl.Vec3d{0.6, 0.6, 0.6}, lightColor)
+func DrawLGBox(pos, size mgl64.Vec2) {
+	DrawBox(pos, size, mgl64.Vec3{0.6, 0.6, 0.6}, lightColor)
 }
 
-func DrawGradientBox(pos, size mathgl.Vec2d, borderColor, topColor, bottomColor mathgl.Vec3d) {
+func DrawGradientBox(pos, size mgl64.Vec2, borderColor, topColor, bottomColor mgl64.Vec3) {
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
 	gl.Rectd(gl.Double(pos[0]-1), gl.Double(pos[1]-1), gl.Double(pos.Add(size)[0]+1), gl.Double(pos.Add(size)[1]+1))
 	DrawBorderlessGradientBox(pos, size, topColor, bottomColor)
 }
 
-func DrawInnerRoundedBox(pos, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
+func DrawInnerRoundedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
 	if size[0] == 0 || size[1] == 0 {
 		return
 	}
@@ -1852,7 +1852,7 @@ func DrawInnerRoundedBox(pos, size mathgl.Vec2d, borderColor, backgroundColor ma
 
 const Tau = 2 * math.Pi
 
-func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor, backgroundColor mathgl.Vec3d) {
+func DrawCircle(pos mgl64.Vec2, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
 	const x = 64
 
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
@@ -1872,11 +1872,11 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor, backgroundColo
 	gl.End()
 }
 
-func DrawCircleBorder(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor mathgl.Vec3d) {
+func DrawCircleBorder(pos mgl64.Vec2, size mgl64.Vec2, borderColor mgl64.Vec3) {
 	DrawCircleBorderCustom(pos, size, borderColor, 1, 64, 0, 64)
 }
 
-func DrawCircleBorderCustom(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor mathgl.Vec3d, borderWidth float64, totalSlices, startSlice, endSlice int32) {
+func DrawCircleBorderCustom(pos mgl64.Vec2, size mgl64.Vec2, borderColor mgl64.Vec3, borderWidth float64, totalSlices, startSlice, endSlice int32) {
 	var x = float64(totalSlices)
 
 	gl.Color3dv((*gl.Double)(&borderColor[0]))
@@ -1892,7 +1892,7 @@ func DrawCircleBorderCustom(pos mathgl.Vec2d, size mathgl.Vec2d, borderColor mat
 
 type KatWidget struct {
 	Widget
-	target      mathgl.Vec2d
+	target      mgl64.Vec2
 	rotation    float64
 	mode        KatMode
 	skillActive bool
@@ -1925,8 +1925,8 @@ func (mode KatMode) String() string {
 	panic(0)
 }
 
-func NewKatWidget(pos mathgl.Vec2d) *KatWidget {
-	w := &KatWidget{Widget: NewWidget(pos, mathgl.Vec2d{16, 16}), target: pos}
+func NewKatWidget(pos mgl64.Vec2) *KatWidget {
+	w := &KatWidget{Widget: NewWidget(pos, mgl64.Vec2{16, 16}), target: pos}
 	UniversalClock.AddChangeListener(w)
 	return w
 }
@@ -1973,7 +1973,7 @@ func (w *KatWidget) Render() {
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 		gl.Rotated(gl.Double(w.rotation), 0, 0, 1)
 
-		DrawCircleBorderCustom(np, mathgl.Vec2d{16, 16}, mathgl.Vec3d{1, 0, 0}, 2, 12, 1, 11)
+		DrawCircleBorderCustom(np, mgl64.Vec2{16, 16}, mgl64.Vec3{1, 0, 0}, 2, 12, 1, 11)
 
 		// Draw the gun
 		{
@@ -1989,11 +1989,11 @@ func (w *KatWidget) Render() {
 	}
 
 	if w.mode == Shunpo && !w.skillActive {
-		DrawCircleBorder(w.pos, mathgl.Vec2d{ShunpoRadius * 2, ShunpoRadius * 2}, mathgl.Vec3d{0.7, 0.7, 0.7})
+		DrawCircleBorder(w.pos, mgl64.Vec2{ShunpoRadius * 2, ShunpoRadius * 2}, mgl64.Vec3{0.7, 0.7, 0.7})
 	}
 }
 
-func (w *KatWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *KatWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if w.pos.Sub(ParentPosition).Len() <= w.size[0]/2 {
 		return []Widgeter{w}
 	} else {
@@ -2012,12 +2012,12 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		w.mode == Shunpo {
-		w.target = WidgeterS{w}.GlobalToParent(mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
+		w.target = WidgeterS{w}.GlobalToParent(mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
 		w.skillActive = true
 	}
 
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(1) {
-		pointerPos := WidgeterS{w}.GlobalToParent(mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
+		pointerPos := WidgeterS{w}.GlobalToParent(mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
 		if pointerPos.Sub(w.pos).Len() > w.size[0]*2/3 || w.target.Sub(w.pos).Len() > w.size[0]*2/3 {
 			w.target = pointerPos
 		}
@@ -2058,7 +2058,7 @@ func (w *KatWidget) NotifyChange() {
 			redraw = true
 		}
 
-		var direction mathgl.Vec2d
+		var direction mgl64.Vec2
 		if keyboardPointer.State.Button('A') && !keyboardPointer.State.Button('D') {
 			direction[0] = -1
 			redraw = true
@@ -2074,7 +2074,7 @@ func (w *KatWidget) NotifyChange() {
 			redraw = true
 		}
 		if direction.Len() != 0 {
-			rotM := mathgl.Rotate2Dd(w.rotation)
+			rotM := mgl64.Rotate2D(w.rotation)
 			direction = rotM.Mul2x1(direction)
 
 			w.target = w.pos.Add(direction.Normalize().Mul(speed * timePassed))
@@ -2115,7 +2115,7 @@ type CompositeWidget struct {
 	Widgets Widgeters
 }
 
-func NewCompositeWidget(pos mathgl.Vec2d, Widgets Widgeters) *CompositeWidget {
+func NewCompositeWidget(pos mgl64.Vec2, Widgets Widgeters) *CompositeWidget {
 	w := &CompositeWidget{Widget: NewWidget(pos, np), Widgets: Widgets}
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
@@ -2183,7 +2183,7 @@ func (w *CompositeWidget) Render() {
 		widget.Render()
 	}
 }
-func (w *CompositeWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *CompositeWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
 
 	hits := []Widgeter{}
@@ -2212,11 +2212,11 @@ type FlowLayoutWidgetOptions struct {
 	FlowLayoutType
 }
 
-func NewFlowLayoutWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *FlowLayoutWidgetOptions) *FlowLayoutWidget {
+func NewFlowLayoutWidget(pos mgl64.Vec2, Widgets []Widgeter, options *FlowLayoutWidgetOptions) *FlowLayoutWidget {
 	if options == nil {
 		options = &FlowLayoutWidgetOptions{}
 	}
-	w := &FlowLayoutWidget{CompositeWidget: CompositeWidget{Widget: NewWidget(pos, mathgl.Vec2d{}), Widgets: Widgets}, options: *options}
+	w := &FlowLayoutWidget{CompositeWidget: CompositeWidget{Widget: NewWidget(pos, mgl64.Vec2{}), Widgets: Widgets}, options: *options}
 	// TODO: This is a hack, I'm manually overriding parents of each widget that were set in NewCompositeWidget()
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
@@ -2260,7 +2260,7 @@ func (w *FlowLayoutWidget) Layout() {
 
 type CanvasWidget struct {
 	CompositeWidget
-	offset  mathgl.Vec2d
+	offset  mgl64.Vec2
 	options CanvasWidgetOptions
 
 	PopupTest Widgeter
@@ -2270,11 +2270,11 @@ type CanvasWidgetOptions struct {
 	Scrollable bool
 }
 
-func NewCanvasWidget(pos mathgl.Vec2d, Widgets []Widgeter, options *CanvasWidgetOptions) *CanvasWidget {
+func NewCanvasWidget(pos mgl64.Vec2, Widgets []Widgeter, options *CanvasWidgetOptions) *CanvasWidget {
 	if options == nil {
 		options = &CanvasWidgetOptions{}
 	}
-	w := &CanvasWidget{CompositeWidget: CompositeWidget{Widget: NewWidget(pos, mathgl.Vec2d{}), Widgets: Widgets}, options: *options}
+	w := &CanvasWidget{CompositeWidget: CompositeWidget{Widget: NewWidget(pos, mgl64.Vec2{}), Widgets: Widgets}, options: *options}
 	for _, widget := range w.Widgets {
 		widget.SetParent(w)
 	}
@@ -2303,7 +2303,7 @@ func (w *CanvasWidget) PollLogic() {
 				speed *= 10
 			}
 
-			var direction mathgl.Vec2d
+			var direction mgl64.Vec2
 			if keyboardPointer.State.Button(int(glfw.KeyLeft)) && !keyboardPointer.State.Button(int(glfw.KeyRight)) {
 				direction[0] = +1
 				redraw = true
@@ -2343,7 +2343,7 @@ func (w *CanvasWidget) Layout() {
 	if globalWindow != nil {
 		windowSize0, windowSize1 = globalWindow.GetSize()
 	}
-	windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
+	windowSize := mgl64.Vec2{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 	w.size = windowSize
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
@@ -2399,7 +2399,7 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 		// TEST, DEBUG: Cmd+O shortcut to open a new window, for testing purposes
 		case glfw.KeyO:
 			if inputEvent.ModifierKey&glfw.ModSuper != 0 {
-				w2 := NewWindowWidget(mathgl.Vec2d{600, 400}, mathgl.Vec2d{300, 60}, NewTextBoxWidget(np))
+				w2 := NewWindowWidget(mgl64.Vec2{600, 400}, mgl64.Vec2{300, 60}, NewTextBoxWidget(np))
 				w2.Name = "New Window"
 
 				// Add new widget to canvas
@@ -2412,7 +2412,7 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyP:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				textBox := NewTextBoxWidget(np)
-				w.PopupTest = NewSpacerWidget(mathgl.Vec2d{200, 0}, textBox)
+				w.PopupTest = NewSpacerWidget(mgl64.Vec2{200, 0}, textBox)
 
 				originalMapping := keyboardPointer.OriginMapping // HACK
 				closeOnEscape := &CustomWidget{
@@ -2431,12 +2431,12 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 							case glfw.KeyEnter:
 								content := textBox.Content.Content()
 								{
-									globalPosition := mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]}
+									globalPosition := mgl64.Vec2{mousePointer.State.Axes[0], mousePointer.State.Axes[1]}
 									localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 
 									body := NewTextFileWidget(np, content)
 
-									w2 := NewWindowWidget(localPosition, mathgl.Vec2d{}, body)
+									w2 := NewWindowWidget(localPosition, mgl64.Vec2{}, body)
 									w2.Name = content
 
 									// Add new widget to canvas
@@ -2476,7 +2476,7 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 }
 
-func (w *CanvasWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *CanvasWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
 
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
@@ -2490,7 +2490,7 @@ func (w *CanvasWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	}
 }
 
-func (w *CanvasWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
+func (w *CanvasWidget) ParentToLocal(ParentPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
 	return w.Widget.ParentToLocal(ParentPosition).Sub(w.offset)
 }
 
@@ -2503,7 +2503,7 @@ type CollapsibleWidget struct {
 	child Widgeter
 }
 
-func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter, title string) *CollapsibleWidget {
+func NewCollapsibleWidget(pos mgl64.Vec2, child Widgeter, title string) *CollapsibleWidget {
 	w := &CollapsibleWidget{Widget: NewWidget(pos, np), child: child}
 	w.child.SetParent(w)
 
@@ -2513,8 +2513,8 @@ func NewCollapsibleWidget(pos mathgl.Vec2d, child Widgeter, title string) *Colla
 	//w.state.state = true // HACK
 	w.state.SetParent(w) // For its Layout() to work...
 
-	w.label = NewTextLabelWidgetString(mathgl.Vec2d{w.state.Size()[0] + 2, 0}, title) // HACK, should use FlowLayout or something
-	w.label.SetParent(w)                                                              // For its Layout() to work...
+	w.label = NewTextLabelWidgetString(mgl64.Vec2{w.state.Size()[0] + 2, 0}, title) // HACK, should use FlowLayout or something
+	w.label.SetParent(w)                                                            // For its Layout() to work...
 
 	// HACK: Set position of child
 	w.child.Pos()[0] = w.state.Size()[0] + 2
@@ -2586,7 +2586,7 @@ func (w *CollapsibleWidget) Render() {
 	}
 }
 
-func (w *CollapsibleWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *CollapsibleWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
 
 	hits := w.state.Hit(LocalPosition)
@@ -2604,7 +2604,7 @@ type ScrollPaneWidget struct {
 	child Widgeter
 }
 
-func NewScrollPaneWidget(pos, size mathgl.Vec2d, child Widgeter) *ScrollPaneWidget {
+func NewScrollPaneWidget(pos, size mgl64.Vec2, child Widgeter) *ScrollPaneWidget {
 	w := &ScrollPaneWidget{Widget: NewWidget(pos, size), child: child}
 	w.child.SetParent(w)
 	return w
@@ -2646,7 +2646,7 @@ func (w *ScrollPaneWidget) Layout() {
 	}
 }*/
 
-func (w *ScrollPaneWidget) ScrollToArea(target, size mathgl.Vec2d) {
+func (w *ScrollPaneWidget) ScrollToArea(target, size mgl64.Vec2) {
 	for i := 0; i < 2; i++ {
 		// Move the minimum amount that increases overlap
 		w.child.Pos()[i] += math.Min(math.Dim(-w.child.Pos()[i], target[i]), math.Dim(-w.child.Pos()[i]+w.size[i], target[i]+size[i]))
@@ -2657,7 +2657,7 @@ func (w *ScrollPaneWidget) ScrollToArea(target, size mathgl.Vec2d) {
 	//w.Layout()
 }
 
-func (w *ScrollPaneWidget) CenterOnArea(target, size mathgl.Vec2d) {
+func (w *ScrollPaneWidget) CenterOnArea(target, size mgl64.Vec2) {
 	for i := 0; i < 2; i++ {
 		w.child.Pos()[i] = -(target[i] + size[i]/2) + w.size[i]/2
 	}
@@ -2674,7 +2674,7 @@ func NearInt64(value float64) int64 {
 	}
 }
 
-func SetScissor(pos, size mathgl.Vec2d) {
+func SetScissor(pos, size mgl64.Vec2) {
 	var ModelMatrix [16]gl.Double
 	var ProjectionMatrix [16]gl.Double
 	var Viewport [4]gl.Int
@@ -2683,17 +2683,17 @@ func SetScissor(pos, size mathgl.Vec2d) {
 	gl.GetDoublev(gl.PROJECTION_MATRIX, &ProjectionMatrix[0])
 	gl.GetIntegerv(gl.VIEWPORT, &Viewport[0])
 
-	p0 := mathgl.Projectd(mathgl.Vec3d{pos[0], pos[1] + size[1] /* Inverted y coordinate. */, 0},
-		mathgl.Mat4d{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
-		mathgl.Mat4d{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+	p0 := mgl64.Project(mgl64.Vec3{pos[0], pos[1] + size[1] /* Inverted y coordinate. */, 0},
+		mgl64.Mat4{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
+		mgl64.Mat4{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
 		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
-	p1 := mathgl.Projectd(mathgl.Vec3d{size[0], size[1], 0},
-		mathgl.Mat4d{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
-		mathgl.Mat4d{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+	p1 := mgl64.Project(mgl64.Vec3{size[0], size[1], 0},
+		mgl64.Mat4{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
+		mgl64.Mat4{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
 		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
-	p2 := mathgl.Projectd(mathgl.Vec3d{0, 0, 0},
-		mathgl.Mat4d{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
-		mathgl.Mat4d{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+	p2 := mgl64.Project(mgl64.Vec3{0, 0, 0},
+		mgl64.Mat4{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
+		mgl64.Mat4{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
 		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
 
 	pos0 := NearInt64(float64(p0[0]))
@@ -2716,7 +2716,7 @@ func (w *ScrollPaneWidget) Render() {
 	defer gl.PopMatrix()
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 
-	SetScissor(mathgl.Vec2d{-1, -1}, w.size.Add(mathgl.Vec2d{2, 2}))
+	SetScissor(mgl64.Vec2{-1, -1}, w.size.Add(mgl64.Vec2{2, 2}))
 	gl.Enable(gl.SCISSOR_TEST)
 
 	w.child.Render()
@@ -2729,21 +2729,21 @@ func (w *ScrollPaneWidget) Render() {
 
 		// Vertical
 		if w.child.Size()[1] > w.size[1] {
-			DrawBorderlessBox(mathgl.Vec2d{w.size[0] - scrollbarWidth + 1, -w.child.Pos()[1]/w.child.Size()[1]*(w.size[1]+2) - 1},
-				mathgl.Vec2d{scrollbarWidth, w.size[1] / w.child.Size()[1] * (w.size[1] + 2)},
+			DrawBorderlessBox(mgl64.Vec2{w.size[0] - scrollbarWidth + 1, -w.child.Pos()[1]/w.child.Size()[1]*(w.size[1]+2) - 1},
+				mgl64.Vec2{scrollbarWidth, w.size[1] / w.child.Size()[1] * (w.size[1] + 2)},
 				darkColor)
 		}
 
 		// Horizontal
 		if w.child.Size()[0] > w.size[0] {
-			DrawBorderlessBox(mathgl.Vec2d{-w.child.Pos()[0]/w.child.Size()[0]*(w.size[0]+2) - 1, w.size[1] - scrollbarWidth + 1},
-				mathgl.Vec2d{w.size[0] / w.child.Size()[0] * (w.size[0] + 2), scrollbarWidth},
+			DrawBorderlessBox(mgl64.Vec2{-w.child.Pos()[0]/w.child.Size()[0]*(w.size[0]+2) - 1, w.size[1] - scrollbarWidth + 1},
+				mgl64.Vec2{w.size[0] / w.child.Size()[0] * (w.size[0] + 2), scrollbarWidth},
 				darkColor)
 		}
 	}
 }
 
-func (w *ScrollPaneWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *ScrollPaneWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
 
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
@@ -2776,7 +2776,7 @@ type SpacerWidget struct {
 	border int
 }
 
-func NewSpacerWidget(pos mathgl.Vec2d, child Widgeter) *SpacerWidget {
+func NewSpacerWidget(pos mgl64.Vec2, child Widgeter) *SpacerWidget {
 	w := &SpacerWidget{Widget: NewWidget(pos, np), child: child, border: 2}
 	w.child.SetParent(w)
 	w.Layout() // TODO: Should this be automatic from above SetParent()?
@@ -2791,7 +2791,7 @@ func (w *SpacerWidget) PollLogic() {
 }
 
 func (w *SpacerWidget) Layout() {
-	w.Widget.size = w.child.Size().Add(mathgl.Vec2d{float64(w.border * 2), float64(w.border * 2)})
+	w.Widget.size = w.child.Size().Add(mgl64.Vec2{float64(w.border * 2), float64(w.border * 2)})
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.Layout()
@@ -2812,7 +2812,7 @@ func (w *SpacerWidget) Render() {
 	w.child.Render()
 }
 
-func (w *SpacerWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *SpacerWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
 
 	hits := w.child.Hit(LocalPosition)
@@ -2820,8 +2820,8 @@ func (w *SpacerWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
 	return hits
 }
 
-func (w *SpacerWidget) ParentToLocal(ParentPosition mathgl.Vec2d) (LocalPosition mathgl.Vec2d) {
-	return w.Widget.ParentToLocal(ParentPosition).Sub(mathgl.Vec2d{float64(w.border), float64(w.border)})
+func (w *SpacerWidget) ParentToLocal(ParentPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
+	return w.Widget.ParentToLocal(ParentPosition).Sub(mgl64.Vec2{float64(w.border), float64(w.border)})
 }
 
 // ---
@@ -2849,7 +2849,7 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	gl.Rectd(0, 0, gl.Double(w.size[0]), gl.Double(w.size[1]))
 
 	gl.Color3d(0, 0, 0)
-	PrintText(mathgl.Vec2d{0, 0}, s)
+	PrintText(mgl64.Vec2{0, 0}, s)
 }
 
 // ---
@@ -2860,7 +2860,7 @@ type ChannelExpeWidget struct {
 	ch  ChanWriter
 }
 
-func NewChannelExpeWidget(pos mathgl.Vec2d) *ChannelExpeWidget {
+func NewChannelExpeWidget(pos mgl64.Vec2) *ChannelExpeWidget {
 	w := &ChannelExpeWidget{ch: make(ChanWriter)}
 	action := func() {
 		// Comments are currently not preserved in the tooltip
@@ -2950,7 +2950,7 @@ type LiveCmdExpeWidget struct {
 	DepNode2Manual // FinishedDepNode2
 }
 
-func NewLiveCmdExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, template CmdFactory) *LiveCmdExpeWidget {
+func NewLiveCmdExpeWidget(pos mgl64.Vec2, dependees []DepNode2I, template CmdFactory) *LiveCmdExpeWidget {
 	w := &LiveCmdExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan *os.ProcessState)}
 
 	// THINK: The only reason to have a separate command node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
@@ -3069,7 +3069,7 @@ type LivePipeExpeWidget struct {
 	DepNode2Manual // FinishedDepNode2
 }
 
-func NewLivePipeExpeWidget(pos mathgl.Vec2d, dependees []DepNode2I, p PipeFactory) *LivePipeExpeWidget {
+func NewLivePipeExpeWidget(pos mgl64.Vec2, dependees []DepNode2I, p PipeFactory) *LivePipeExpeWidget {
 	w := &LivePipeExpeWidget{TextBoxWidget: NewTextBoxWidget(pos), finishedChan: make(chan error)}
 
 	// THINK: The only reason to have a separate pipe node is because current NotifyChange() does not tell the originator of change, so I can't tell UniversalClock's changes from dependee changes (and I need to do different actions for each)
@@ -3174,7 +3174,7 @@ type LiveGoroutineExpeWidget struct {
 	live                        bool
 }
 
-func NewLiveGoroutineExpeWidget(pos mathgl.Vec2d, live bool, dependees []DepNode2I, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
+func NewLiveGoroutineExpeWidget(pos mgl64.Vec2, live bool, dependees []DepNode2I, params func() interface{}, action func(interface{}) string) *LiveGoroutineExpeWidget {
 	w := &LiveGoroutineExpeWidget{outChan: make(chan timestampString), live: live}
 
 	refreshButton := NewButtonWidget(np, func() { MakeUpdated(w.actionNode) })
@@ -3232,8 +3232,8 @@ type ConnectionWidget struct {
 	Widget
 }
 
-func NewConnectionWidget(pos mathgl.Vec2d) *ConnectionWidget {
-	w := &ConnectionWidget{Widget: NewWidget(pos, mathgl.Vec2d{fontHeight, fontHeight})}
+func NewConnectionWidget(pos mgl64.Vec2) *ConnectionWidget {
+	w := &ConnectionWidget{Widget: NewWidget(pos, mgl64.Vec2{fontHeight, fontHeight})}
 	return w
 }
 
@@ -3254,17 +3254,17 @@ func (w *ConnectionWidget) Render() {
 	} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
 		DrawCircle(w.pos, w.size, highlightColor, nearlyWhiteColor)
 	} else {
-		DrawCircle(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, nearlyWhiteColor)
+		DrawCircle(w.pos, w.size, mgl64.Vec3{0.3, 0.3, 0.3}, nearlyWhiteColor)
 	}
 
-	DrawCircle(w.pos, w.size.Mul(0.5625), mathgl.Vec3d{0.3, 0.3, 0.3}, mathgl.Vec3d{0.3, 0.3, 0.3})
+	DrawCircle(w.pos, w.size.Mul(0.5625), mgl64.Vec3{0.3, 0.3, 0.3}, mgl64.Vec3{0.3, 0.3, 0.3})
 
 	if isOriginHit && mousePointer.State.IsActive() {
 		gl.PushMatrix()
 		defer gl.PopMatrix()
 		gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
 
-		globalPosition := mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]}
+		globalPosition := mgl64.Vec2{mousePointer.State.Axes[0], mousePointer.State.Axes[1]}
 		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 
 		gl.Color3d(0, 0, 0)
@@ -3275,7 +3275,7 @@ func (w *ConnectionWidget) Render() {
 	}
 }
 
-func (w *ConnectionWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *ConnectionWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if w.pos.Sub(ParentPosition).Len() <= w.size[0]/2 {
 		return []Widgeter{w}
 	} else {
@@ -3291,7 +3291,7 @@ type HttpServerTestWidget struct {
 	stopServerChan chan struct{}
 }
 
-func NewHttpServerTestWidget(pos mathgl.Vec2d) *HttpServerTestWidget {
+func NewHttpServerTestWidget(pos mgl64.Vec2) *HttpServerTestWidget {
 	w := &HttpServerTestWidget{stopServerChan: make(chan struct{})}
 	action := func() {
 		if !w.started {
@@ -3424,7 +3424,7 @@ type FpsWidget struct {
 	samples []fpsSample
 }
 
-func NewFpsWidget(pos mathgl.Vec2d) *FpsWidget {
+func NewFpsWidget(pos mgl64.Vec2) *FpsWidget {
 	return &FpsWidget{Widget: NewWidget(pos, np)}
 }
 
@@ -3438,14 +3438,14 @@ func (w *FpsWidget) Render() {
 	gl.Vertex2d(gl.Double(30), gl.Double(-1000.0/60))
 	gl.End()
 	for index, sample := range w.samples {
-		var color mathgl.Vec3d
+		var color mgl64.Vec3
 		if sample.Render <= 1000.0/60*1.25 {
-			color = mathgl.Vec3d{0, 0, 0}
+			color = mgl64.Vec3{0, 0, 0}
 		} else {
-			color = mathgl.Vec3d{1, 0, 0}
+			color = mgl64.Vec3{1, 0, 0}
 		}
-		DrawBorderlessBox(mathgl.Vec2d{float64(30 - len(w.samples) + index), -sample.Render}, mathgl.Vec2d{1, sample.Render}, color)
-		DrawBorderlessBox(mathgl.Vec2d{float64(30 - len(w.samples) + index), -sample.Total}, mathgl.Vec2d{1, sample.Total - sample.Render}, mathgl.Vec3d{0.65, 0.65, 0.65})
+		DrawBorderlessBox(mgl64.Vec2{float64(30 - len(w.samples) + index), -sample.Render}, mgl64.Vec2{1, sample.Render}, color)
+		DrawBorderlessBox(mgl64.Vec2{float64(30 - len(w.samples) + index), -sample.Total}, mgl64.Vec2{1, sample.Total - sample.Render}, mgl64.Vec3{0.65, 0.65, 0.65})
 	}
 }
 
@@ -3483,11 +3483,11 @@ type SearchableListWidget struct {
 	ExtensionsTest []Widgeter
 }
 
-func NewSearchableListWidget(pos, size mathgl.Vec2d, entries SliceStringer) *SearchableListWidget {
+func NewSearchableListWidget(pos, size mgl64.Vec2, entries SliceStringer) *SearchableListWidget {
 	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
 	listWidget := NewFilterableSelecterWidget(np, entries, searchField.Content)
-	listWidgetScrollPane := NewScrollPaneWidget(mathgl.Vec2d{0, fontHeight + 2}, size, listWidget)
+	listWidgetScrollPane := NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, size, listWidget)
 
 	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget}
 
@@ -3511,10 +3511,10 @@ func (this *entriesPlusOne) Len() uint64 {
 	return this.SliceStringer.Len() + 1
 }
 
-func NewSearchableListWidgetTest(pos, size mathgl.Vec2d, entries SliceStringer) *SearchableListWidget {
+func NewSearchableListWidgetTest(pos, size mgl64.Vec2, entries SliceStringer) *SearchableListWidget {
 	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
 	listWidget := NewFilterableSelecterWidget(np, &entriesPlusOne{entries, searchField}, searchField.Content)
-	listWidgetScrollPane := NewScrollPaneWidget(mathgl.Vec2d{0, fontHeight + 2}, size, listWidget)
+	listWidgetScrollPane := NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, size, listWidget)
 
 	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget}
 
@@ -3545,7 +3545,7 @@ func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 }
 
-func (w *SearchableListWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *SearchableListWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		hits := []Widgeter{w}
 		hits = append(hits, w.CompositeWidget.Hit(ParentPosition)...)
@@ -3622,7 +3622,7 @@ type FilterableSelecterWidget struct {
 	entries SliceStringer
 }
 
-func NewFilterableSelecterWidget(pos mathgl.Vec2d, entries SliceStringer, filter MultilineContentI) *FilterableSelecterWidget {
+func NewFilterableSelecterWidget(pos mgl64.Vec2, entries SliceStringer, filter MultilineContentI) *FilterableSelecterWidget {
 	entries = NewFilterableSliceStringer(entries, filter)
 
 	w := &FilterableSelecterWidget{Widget: NewWidget(pos, np), entries: entries}
@@ -3677,7 +3677,7 @@ func (w *FilterableSelecterWidget) NotifyChange() {
 func (w *FilterableSelecterWidget) selectionChangedTest() {
 	// TEST
 	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
-		scrollPane.ScrollToArea(mathgl.Vec2d{0, float64(w.selected * fontHeight)}, mathgl.Vec2d{float64(w.longestEntryLength * fontWidth), fontHeight})
+		scrollPane.ScrollToArea(mgl64.Vec2{0, float64(w.selected * fontHeight)}, mgl64.Vec2{float64(w.longestEntryLength * fontWidth), fontHeight})
 	}
 
 	w.manuallyPicked = w.entries.Get(w.selected)
@@ -3715,12 +3715,12 @@ func (w *FilterableSelecterWidget) Render() {
 	// TODO: Generalize this.
 	const debugSmallerViewport = fontHeight
 	beginLineIndex, endLineIndex := 0, int(w.entries.Len())
-	if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+	if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
 		beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 	}
 	_, height := globalWindow.GetSize() // HACK: Should be some viewport
 	height -= debugSmallerViewport
-	if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
+	if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
 		endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 	}
 
@@ -3728,21 +3728,21 @@ func (w *FilterableSelecterWidget) Render() {
 		entry := w.entries.Get(uint64(beginLineIndex)).String()
 		if w.selected == uint64(beginLineIndex) {
 			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(beginLineIndex * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.21, 0.45, 0.84})
 				gl.Color3d(1, 1, 1)
 			} else {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(beginLineIndex * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.83, 0.83, 0.83})
 				gl.Color3d(0, 0, 0)
 			}
 		} else {
 			gl.Color3d(0, 0, 0)
 		}
 
-		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(beginLineIndex * fontHeight)}), entry)
+		PrintText(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), entry)
 	}
 }
 
-func (w *FilterableSelecterWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *FilterableSelecterWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -3765,7 +3765,7 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 
 	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
-		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if w.entries.Len() > 0 {
 			if localPosition[1] < 0 {
@@ -3857,7 +3857,7 @@ type FolderListingWidget struct {
 	DepNode2Manual // SelectionChanged
 }
 
-func NewFolderListingWidget(pos mathgl.Vec2d, path string) *FolderListingWidget {
+func NewFolderListingWidget(pos mgl64.Vec2, path string) *FolderListingWidget {
 	w := &FolderListingWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{NewFlowLayoutWidget(np, []Widgeter{newFolderListingPureWidget(path)}, nil)})}
 	w.flow = w.Widgets[0].(*FlowLayoutWidget)
 	w.flow.SetParent(w) // HACK?
@@ -4037,10 +4037,10 @@ func (w *FolderListingPureWidget) Render() {
 	for i, v := range w.entries {
 		if w.selected == uint64(i+1) {
 			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.21, 0.45, 0.84})
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.21, 0.45, 0.84})
 				gl.Color3d(1, 1, 1)
 			} else {
-				DrawBorderlessBox(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), mathgl.Vec2d{w.size[0], fontHeight}, mathgl.Vec3d{0.83, 0.83, 0.83})
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.83, 0.83, 0.83})
 				gl.Color3d(0, 0, 0)
 			}
 		} else {
@@ -4048,14 +4048,14 @@ func (w *FolderListingPureWidget) Render() {
 		}
 
 		if v.IsDir() {
-			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name()+PathSeparator)
+			PrintText(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), v.Name()+PathSeparator)
 		} else {
-			PrintText(w.pos.Add(mathgl.Vec2d{0, float64(i * fontHeight)}), v.Name())
+			PrintText(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), v.Name())
 		}
 	}
 }
 
-func (w *FolderListingPureWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *FolderListingPureWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -4078,7 +4078,7 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 
 	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
 	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
-		globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if len(w.entries) > 0 {
 			if localPosition[1] < 0 {
@@ -4131,17 +4131,17 @@ type GoonWidget struct {
 	expanded *TriButtonWidget
 }
 
-func NewGoonWidget(pos mathgl.Vec2d, a interface{}) Widgeter {
+func NewGoonWidget(pos mgl64.Vec2, a interface{}) Widgeter {
 	title := GetParentArgExprAsString(1)
 	if !strings.HasPrefix(title, "&") {
 		panic("NewGoonWidget: Need to pass address of value.")
 	}
 	//goonWidget := newGoonWidget(mathgl.Vec2d{fontHeight + 2}, title[1:], reflect.ValueOf(a))
-	goonWidget := setupInternals3(mathgl.Vec2d{fontHeight + 2}, title[1:], UnsafeReflectValue(reflect.ValueOf(a)).Elem())
+	goonWidget := setupInternals3(mgl64.Vec2{fontHeight + 2}, title[1:], UnsafeReflectValue(reflect.ValueOf(a)).Elem())
 	return NewCompositeWidget(pos, []Widgeter{goonWidget})
 }
 
-func newGoonWidget(pos mathgl.Vec2d, title string, a reflect.Value) *GoonWidget {
+func newGoonWidget(pos mgl64.Vec2, title string, a reflect.Value) *GoonWidget {
 	/*expanded := &Bool{}
 
 	action := func() {
@@ -4178,7 +4178,7 @@ func (w *GoonWidget) setupInternals() {
 	oldParent := w.parent
 	if expandable {
 		if w.expanded == nil {
-			w.expanded = NewTriButtonWidget(mathgl.Vec2d{-fontHeight - 2}, func() { w.flip() })
+			w.expanded = NewTriButtonWidget(mgl64.Vec2{-fontHeight - 2}, func() { w.flip() })
 		}
 
 		w.CompositeWidget = NewCompositeWidget(w.pos, []Widgeter{w.expanded, &Widget{}})
@@ -4233,7 +4233,7 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	title := NewTextLabelWidgetString(np, w.title+": ")
 	t := NewTextLabelWidgetString(np, fmt.Sprintf("%s{", getTypeString(v)))
 	header := NewFlowLayoutWidget(np, []Widgeter{title, t}, nil)
-	tab := mathgl.Vec2d{fontHeight + 2}
+	tab := mgl64.Vec2{fontHeight + 2}
 
 	widgets := []Widgeter{header}
 
@@ -4277,7 +4277,7 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 	return NewFlowLayoutWidget(np, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 }
 
-func setupInternals3(pos mathgl.Vec2d, titleString string, a reflect.Value) Widgeter {
+func setupInternals3(pos mgl64.Vec2, titleString string, a reflect.Value) Widgeter {
 	/*if !a.CanInterface() {
 		a = UnsafeReflectValue(a)
 	}*/
@@ -4557,7 +4557,7 @@ func (cp *caretPositionInternal) Move(amount int8) {
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
-func (cp *caretPositionInternal) SetPositionFromPhysical(pos mathgl.Vec2d) {
+func (cp *caretPositionInternal) SetPositionFromPhysical(pos mgl64.Vec2) {
 	if pos[1] < 0 {
 		cp.lineIndex = 0
 	} else if pos[1] >= float64(cp.w.LenLines()*fontHeight) {
@@ -4741,7 +4741,7 @@ func (cp *CaretPosition) TryMoveV(amount int8, leaveSelection, jumpWords bool) {
 	}
 }
 
-func (cp *CaretPosition) SetPositionFromPhysical(pos mathgl.Vec2d, leaveSelectionOptional ...bool) {
+func (cp *CaretPosition) SetPositionFromPhysical(pos mgl64.Vec2, leaveSelectionOptional ...bool) {
 	// HACK, TODO: Make leaveSelection a required parameter?
 	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
 
@@ -5099,23 +5099,23 @@ type lifeFormWidget struct {
 	Output GenerateOutput();*/
 }
 
-func NewLifeFormWidget(pos mathgl.Vec2d) *lifeFormWidget {
-	w := &lifeFormWidget{Widget: NewWidget(pos, mathgl.Vec2d{100, 100})}
+func NewLifeFormWidget(pos mgl64.Vec2) *lifeFormWidget {
+	w := &lifeFormWidget{Widget: NewWidget(pos, mgl64.Vec2{100, 100})}
 	UniversalClock.AddChangeListener(w)
 	return w
 }
 
 func (w *lifeFormWidget) Render() {
-	Colors := []mathgl.Vec3d{
-		mathgl.Vec3d{0 / 255.0, 140 / 255.0, 0 / 255.0},
-		mathgl.Vec3d{0 / 255.0, 98 / 255.0, 140 / 255.0},
-		mathgl.Vec3d{194 / 255.0, 74 / 255.0, 0 / 255.0},
-		mathgl.Vec3d{89 / 255.0, 0 / 255.0, 140 / 255.0},
-		mathgl.Vec3d{191 / 255.0, 150 / 255.0, 0 / 255.0},
-		mathgl.Vec3d{140 / 255.0, 0 / 255.0, 0 / 255.0},
+	Colors := []mgl64.Vec3{
+		mgl64.Vec3{0 / 255.0, 140 / 255.0, 0 / 255.0},
+		mgl64.Vec3{0 / 255.0, 98 / 255.0, 140 / 255.0},
+		mgl64.Vec3{194 / 255.0, 74 / 255.0, 0 / 255.0},
+		mgl64.Vec3{89 / 255.0, 0 / 255.0, 140 / 255.0},
+		mgl64.Vec3{191 / 255.0, 150 / 255.0, 0 / 255.0},
+		mgl64.Vec3{140 / 255.0, 0 / 255.0, 0 / 255.0},
 	}
 
-	DrawCircle(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, Colors[w.Color])
+	DrawCircle(w.pos, w.size, mgl64.Vec3{0.3, 0.3, 0.3}, Colors[w.Color])
 
 	// Render properties
 	/*OpenGLStream OpenGLStream(GetPosition() + Vector2n(GetDimensions().X() / 2 + 5, GetDimensions().X() / -2));
@@ -5126,7 +5126,7 @@ func (w *lifeFormWidget) Render() {
 	OpenGLStream << ss.str();*/
 }
 
-func (w *lifeFormWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *lifeFormWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	if w.pos.Sub(ParentPosition).Len() <= w.size[0]/2 {
 		return []Widgeter{w}
 	} else {
@@ -5138,15 +5138,15 @@ func (w *lifeFormWidget) NotifyChange() {
 	var timePassed float64 = UniversalClock.TimePassed
 
 	m_PositionD := w.pos
-	var m_VelocityD mathgl.Vec2d
+	var m_VelocityD mgl64.Vec2
 
 	// Instinct model
 	{
-		m_VelocityD = mathgl.Vec2d{8, 5}
+		m_VelocityD = mgl64.Vec2{8, 5}
 
 		const speedMultiplier = float64(250)
 
-		ParentPosition := WidgeterS{w}.GlobalToParent(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		ParentPosition := WidgeterS{w}.GlobalToParent(mgl64.Vec2{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		LocalPosition := w.ParentToLocal(ParentPosition)
 
 		if true && //PointerState.GetButtonState(0)
@@ -5154,7 +5154,7 @@ func (w *lifeFormWidget) NotifyChange() {
 
 			EscapeVector := LocalPosition
 			EscapeAngle := math.Atan2(EscapeVector[0], EscapeVector[1])
-			EscapeDirection := mathgl.Vec2d{math.Sin(EscapeAngle), math.Cos(EscapeAngle)}.Mul(-1)
+			EscapeDirection := mgl64.Vec2{math.Sin(EscapeAngle), math.Cos(EscapeAngle)}.Mul(-1)
 
 			m_VelocityD = EscapeDirection.Mul(speedMultiplier)
 		}
@@ -5252,9 +5252,9 @@ type TextLabelWidget struct {
 	layoutDepNode2 DepNode2Func
 }
 
-func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *TextLabelWidget {
+func NewTextLabelWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI) *TextLabelWidget {
 	w := &TextLabelWidget{
-		Widget:  NewWidget(pos, mathgl.Vec2d{0, 0}),
+		Widget:  NewWidget(pos, mgl64.Vec2{0, 0}),
 		Content: mc,
 	}
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
@@ -5263,18 +5263,18 @@ func NewTextLabelWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI) *
 	return w
 }
 
-func NewTextLabelWidgetString(pos mathgl.Vec2d, s string) *TextLabelWidget {
+func NewTextLabelWidgetString(pos mgl64.Vec2, s string) *TextLabelWidget {
 	mc := NewMultilineContentString(s)
 	w := NewTextLabelWidgetExternalContent(pos, mc)
 	return w
 }
 
-func NewTextLabelWidgetGoon(pos mathgl.Vec2d, any interface{}) *TextLabelWidget {
+func NewTextLabelWidgetGoon(pos mgl64.Vec2, any interface{}) *TextLabelWidget {
 	mc := NewMultilineContentFuncInstant(func() string { return TrimLastNewline(goon.Sdump(any)) })
 	return NewTextLabelWidgetExternalContent(pos, mc)
 }
 
-func NewTextLabelWidgetStringTooltip(pos mathgl.Vec2d, s, tooltip string) *TextLabelWidget {
+func NewTextLabelWidgetStringTooltip(pos mgl64.Vec2, s, tooltip string) *TextLabelWidget {
 	mc := NewMultilineContentString(s)
 	w := NewTextLabelWidgetExternalContent(pos, mc)
 	w.tooltip = NewTextLabelWidgetString(np, tooltip)
@@ -5308,15 +5308,15 @@ func (w *TextLabelWidget) Render() {
 	gl.Color3d(0, 0, 0)
 	for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
 		contentLine := w.Content.Line(lineIndex)
-		PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
+		PrintLine(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
 	}
 
 	isHit := len(w.HoverPointers()) > 0
 	// Tooltip
 	if w.tooltip != nil && isHit {
-		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
+		mousePointerPositionLocal := WidgeterS{w}.GlobalToLocal(mgl64.Vec2{mousePointer.State.Axes[0], mousePointer.State.Axes[1]})
 		w.tooltip.Layout()
-		tooltipOffset := mathgl.Vec2d{0, -fontHeight - w.tooltip.Size()[1]}
+		tooltipOffset := mgl64.Vec2{0, -fontHeight - w.tooltip.Size()[1]}
 		*w.tooltip.Pos() = w.pos.Add(mousePointerPositionLocal).Add(tooltipOffset)
 		w.tooltip.Render()
 	}
@@ -5346,9 +5346,9 @@ type StringerWidget struct {
 	layoutDepNode2 DepNode2Func
 }
 
-func NewStringerWidget(pos mathgl.Vec2d, content DepStringerI) *StringerWidget {
+func NewStringerWidget(pos mgl64.Vec2, content DepStringerI) *StringerWidget {
 	w := &StringerWidget{
-		Widget:  NewWidget(pos, mathgl.Vec2d{0, 0}),
+		Widget:  NewWidget(pos, mgl64.Vec2{0, 0}),
 		content: content,
 	}
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.Layout() }
@@ -5385,9 +5385,9 @@ func (w *StringerWidget) Render() {
 // ---
 
 type TextStyle struct {
-	TextColor       *mathgl.Vec3d
-	BorderColor     **mathgl.Vec3d
-	BackgroundColor **mathgl.Vec3d
+	TextColor       *mgl64.Vec3
+	BorderColor     **mgl64.Vec3
+	BackgroundColor **mgl64.Vec3
 }
 
 func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
@@ -5532,7 +5532,7 @@ func (this *selectionHighlighterIterator) Advance(span uint32) *TextStyle {
 
 type highlightSegment struct {
 	offset uint32
-	color  mathgl.Vec3d
+	color  mgl64.Vec3
 }
 
 type highlightedGoContent struct {
@@ -5569,15 +5569,15 @@ func (this *highlightedGoContent) Update() {
 
 		switch {
 		case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.004, 0, 0.714}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.004, 0, 0.714}})
 		case tok.IsLiteral() && tok != token.IDENT:
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.804, 0, 0}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}})
 		case lit == "false" || lit == "true":
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0.008, 0.024, 1}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.008, 0.024, 1}})
 		case tok == token.COMMENT:
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0.506, 0.094}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0.506, 0.094}})
 		default:
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0, 0}})
 		}
 	}
 
@@ -5668,7 +5668,7 @@ func (this *highlightedDiff) LenSegments() int {
 func (this *highlightedDiff) SegmentToTextStyle(index uint32) *TextStyle {
 	color := this.Segment(index).color
 	colorPtr := &color
-	if color.ApproxEqual(mathgl.Vec3d{}) {
+	if color.ApproxEqual(mgl64.Vec3{}) {
 		colorPtr = nil
 	}
 	return &TextStyle{
@@ -5805,7 +5805,7 @@ func (this *tokenizedDiff) LenSegments() int {
 func (this *tokenizedDiff) SegmentToTextStyle(index uint32) *TextStyle {
 	color := this.Segment(index).color
 	colorPtr := &color
-	if color.ApproxEqual(mathgl.Vec3d{}) {
+	if color.ApproxEqual(mgl64.Vec3{}) {
 		colorPtr = nil
 	}
 	return &TextStyle{
@@ -5885,7 +5885,7 @@ func (this *lineDiff) LenSegments() int {
 func (this *lineDiff) SegmentToTextStyle(index uint32) *TextStyle {
 	color := this.Segment(index).color
 	colorPtr := &color
-	if color.ApproxEqual(mathgl.Vec3d{}) {
+	if color.ApproxEqual(mgl64.Vec3{}) {
 		colorPtr = nil
 	}
 	return &TextStyle{
@@ -5895,7 +5895,7 @@ func (this *lineDiff) SegmentToTextStyle(index uint32) *TextStyle {
 
 // ---
 
-func NewFindPanel(pos mathgl.Vec2d) *TextBoxWidget {
+func NewFindPanel(pos mgl64.Vec2) *TextBoxWidget {
 	/*return NewFlowLayoutWidget(pos, []Widgeter{
 		NewSpacerWidget(np, NewTextBoxWidget(np)),
 		NewSpacerWidget(np, NewButtonWidget(np, nil)),
@@ -5934,9 +5934,9 @@ func (this *FindResults) Update() {
 		nonresults := strings.Split(content, findTarget)
 		for _, nonresult := range nonresults {
 			offset += uint32(len(nonresult))
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{1, 1, 1}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{1, 1, 1}})
 			offset += uint32(len(findTarget))
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mathgl.Vec3d{0, 0, 0}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0, 0}})
 		}
 	}
 
@@ -6029,7 +6029,7 @@ type TextBoxWidget struct {
 
 	ExtensionsTest   []Widgeter
 	HighlightersTest []Highlighter
-	LineHighlighter  func(content MultilineContentI, lineIndex int) (BackgroundColor *mathgl.Vec3d)
+	LineHighlighter  func(content MultilineContentI, lineIndex int) (BackgroundColor *mgl64.Vec3)
 	PopupsTest       []Widgeter
 	DepsTest         []DepNode2I // Temporary solution until there's a better MultilineContentFunc.
 }
@@ -6047,23 +6047,23 @@ type TextBoxWidgetOptions struct {
 	FindPanel  bool
 }
 
-func NewTextBoxWidget(pos mathgl.Vec2d) *TextBoxWidget {
+func NewTextBoxWidget(pos mgl64.Vec2) *TextBoxWidget {
 	mc := NewMultilineContent()
 	return NewTextBoxWidgetExternalContent(pos, mc, nil)
 }
 
-func NewTextBoxWidgetOptions(pos mathgl.Vec2d, options TextBoxWidgetOptions) *TextBoxWidget {
+func NewTextBoxWidgetOptions(pos mgl64.Vec2, options TextBoxWidgetOptions) *TextBoxWidget {
 	mc := NewMultilineContent()
 	return NewTextBoxWidgetExternalContent(pos, mc, &options)
 }
 
-func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, options *TextBoxWidgetOptions) *TextBoxWidget {
+func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, options *TextBoxWidgetOptions) *TextBoxWidget {
 	if options == nil {
 		options = &TextBoxWidgetOptions{}
 	}
 
 	w := &TextBoxWidget{
-		Widget:        NewWidget(pos, mathgl.Vec2d{0, 0}),
+		Widget:        NewWidget(pos, mgl64.Vec2{0, 0}),
 		Content:       mc,
 		caretPosition: NewCaretPosition(mc),
 		options:       *options,
@@ -6077,7 +6077,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, opt
 		if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
 			expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
-			scrollPane.ScrollToArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
+			scrollPane.ScrollToArea(mgl64.Vec2{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mgl64.Vec2{0, fontHeight})
 		}
 	}
 	w.scrollToCaret.AddSources(w.caretPosition)
@@ -6093,7 +6093,7 @@ func NewTextBoxWidgetExternalContent(pos mathgl.Vec2d, mc MultilineContentI, opt
 	}
 
 	if w.options.FindPanel {
-		w.findPanel = NewFindPanel(mathgl.Vec2d{200, 800})
+		w.findPanel = NewFindPanel(mgl64.Vec2{200, 800})
 
 		w.wholeWordHighlighter = &WholeWordHighlighter{}
 		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition)
@@ -6112,13 +6112,13 @@ func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
 	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
 		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
-		scrollPane.CenterOnArea(mathgl.Vec2d{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mathgl.Vec2d{0, fontHeight})
+		scrollPane.CenterOnArea(mgl64.Vec2{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mgl64.Vec2{0, fontHeight})
 	}
 }
 
 type TextBoxScrollPaneView struct {
 	caretPosition      CaretPosition
-	scrollPaneChildPos mathgl.Vec2d
+	scrollPaneChildPos mgl64.Vec2
 }
 
 func (w *TextBoxWidget) SaveView() (view TextBoxScrollPaneView) {
@@ -6252,7 +6252,7 @@ func (w *TextBoxWidget) Render() {
 			DrawNBox(w.pos, w.size)
 		}
 	} else {
-		var background mathgl.Vec3d
+		var background mgl64.Vec3
 		if w.options.ValidFunc(w.Content) {
 			background = lightGreenColor
 		} else {
@@ -6267,7 +6267,7 @@ func (w *TextBoxWidget) Render() {
 		} else if hasTypingFocus {
 			DrawBox(w.pos, w.size, highlightColor, background)
 		} else {
-			DrawBox(w.pos, w.size, mathgl.Vec3d{0.3, 0.3, 0.3}, background)
+			DrawBox(w.pos, w.size, mgl64.Vec3{0.3, 0.3, 0.3}, background)
 		}
 	}
 
@@ -6277,18 +6277,18 @@ func (w *TextBoxWidget) Render() {
 		// TODO: Generalize this.
 		const debugSmallerViewport = fontHeight
 		beginLineIndex, endLineIndex := 0, w.Content.LenLines()
-		if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+		if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
 			beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 		}
 		_, height := globalWindow.GetSize() // HACK: Should be some viewport
 		height -= debugSmallerViewport
-		if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
+		if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
 			endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 		}
 
 		for lineIndex := beginLineIndex; lineIndex < endLineIndex; lineIndex++ {
 			if backgroundColor := w.LineHighlighter(w.Content, lineIndex); backgroundColor != nil {
-				DrawBorderlessBox(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, mathgl.Vec2d{w.size[0], fontHeight}, *backgroundColor)
+				DrawBorderlessBox(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, mgl64.Vec2{w.size[0], fontHeight}, *backgroundColor)
 			}
 		}
 	}
@@ -6313,12 +6313,12 @@ func (w *TextBoxWidget) Render() {
 			// TODO: Generalize this.
 			const debugSmallerViewport = fontHeight
 			beginLineIndex, endLineIndex := 0, w.Content.LenLines()
-			if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+			if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
 				beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 			}
 			_, height := globalWindow.GetSize() // HACK: Should be some viewport
 			height -= debugSmallerViewport
-			if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mathgl.Vec2d{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
+			if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
 				endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 			}
 
@@ -6338,7 +6338,7 @@ func (w *TextBoxWidget) Render() {
 				hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start, min, max, hasTypingFocus))
 			}
 
-			glt := NewOpenGlStream(w.pos.Add(mathgl.Vec2d{0, float64(fontHeight * beginLineIndex)}))
+			glt := NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(fontHeight * beginLineIndex)}))
 
 			for _, hlIter := range hlIters {
 				textStyle := hlIter.Current()
@@ -6361,7 +6361,7 @@ func (w *TextBoxWidget) Render() {
 		} else {
 			for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
 				contentLine := w.Content.Line(lineIndex)
-				PrintLine(mathgl.Vec2d{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, strings.Repeat("*", int(contentLine.Length)))
+				PrintLine(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, strings.Repeat("*", int(contentLine.Length)))
 			}
 		}
 	}
@@ -6373,8 +6373,8 @@ func (w *TextBoxWidget) Render() {
 			for lineIndex, messages := range goCompileErrorsManagerTest.All[uri] {
 				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Line(lineIndex).Start:w.Content.Line(lineIndex).End()])
 				for sameLineIndex, message := range messages {
-					pos := w.pos.Add(mathgl.Vec2d{fontWidth * float64(expandedLineLength+1), fontHeight * float64(lineIndex+sameLineIndex)})
-					DrawInnerRoundedBox(pos, mathgl.Vec2d{fontWidth * float64(len(message)), fontHeight}, darkColor, darkRedColor)
+					pos := w.pos.Add(mgl64.Vec2{fontWidth * float64(expandedLineLength+1), fontHeight * float64(lineIndex+sameLineIndex)})
+					DrawInnerRoundedBox(pos, mgl64.Vec2{fontWidth * float64(len(message)), fontHeight}, darkColor, darkRedColor)
 					gl.Color3d(0, 0, 0)
 					glt.SetPos(pos)
 					glt.PrintLine(message)
@@ -6404,7 +6404,7 @@ func (w *TextBoxWidget) Render() {
 		gl.PopMatrix()
 	}
 }
-func (w *TextBoxWidget) Hit(ParentPosition mathgl.Vec2d) []Widgeter {
+func (w *TextBoxWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	/*if len(w.Widget.Hit(ParentPosition)) > 0 {
 		return []Widgeter{w}
 	} else {
@@ -6456,13 +6456,13 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			// Leave selection if shift is held down
 			leaveSelection := inputEvent.ModifierKey&glfw.ModShift != 0
 
-			globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+			globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 			localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 			w.caretPosition.SetPositionFromPhysical(localPosition, leaveSelection)
 		} else if inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 && inputEvent.Pointer.State.Button(0) { // On mouse move while button 0 down
 			leaveSelection := true
 
-			globalPosition := mathgl.Vec2d{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+			globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 			localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 			w.caretPosition.SetPositionFromPhysical(localPosition, leaveSelection)
 		}
@@ -6598,7 +6598,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					break
 				}
 
-				popupTest := NewSearchableListWidgetTest(mathgl.Vec2d{200, 0}, mathgl.Vec2d{600, 600}, globalGoSymbols)
+				popupTest := NewSearchableListWidgetTest(mgl64.Vec2{200, 0}, mgl64.Vec2{600, 600}, globalGoSymbols)
 				// HACK: Not general at all
 				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
 					popupTest.SetParent(scrollPane)
@@ -6761,7 +6761,7 @@ type TextFileWidget struct {
 	*TextBoxWidget
 }
 
-func NewTextFileWidget(pos mathgl.Vec2d, path string) *TextFileWidget {
+func NewTextFileWidget(pos mgl64.Vec2, path string) *TextFileWidget {
 	// TODO: Opening the same file shouldn't result in a new MultilineContentFile
 	ec := NewMultilineContentFile(path)
 	w := &TextFileWidget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, ec, nil)}
@@ -6774,7 +6774,7 @@ func (w *TextFileWidget) Path() string {
 
 // ---
 
-func NewTextBoxValidationWidget(pos mathgl.Vec2d, validFunc func(MultilineContentI) bool) *TextBoxWidget {
+func NewTextBoxValidationWidget(pos mgl64.Vec2, validFunc func(MultilineContentI) bool) *TextBoxWidget {
 	w := NewTextBoxWidgetOptions(pos, TextBoxWidgetOptions{ValidFunc: validFunc})
 	return w
 }
@@ -6868,7 +6868,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 				(inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2)
 
 			if pointingPointerMovedRelativeToCanvas {
-				LocalPosition := mathgl.Vec2d{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])}
+				LocalPosition := mgl64.Vec2{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])}
 
 				// Clear previously hit widgets
 				for _, widget := range inputEvent.Pointer.Mapping {
@@ -7271,7 +7271,7 @@ func main() {
 		mousePointer = &Pointer{VirtualCategory: POINTING}
 		keyboardPointer = &Pointer{VirtualCategory: TYPING}
 
-		var lastMousePos mathgl.Vec2d
+		var lastMousePos mgl64.Vec2
 		lastMousePos[0], lastMousePos[1] = window.GetCursorPosition()
 		MousePos := func(w *glfw.Window, x, y float64) {
 			//fmt.Println("MousePos:", x, y)
@@ -7371,7 +7371,7 @@ func main() {
 	var widget Widgeter
 	var widgets []Widgeter
 
-	spinner := SpinnerWidget{Widget: NewWidget(mathgl.Vec2d{20, 20}, mathgl.Vec2d{0, 0}), Spinner: 0}
+	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
 	const sublimeMode = true
 
@@ -7380,7 +7380,7 @@ func main() {
 		// iGo Live Editor experiment
 
 		//source := NewTextFileWidget(mathgl.Vec2d{50, 160}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
-		source := NewTextBoxWidget(mathgl.Vec2d{50, 160})
+		source := NewTextBoxWidget(mgl64.Vec2{50, 160})
 		widgets = append(widgets, source)
 
 		parsedFile := &parsedFile{}
@@ -7411,7 +7411,7 @@ func main() {
 			return buf.String()
 		}
 
-		w := NewLiveGoroutineExpeWidget(mathgl.Vec2d{500, 160}, true, []DepNode2I{parsedFile}, params, action)
+		w := NewLiveGoroutineExpeWidget(mgl64.Vec2{500, 160}, true, []DepNode2I{parsedFile}, params, action)
 		widgets = append(widgets, w)
 
 		parsedIgoFile := &parsedIgoFile{}
@@ -7438,26 +7438,26 @@ func main() {
 			return buf.String()
 		}
 
-		w2 := NewLiveGoroutineExpeWidget(mathgl.Vec2d{950, 160}, true, []DepNode2I{parsedIgoFile}, params2, action2)
+		w2 := NewLiveGoroutineExpeWidget(mgl64.Vec2{950, 160}, true, []DepNode2I{parsedIgoFile}, params2, action2)
 		widgets = append(widgets, w2)
 
 		{
 			mc1 := NewMultilineContent()
-			b1 := NewTextBoxWidgetExternalContent(mathgl.Vec2d{400, 800}, mc1, nil)
+			b1 := NewTextBoxWidgetExternalContent(mgl64.Vec2{400, 800}, mc1, nil)
 
 			mc2 := NewReverseMultilineContent()
 			mc2.AddAndSetViewGroup(mc1, "")
-			b2 := NewTextBoxWidgetExternalContent(mathgl.Vec2d{800, 800}, mc2, nil)
+			b2 := NewTextBoxWidgetExternalContent(mgl64.Vec2{800, 800}, mc2, nil)
 
 			widgets = append(widgets, b1, b2)
 		}
 
 		// Led Sign
-		widgets = append(widgets, &BoxWidget{Widget: NewWidget(mathgl.Vec2d{500, 850}, mathgl.Vec2d{96, 16})})
+		widgets = append(widgets, &BoxWidget{Widget: NewWidget(mgl64.Vec2{500, 850}, mgl64.Vec2{96, 16})})
 
 		// TEST: Bunch of buttons with spacing.
 		{
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{500, 900}, []Widgeter{
+			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{500, 900}, []Widgeter{
 				NewSpacerWidget(np, NewButtonWidget(np, nil)),
 				NewSpacerWidget(np, NewButtonWidget(np, nil)),
 				NewSpacerWidget(np, NewButtonWidget(np, nil)),
@@ -7493,8 +7493,8 @@ func main() {
 			}
 
 			someString := "Can you edit me?"
-			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296}, &someString))
-			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600 - 100, 296 + 20}, &x))
+			widgets = append(widgets, NewGoonWidget(mgl64.Vec2{600, 296}, &someString))
+			widgets = append(widgets, NewGoonWidget(mgl64.Vec2{600 - 100, 296 + 20}, &x))
 
 			// *ast.File goon
 			src := `package main
@@ -7525,13 +7525,13 @@ func main() {
 			fileAst, err := parser.ParseFile(fset, "", src, 0 /*parser.ParseComments|parser.AllErrors*/)
 			CheckError(err)
 
-			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296 + 40}, &fileAst))
-			widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 296 + 60}, &parsedFile))
+			widgets = append(widgets, NewGoonWidget(mgl64.Vec2{600, 296 + 40}, &fileAst))
+			widgets = append(widgets, NewGoonWidget(mgl64.Vec2{600, 296 + 60}, &parsedFile))
 
-			output := NewTextBoxWidget(mathgl.Vec2d{1000, 300})
+			output := NewTextBoxWidget(mgl64.Vec2{1000, 300})
 			widgets = append(widgets, output)
 
-			dumpButton := NewButtonWidget(mathgl.Vec2d{600 - 20, 296}, func() {
+			dumpButton := NewButtonWidget(mgl64.Vec2{600 - 20, 296}, func() {
 				goon.DumpExpr(x)
 				goon.DumpExpr(someString)
 				SetViewGroup(output.Content, SprintAstBare(fileAst))
@@ -7545,14 +7545,14 @@ func main() {
 		if window != nil {
 			windowSize0, windowSize1 = window.GetSize()
 		}
-		windowSize := mathgl.Vec2d{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
+		windowSize := mgl64.Vec2{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 		_ = windowSize
 
-		goPackageListing := NewGoPackageListingWidget(mathgl.Vec2d{0, 200}, mathgl.Vec2d{200, 500 - fontHeight - 2})
+		goPackageListing := NewGoPackageListingWidget(mgl64.Vec2{0, 200}, mgl64.Vec2{200, 500 - fontHeight - 2})
 		widgets = append(widgets, goPackageListing)
 
 		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
-		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{0, 200 + 500 + 2}, mathgl.Vec2d{200, float64(windowSize1 - 702 - 2)}, folderListing))
+		widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{0, 200 + 500 + 2}, mgl64.Vec2{200, float64(windowSize1 - 702 - 2)}, folderListing))
 
 		// TEST, HACK: Open the folder listing to the folder of the Go package
 		folderListingDirChanger := DepNode2Func{}
@@ -7572,7 +7572,7 @@ func main() {
 		editorFileOpener.AddSources(folderListing, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
 		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true, FindPanel: true})
-		widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{200 + 2, 0}, mathgl.Vec2d{750, float64(windowSize1 - 2)}, editor))
+		widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{200 + 2, 0}, mgl64.Vec2{750, float64(windowSize1 - 2)}, editor))
 
 		// View sidebar
 		{
@@ -7608,7 +7608,7 @@ func main() {
 			}
 			template.AddSources(folderListing)
 
-			lineHighlighter := func(content MultilineContentI, lineIndex int) (BackgroundColor *mathgl.Vec3d) {
+			lineHighlighter := func(content MultilineContentI, lineIndex int) (BackgroundColor *mgl64.Vec3) {
 				if content.Line(lineIndex).Length > 0 {
 					lineFirstChar := content.Content()[content.Line(lineIndex).Start]
 					switch lineFirstChar {
@@ -7877,7 +7877,7 @@ func main() {
 			// =====
 
 			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool9Collapsible, nextTool2Collapsible, nextTool2bCollapsible, nextTool2cCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool10Collapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
-			widgets = append(widgets, NewScrollPaneWidget(mathgl.Vec2d{950 + 4, 0}, mathgl.Vec2d{580, float64(windowSize1 - 2)}, tools))
+			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{950 + 4, 0}, mgl64.Vec2{580, float64(windowSize1 - 2)}, tools))
 		}
 
 	} else if false { // Deleted test widget instances
@@ -7904,18 +7904,18 @@ func main() {
 
 			run := NewLiveCmdExpeWidget(np, []DepNode2I{build}, NewCmdTemplate("./Con2RunBin")) // TODO: Proper path
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{50, 200}, []Widgeter{src, build, run}, nil))
+			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{50, 200}, []Widgeter{src, build, run}, nil))
 		}
 
 		// DEBUG: Testing out new DepNode2 system
 		{
 			// TODO: Use DepNode2 so that if this is false, then goCompileErrorsManagerTest.All (and goCompileErrorsTest also) shouldn't get updated
 			goCompileErrorsEnabled := true
-			goCompileErrorsEnabledTest = NewTriButtonExternalStateWidget(mathgl.Vec2d{500, 700}, func() bool { return goCompileErrorsEnabled }, func() { goCompileErrorsEnabled = !goCompileErrorsEnabled })
+			goCompileErrorsEnabledTest = NewTriButtonExternalStateWidget(mgl64.Vec2{500, 700}, func() bool { return goCompileErrorsEnabled }, func() { goCompileErrorsEnabled = !goCompileErrorsEnabled })
 			widgets = append(widgets, goCompileErrorsEnabledTest)
 
 			//widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 716 + 2}, &goCompileErrorsManagerTest.DepNode2.NeedToUpdate))
-			widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 732 + 4}, &goCompileErrorsManagerTest.All))
+			widgets = append(widgets, NewTextLabelWidgetGoon(mgl64.Vec2{500, 732 + 4}, &goCompileErrorsManagerTest.All))
 		}
 
 		// TEST: Render the Go code tokens with color highlighting
@@ -7923,7 +7923,7 @@ func main() {
 			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget
 
 			w := &CustomWidget{
-				Widget: NewWidget(np, mathgl.Vec2d{fontHeight, fontHeight}),
+				Widget: NewWidget(np, mgl64.Vec2{fontHeight, fontHeight}),
 			}
 			w.RenderFunc = func() {
 				// HACK: Layout in Render()
@@ -7988,20 +7988,20 @@ func main() {
 			widgets[2].(*FlowLayoutWidget).Layout()
 		}
 
-		widgets = append(widgets, &BoxWidget{NewWidget(mathgl.Vec2d{50, 150}, mathgl.Vec2d{16, 16}), "The Original Box"})
-		widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{150, 150},
+		widgets = append(widgets, &BoxWidget{NewWidget(mgl64.Vec2{50, 150}, mgl64.Vec2{16, 16}), "The Original Box"})
+		widgets = append(widgets, NewCompositeWidget(mgl64.Vec2{150, 150},
 			[]Widgeter{
-				&BoxWidget{NewWidget(mathgl.Vec2d{0, 0}, mathgl.Vec2d{16, 16}), "Left of Duo"},
-				&BoxWidget{NewWidget(mathgl.Vec2d{16 + 2, 0}, mathgl.Vec2d{16, 16}), "Right of Duo"},
+				&BoxWidget{NewWidget(mgl64.Vec2{0, 0}, mgl64.Vec2{16, 16}), "Left of Duo"},
+				&BoxWidget{NewWidget(mgl64.Vec2{16 + 2, 0}, mgl64.Vec2{16, 16}), "Right of Duo"},
 			}))
-		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mathgl.Vec2d{50, 180}, mathgl.Vec2d{0, 0}), window})
-		widgets = append(widgets, NewChannelExpeWidget(mathgl.Vec2d{10, 220}))
-		widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{50, 5}))
-		widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{90, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content, nil)) // HACK: Manual test
-		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content))    // HACK: Manual test
+		widgets = append(widgets, &UnderscoreSepToCamelCaseWidget{NewWidget(mgl64.Vec2{50, 180}, mgl64.Vec2{0, 0}), window})
+		widgets = append(widgets, NewChannelExpeWidget(mgl64.Vec2{10, 220}))
+		widgets = append(widgets, NewTextBoxWidget(mgl64.Vec2{50, 5}))
+		widgets = append(widgets, NewTextFileWidget(mgl64.Vec2{90, 25}, "/Users/Dmitri/Dropbox/Needs Processing/Sample.txt"))
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mgl64.Vec2{90, 60}, widgets[len(widgets)-1].(*TextFileWidget).TextBoxWidget.Content, nil)) // HACK: Manual test
+		widgets = append(widgets, NewTextLabelWidgetExternalContent(mgl64.Vec2{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content))    // HACK: Manual test
 
-		widgets = append(widgets, NewTest2Widget(mathgl.Vec2d{240, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
+		widgets = append(widgets, NewTest2Widget(mgl64.Vec2{240, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
 
 		type Inner struct {
 			Field1 string
@@ -8032,13 +8032,13 @@ func main() {
 
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, FlowLayoutWidget{}))
 		//widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{260, 130}, InputEvent{}))
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{380, 10}, &x))
-		y := NewWidget(mathgl.Vec2d{1, 2}, mathgl.Vec2d{3})
-		widgets = append(widgets, NewGoonWidget(mathgl.Vec2d{600, 10}, &y))
+		widgets = append(widgets, NewGoonWidget(mgl64.Vec2{380, 10}, &x))
+		y := NewWidget(mgl64.Vec2{1, 2}, mgl64.Vec2{3})
+		widgets = append(widgets, NewGoonWidget(mgl64.Vec2{600, 10}, &y))
 	} else if true {
 		widgets = append(widgets, &spinner)
 
-		katWidget := NewKatWidget(mathgl.Vec2d{370, 15})
+		katWidget := NewKatWidget(mgl64.Vec2{370, 15})
 		widgets = append(widgets, katWidget)
 		if katOnly {
 			// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
@@ -8061,7 +8061,7 @@ func main() {
 			}
 			dst := NewLiveGoroutineExpeWidget(np, true, []DepNode2I{src.Content}, params, action)
 
-			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 130}, []Widgeter{src, label, dst}, nil)
+			w := NewFlowLayoutWidget(mgl64.Vec2{80, 130}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
 		}
 		// GoForcedUseWidget2
@@ -8085,16 +8085,16 @@ func main() {
 			}
 			dst := NewLiveGoroutineExpeWidget(np, true, []DepNode2I{src.Content}, params, action)
 
-			w := NewFlowLayoutWidget(mathgl.Vec2d{80, 150}, []Widgeter{src, label, dst}, nil)
+			w := NewFlowLayoutWidget(mgl64.Vec2{80, 150}, []Widgeter{src, label, dst}, nil)
 			widgets = append(widgets, w)
 		}
 
-		widgets = append(widgets, NewFolderListingWidget(mathgl.Vec2d{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
+		widgets = append(widgets, NewFolderListingWidget(mgl64.Vec2{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
 
 		//widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{160, 30}, []Widgeter{NewGoPackageListingPureWidget()}))
 
 		contentWs := NewMultilineContent()
-		widgets = append(widgets, NewTextBoxWidgetExternalContent(mathgl.Vec2d{800 - 50, 30}, contentWs, nil))
+		widgets = append(widgets, NewTextBoxWidgetExternalContent(mgl64.Vec2{800 - 50, 30}, contentWs, nil))
 		http.HandleFunc("/websocket", func(w http.ResponseWriter, req *http.Request) {
 			io.WriteString(w, `<html>
 	<body>
@@ -8170,11 +8170,11 @@ func main() {
 				return fmt.Sprintf("%.8f", shuryearNow)
 			}
 			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
-			widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{1443, 0}, mc)) // TODO: Stick to top right corner?
+			widgets = append(widgets, NewTextLabelWidgetExternalContent(mgl64.Vec2{1443, 0}, mc)) // TODO: Stick to top right corner?
 		}
 
 		{
-			buttonTrigger := NewButtonTriggerWidget(mathgl.Vec2d{50, 30})
+			buttonTrigger := NewButtonTriggerWidget(mgl64.Vec2{50, 30})
 			spinner.AddSources(buttonTrigger)
 			widgets = append(widgets, buttonTrigger)
 		}
@@ -8252,7 +8252,7 @@ func main() {
 			out := NewTextLabelWidgetContentFunc(np, debugOutput, []DepNodeI{&UniversalClock})*/
 			out := NewLiveCmdExpeWidget(np, []DepNode2I{template}, template)
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
+			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{800, 10}, []Widgeter{in, NewTextLabelWidgetString(np, "gofmt -r "), from, NewTextLabelWidgetString(np, " -> "), to, out}, nil))
 
 			box1 := in
 			box2 := out
@@ -8334,13 +8334,13 @@ func main() {
 			}
 			output := NewLiveGoroutineExpeWidget(np, true, []DepNode2I{gistButtonTrigger}, params, action)
 
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{500, 10}, []Widgeter{username, password, NewTextLabelWidgetString(np, "+Gist"), gistButtonTrigger, output}, nil))
+			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{500, 10}, []Widgeter{username, password, NewTextLabelWidgetString(np, "+Gist"), gistButtonTrigger, output}, nil))
 		}
 
 		// Sample Window widget
 		{
 			newWindowButton := NewButtonWidget(np, func() {
-				w := NewWindowWidget(mathgl.Vec2d{500, 500}, mathgl.Vec2d{200, 140}, NewTextBoxWidget(np))
+				w := NewWindowWidget(mgl64.Vec2{500, 500}, mgl64.Vec2{200, 140}, NewTextBoxWidget(np))
 				w.Name = "New Window"
 
 				// Add new widget to canvas
@@ -8348,15 +8348,15 @@ func main() {
 			})
 			widgets = append(widgets, newWindowButton)
 
-			w := NewWindowWidget(mathgl.Vec2d{1000, 40}, mathgl.Vec2d{200, 140}, NewTextBoxWidget(np))
+			w := NewWindowWidget(mgl64.Vec2{1000, 40}, mgl64.Vec2{200, 140}, NewTextBoxWidget(np))
 			w.Name = "Sample Window"
 			widgets = append(widgets, w)
 		}
 
 		// TODO: Highlighting Go code + selection at a time
 		{
-			widgets = append(widgets, NewTextBoxWidget(mathgl.Vec2d{20, 240}))
-			widgets = append(widgets, NewTextFileWidget(mathgl.Vec2d{100, 240}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go"))
+			widgets = append(widgets, NewTextBoxWidget(mgl64.Vec2{20, 240}))
+			widgets = append(widgets, NewTextFileWidget(mgl64.Vec2{100, 240}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go"))
 		}
 
 		// TEST: Live vcs status of a single repo
@@ -8378,7 +8378,7 @@ func main() {
 				return rootPath + "\n" + vcsStatus
 			}
 
-			widgets = append(widgets, NewLiveGoroutineExpeWidget(mathgl.Vec2d{260, 180}, false, []DepNode2I{booVcs.Repo.VcsLocal}, params, action))
+			widgets = append(widgets, NewLiveGoroutineExpeWidget(mgl64.Vec2{260, 180}, false, []DepNode2I{booVcs.Repo.VcsLocal}, params, action))
 		}
 
 		// Diff experiment
@@ -8408,7 +8408,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), ...)
 	}
 	gl.End()`), nil)
-			widgets = append(widgets, NewFlowLayoutWidget(mathgl.Vec2d{520, 200}, []Widgeter{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}))
+			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{520, 200}, []Widgeter{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}))
 
 			highlightedDiff1 := &highlightedDiff{leftSide: true}
 			highlightedDiff1.AddSources(box1.Content, box2.Content)
@@ -8431,28 +8431,28 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		}
 
 		{
-			w := NewConnectionWidget(mathgl.Vec2d{700, 500})
+			w := NewConnectionWidget(mgl64.Vec2{700, 500})
 			widgets = append(widgets, w)
 		}
 
 	} else if false {
-		widgets = append(widgets, NewGpcFileWidget(mathgl.Vec2d{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
-		widgets = append(widgets, NewTest1Widget(mathgl.Vec2d{10, 50}))
-		widgets = append(widgets, NewKatWidget(mathgl.Vec2d{370, 20}))
+		widgets = append(widgets, NewGpcFileWidget(mgl64.Vec2{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
+		widgets = append(widgets, NewTest1Widget(mgl64.Vec2{10, 50}))
+		widgets = append(widgets, NewKatWidget(mgl64.Vec2{370, 20}))
 	}
 
-	fpsWidget := NewFpsWidget(mathgl.Vec2d{10, 120})
+	fpsWidget := NewFpsWidget(mgl64.Vec2{10, 120})
 	widgets = append(widgets, fpsWidget)
 	// NumGoroutines
 	{
 		contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
 		mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
-		widgets = append(widgets, NewTextLabelWidgetExternalContent(mathgl.Vec2d{10, 40}, mc))
+		widgets = append(widgets, NewTextLabelWidgetExternalContent(mgl64.Vec2{10, 40}, mc))
 	}
 
 	// Http Server
 	initHttpHandlers()
-	widgets = append(widgets, NewHttpServerTestWidget(mathgl.Vec2d{10, 130}))
+	widgets = append(widgets, NewHttpServerTestWidget(mgl64.Vec2{10, 130}))
 
 	// lifeFormWidget test.
 	//widgets = append(widgets, NewLifeFormWidget(mathgl.Vec2d{400, 400}))
@@ -8486,10 +8486,10 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 
 	if sublimeMode {
 		// TODO: Position of {1, 1} means 1 column and 1 row of pixels will not get user input, need to fix
-		widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: false})
+		widget = NewCanvasWidget(mgl64.Vec2{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: false})
 	} else {
 		// TODO: Position of {1, 1} means 1 column and 1 row of pixels will not get user input, need to fix
-		widget = NewCanvasWidget(mathgl.Vec2d{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: true})
+		widget = NewCanvasWidget(mgl64.Vec2{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: true})
 	}
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
