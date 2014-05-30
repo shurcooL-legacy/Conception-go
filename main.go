@@ -6956,6 +6956,21 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 
 // ---
 
+type MarkdownHandlerFunc func(req *http.Request) (markdown []byte)
+
+func (this MarkdownHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	markdown := this(req)
+
+	_, plain := req.URL.Query()["plain"]
+	if plain {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write(markdown)
+	} else {
+		w.Header().Set("Content-Type", "text/html")
+		u1.WriteMarkdownGfmAsHtmlPage(w, markdown)
+	}
+}
+
 func initHttpHandlers() {
 	http.HandleFunc("/close", func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintln(w, "Closing.")
@@ -6967,7 +6982,7 @@ func initHttpHandlers() {
 		fmt.Fprintf(w, "%#v\n", widgets)
 	})*/
 	http.Handle("/favicon.ico", http.NotFoundHandler())
-	http.Handle("/status/", http.StripPrefix("/status", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	http.Handle("/status/", http.StripPrefix("/status", MarkdownHandlerFunc(func(req *http.Request) []byte {
 
 		// HACK: Handle .go files specially, just assume they're in "./GoLand"
 		/*if strings.HasSuffix(req.URL.Path, ".go") {
@@ -6975,14 +6990,6 @@ func initHttpHandlers() {
 			w.Write(MustReadFileB(filepath.Join("../../../", req.URL.Path)))
 			return
 		}*/
-
-		_, plain := req.URL.Query()["plain"]
-		switch plain {
-		case true:
-			w.Header().Set("Content-Type", "text/plain")
-		case false:
-			w.Header().Set("Content-Type", "text/html")
-		}
 
 		var b string
 
@@ -7049,16 +7056,12 @@ func initHttpHandlers() {
 				b += fmt.Sprintf("[%s](%s)  \n", v.Name(), path.Join("/status/", importPath, v.Name()))
 			}
 		} else {
-			fmt.Fprintf(w, "Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
+			b += fmt.Sprintf("Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
 		}
 
-		if plain {
-			w.Write([]byte(b))
-		} else {
-			u1.WriteMarkdownGfmAsHtmlPage(w, []byte(b))
-		}
+		return []byte(b)
 	})))
-	http.Handle("/status", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	http.Handle("/status", MarkdownHandlerFunc(func(req *http.Request) []byte {
 		started := time.Now()
 
 		_, short := req.URL.Query()["short"]
@@ -7134,9 +7137,9 @@ func initHttpHandlers() {
 
 		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
 
-		u1.WriteMarkdownGfmAsHtmlPage(w, buf.Bytes())
+		return buf.Bytes()
 	}))
-	http.Handle("/inline/", http.StripPrefix("/inline", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	http.Handle("/inline/", http.StripPrefix("/inline", MarkdownHandlerFunc(func(req *http.Request) []byte {
 		importPath := req.URL.Path[1:]
 
 		// TODO: Cache this via DepNode2I
@@ -7145,7 +7148,7 @@ func initHttpHandlers() {
 		exp11.InlineDotImports(buf, importPath)
 		buf.WriteString("\n```")
 
-		u1.WriteMarkdownGfmAsHtmlPage(w, buf.Bytes())
+		return buf.Bytes()
 	})))
 }
 
