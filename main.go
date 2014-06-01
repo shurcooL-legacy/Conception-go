@@ -2922,7 +2922,9 @@ func (this *commandNode) Update() {
 
 	SetViewGroup(this.w.Content, "")
 
+	MakeUpdatedLock.Unlock() // HACK: Needed because (*CmdTemplateDynamic2) NewCommand() calls MakeUpdated().
 	this.w.cmd = this.template.NewCommand()
+	MakeUpdatedLock.Lock() // HACK
 	this.w.stdoutChan = make(ChanWriter)
 	this.w.stderrChan = make(ChanWriter)
 	this.w.cmd.Stdout = this.w.stdoutChan
