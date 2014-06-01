@@ -1323,9 +1323,11 @@ func (this *GoPackageSelecterAdapter) GetSelectedGoPackage() *GoPackage {
 }
 
 // TODO: Move to the right place.
+//var goPackages = &exp14.GoPackages{SkipGoroot: true}
 var goPackages = &exp14.GoPackages{SkipGoroot: false}
 
 func NewGoPackageListingWidget(pos, size mgl64.Vec2) *SearchableListWidget {
+	//goPackagesSliceStringer := &goPackagesSliceStringer{&exp14.GoPackages{SkipGoroot: false}}
 	goPackagesSliceStringer := &goPackagesSliceStringer{goPackages}
 
 	w := NewSearchableListWidget(pos, size, goPackagesSliceStringer)
@@ -1473,7 +1475,7 @@ func (w *ButtonWidget) setAction(action func()) {
 
 	if action != nil {
 		// HACK: This isn't thread-safe in any way
-		go func() { w.tooltip = NewTextLabelWidgetString(np, GetSourceAsString(action)) }()
+		//go func() { w.tooltip = NewTextLabelWidgetString(np, GetSourceAsString(action)) }()
 	}
 }
 
@@ -3047,7 +3049,9 @@ func (this *pipeNode) Update() {
 	this.w.stdoutChan = &WriterNotifier{make(ChanWriter), notify}
 	this.w.stderrChan = &WriterNotifier{make(ChanWriter), notify}
 	var p pipe.Pipe
+	MakeUpdatedLock.Unlock() // HACK: Needed because NewPipe() calls MakeUpdated().
 	this.s, p = this.p.NewPipe(this.w.stdoutChan, this.w.stderrChan)
+	MakeUpdatedLock.Lock() // HACK
 
 	go func(s *pipe.State, p pipe.Pipe) {
 		err := p(s)
@@ -3369,7 +3373,9 @@ func (this *FileOpener) Update() {
 		this.openedFile.AddAndSetViewGroup(this.editor, TryReadFile(path))
 
 		if goPackage := this.GetSources()[1].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+			MakeUpdatedLock.Unlock() // HACK: Needed because UpdateVcs() calls MakeUpdated().
 			goPackage.UpdateVcs()
+			MakeUpdatedLock.Lock() // HACK
 			if goPackage.Dir.Repo != nil {
 				vcsLocalInvalidator := &VcsLocalInvalidator{Repo: goPackage.Dir.Repo}
 				vcsLocalInvalidator.AddSources(this.openedFile)
@@ -6096,7 +6102,7 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 		w.findPanel = NewFindPanel(mgl64.Vec2{200, 800})
 
 		w.wholeWordHighlighter = &WholeWordHighlighter{}
-		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition)
+		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition, &w.layoutDepNode2) // layoutDepNode2 is needed to ensure caret position is kept within bounds as a prerequisite.
 
 		w.findResults = &FindResults{Owner: w}
 		w.findResults.AddSources(w.Content, w.findPanel.Content, w.wholeWordHighlighter)
@@ -7092,6 +7098,8 @@ func initHttpHandlers() {
 				goPackagesInRepo[repo.rootPath] = append(goPackagesInRepo[repo.rootPath], repo.goPackages[0])
 			}
 		}
+
+		goon.DumpExpr(len(goPackagesInRepo))
 
 		reduceFunc := func(in interface{}) interface{} {
 			repo := in.(Repo)
