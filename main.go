@@ -2,125 +2,91 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/scanner"
+	"go/token"
+	"image"
+	"io"
+	"io/ioutil"
 	"log"
+	"math"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	. "gist.github.com/5286084.git"
 
-	"image"
-	"os"
-	_ "github.com/ftrvxmtrx/tga"
-
-	gl "github.com/chsc/gogl/gl21"
-	glfw "github.com/go-gl/glfw3" // devel branch with GLFW tip.
-	"github.com/go-gl/mathgl/mgl64"
-
-	"github.com/shurcooL/go/exp/11"
-	"github.com/shurcooL/go/exp/12"
-	"github.com/shurcooL/go/exp/13"
-	"github.com/shurcooL/go/exp/14"
-	"github.com/shurcooL/go/pipe_util"
-	"github.com/shurcooL/go/vcs"
-	"github.com/shurcooL/gostatus/status"
-	"github.com/shurcooL/markdownfmt/markdown"
-	"gopkg.in/pipe.v2"
-
-	"github.com/shurcooL/go/u/u1"
-	"github.com/shurcooL/go/u/u5"
-	"github.com/shurcooL/go/u/u6"
-
-	"github.com/bradfitz/iter"
-
-	"github.com/shurcooL/go-goon"
-
-	. "gist.github.com/6003701.git"
-
-	"os/exec"
-	. "gist.github.com/5258650.git"
-	. "gist.github.com/6096872.git"
-
-	. "gist.github.com/5571468.git"
-
-	"math"
-	intmath "github.com/pkg/math"
-
-	. "gist.github.com/5259939.git"
-	. "gist.github.com/5504644.git"
-	. "gist.github.com/5639599.git"
-	. "gist.github.com/6418462.git"
-
-	"encoding/json"
-	"errors"
-
-	"io"
-	"io/ioutil"
-
-	. "gist.github.com/5892738.git"
-	. "gist.github.com/6418290.git"
-	. "gist.github.com/6545684.git"
-
-	. "gist.github.com/4727543.git"
-
-	"go/ast"
-	"go/parser"
-	"go/scanner"
-	"go/token"
-	. "gist.github.com/6445065.git"
-
-	"reflect"
-
-	. "gist.github.com/6724654.git"
-
-	"code.google.com/p/go.tools/go/types"
-	. "gist.github.com/7576804.git"
-	"honnef.co/go/importer"
-
-	"github.com/davecheney/profile"
-
-	"path"
-	"path/filepath"
-	. "gist.github.com/5953185.git"
-
-	"flag"
-	"net/http"
-	_ "net/http/pprof"
-	. "gist.github.com/7390843.git"
-
-	. "gist.github.com/7480523.git"
-
-	. "gist.github.com/7576154.git"
-
-	"bytes"
-	. "gist.github.com/5645828.git"
-
-	"bufio"
 	"code.google.com/p/go.net/websocket"
-
-	"github.com/sergi/go-diff/diffmatchpatch"
-
-	"github.com/mb0/diff"
-
-	. "gist.github.com/7728088.git"
-
-	. "gist.github.com/7651991.git"
-
-	. "gist.github.com/7802150.git"
-
-	. "gist.github.com/7519227.git"
-
+	"code.google.com/p/go.tools/go/types"
 	goimports "code.google.com/p/go.tools/imports"
-
+	. "gist.github.com/4727543.git"
+	. "gist.github.com/5258650.git"
+	. "gist.github.com/5259939.git"
+	. "gist.github.com/5286084.git"
+	. "gist.github.com/5423254.git"
+	. "gist.github.com/5504644.git"
+	. "gist.github.com/5571468.git"
+	. "gist.github.com/5639599.git"
+	. "gist.github.com/5645828.git"
+	. "gist.github.com/5892738.git"
+	. "gist.github.com/5953185.git"
+	. "gist.github.com/6003701.git"
+	. "gist.github.com/6096872.git"
+	. "gist.github.com/6418290.git"
+	. "gist.github.com/6418462.git"
+	. "gist.github.com/6445065.git"
+	. "gist.github.com/6545684.git"
+	. "gist.github.com/6724654.git"
+	. "gist.github.com/7390843.git"
+	. "gist.github.com/7480523.git"
+	. "gist.github.com/7519227.git"
+	. "gist.github.com/7576154.git"
+	. "gist.github.com/7576804.git"
+	. "gist.github.com/7651991.git"
+	. "gist.github.com/7728088.git"
+	. "gist.github.com/7802150.git"
 	igo_ast "github.com/DAddYE/igo/ast"
 	"github.com/DAddYE/igo/from_go"
 	igo_parser "github.com/DAddYE/igo/parser"
 	"github.com/DAddYE/igo/to_go"
 	igo_token "github.com/DAddYE/igo/token"
-
-	. "gist.github.com/5423254.git"
+	"github.com/bradfitz/iter"
+	gl "github.com/chsc/gogl/gl21"
+	"github.com/davecheney/profile"
+	_ "github.com/ftrvxmtrx/tga"
+	glfw "github.com/go-gl/glfw3" // devel branch with GLFW tip.
+	"github.com/go-gl/mathgl/mgl64"
+	"github.com/mb0/diff"
+	intmath "github.com/pkg/math"
+	"github.com/sergi/go-diff/diffmatchpatch"
+	"github.com/shurcooL/go-goon"
+	"github.com/shurcooL/go/exp/11"
+	"github.com/shurcooL/go/exp/12"
+	"github.com/shurcooL/go/exp/13"
+	"github.com/shurcooL/go/exp/14"
+	"github.com/shurcooL/go/pipe_util"
+	"github.com/shurcooL/go/u/u1"
+	"github.com/shurcooL/go/u/u5"
+	"github.com/shurcooL/go/u/u6"
+	"github.com/shurcooL/go/vcs"
+	"github.com/shurcooL/gostatus/status"
+	"github.com/shurcooL/markdownfmt/markdown"
+	"gopkg.in/pipe.v2"
+	"honnef.co/go/importer"
 )
 
 var _ = UnderscoreSepToCamelCase
