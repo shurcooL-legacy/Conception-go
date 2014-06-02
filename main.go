@@ -2143,9 +2143,8 @@ func (w *CompositeWidget) LayoutNeeded() {
 	}
 }
 func (w *CompositeWidget) Render() {
-	gl.PushMatrix()
-	defer gl.PopMatrix()
 	gl.Translated(gl.Double(w.pos[0]), gl.Double(w.pos[1]), 0)
+	defer gl.Translated(gl.Double(-w.pos[0]), gl.Double(-w.pos[1]), 0)
 
 	for _, widget := range w.Widgets {
 		widget.Render()
