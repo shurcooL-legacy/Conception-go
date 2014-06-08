@@ -59,6 +59,7 @@ import (
 	. "gist.github.com/7651991.git"
 	. "gist.github.com/7728088.git"
 	. "gist.github.com/7802150.git"
+	"gist.github.com/8065433.git"
 	igo_ast "github.com/DAddYE/igo/ast"
 	"github.com/DAddYE/igo/from_go"
 	igo_parser "github.com/DAddYE/igo/parser"
@@ -109,6 +110,7 @@ var oFontBase, oFontBackground gl.Uint
 var redraw bool = true
 var mousePointer *Pointer
 var keyboardPointer *Pointer
+var websocketPointer *Pointer // TEST
 
 var goCompileErrorsManagerTest GoCompileErrorsManagerTest
 var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
@@ -3263,11 +3265,13 @@ type HttpServerTestWidget struct {
 }
 
 func NewHttpServerTestWidget(pos mgl64.Vec2) *HttpServerTestWidget {
+	const httpServerAddr = ":8060"
+
 	w := &HttpServerTestWidget{stopServerChan: make(chan struct{})}
 	action := func() {
 		if !w.started {
 			go func() {
-				err := ListenAndServeStoppable("localhost:8060", nil, w.stopServerChan)
+				err := ListenAndServeStoppable(httpServerAddr, nil, w.stopServerChan)
 				CheckError(err)
 			}()
 		} else {
@@ -3279,7 +3283,7 @@ func NewHttpServerTestWidget(pos mgl64.Vec2) *HttpServerTestWidget {
 	w.FlowLayoutWidget = NewFlowLayoutWidget(pos,
 		[]Widgeter{
 			NewTriButtonExternalStateWidget(np, func() bool { return w.started }, action),
-			NewTextLabelWidgetString(np, "http"),
+			NewTextLabelWidgetString(np, "http://"+TrimLastNewline(gist8065433.Something())+httpServerAddr),
 		}, nil)
 
 	return w
@@ -6778,6 +6782,24 @@ type Pointer struct {
 	State           PointerState
 }
 
+func (this *Pointer) Render() {
+	switch {
+	case this.VirtualCategory == POINTING && len(this.State.Axes) >= 2:
+		gl.PushMatrix()
+		defer gl.PopMatrix()
+		gl.Translated(gl.Double(float64(NearInt64(this.State.Axes[0]))+0.5), gl.Double(float64(NearInt64(this.State.Axes[1]))+0.5), 0)
+
+		gl.Color3d(0, 0, 0)
+		const size float64 = fontHeight
+		gl.Begin(gl.LINES)
+		gl.Vertex2d(0, 0)
+		gl.Vertex2d(0, gl.Double(size))
+		gl.Vertex2d(0, 0)
+		gl.Vertex2d(gl.Double(size/math.Sqrt2), gl.Double(size/math.Sqrt2))
+		gl.End()
+	}
+}
+
 type PointerState struct {
 	Buttons []bool // True means pressed down
 	Axes    []float64
@@ -7169,7 +7191,8 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
 
-	inputEventQueue := []InputEvent{}
+	var inputEventQueue []InputEvent
+	var inputEventQueue2 = make(chan InputEvent, 32)
 	var window *glfw.Window
 
 	if !*headlessFlag {
@@ -7192,8 +7215,10 @@ func main() {
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
 		var err error
 		window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
-		globalWindow = window
 		CheckError(err)
+		globalWindow = window
+
+		window.SetInputMode(glfw.Cursor, glfw.CursorHidden)
 		window.MakeContextCurrent()
 
 		if err := gl.Init(); nil != err {
@@ -7351,7 +7376,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if !sublimeMode && false {
 
@@ -8141,6 +8166,169 @@ func main() {
 			contentWs.RemoveView(wsView) // TODO: Fix race condition
 		}))
 
+		// WebSocket Touch Pointer.
+		http.HandleFunc("/websocket2", func(w http.ResponseWriter, req *http.Request) {
+			io.WriteString(w, `<html>
+	<head>
+		<meta name="viewport" content="width=device-width, maximum-scale=1, minimum-scale=1, target-densitydpi=device-dpi, user-scalable=no">
+		<style>
+			body {
+				margin: 0px;
+			}
+			canvas {
+				background-color: #111133;
+				display: block;
+				position: absolute;
+			}
+			.container {
+				width: auto;
+				text-align: center;
+				background-color: #ff0000;
+			}
+		</style>
+	</head>
+	<body>
+		<script>
+			var canvas, c, container;
+
+			var mouseX, mouseY;
+			// is this running in a touch capable environment?
+			var touchable = "ontouchstart" in window;
+			var touches = []; // array of touch vectors
+
+			function orientationchange() {
+				// Hack to work around lack of orientationchange/resize event
+				if (   canvas.width == window.innerWidth
+					|| canvas.height == window.innerHeight) {
+					alert("orientationchange called but nothing changed??!");
+				}
+
+				canvas.width = window.innerWidth;
+				canvas.height = window.innerHeight;
+			}
+
+			var lastUpdate = new Date, fps = "fps: ", framesDrawn = 0;
+
+			function loop() {
+				window.webkitRequestAnimationFrame(loop);
+
+				try {
+					//sock.send(JSON.stringify(touches.length) + "\n");		// HACK: Should make sure that sock.onopen has happened before calling send...
+					if (touches.length >= 1) {
+						sock.send(touches[0].clientX + " " +touches[0].clientY + "\0")
+					}
+				} catch (exc) {
+					//alert("Error: " + exc);
+				}
+
+				c.clearRect(0, 0, canvas.width, canvas.height);
+				c.strokeStyle = "cyan";
+				c.lineWidth = "4";
+				// Need to handle canvas offsetLeft/offsetTop once we have SD panel
+				for (var i = 0, l = touches.length; i < l; i++) {
+					c.beginPath();
+					c.arc(touches[i].clientX, touches[i].clientY, 50, 0, Math.PI * 2, true);
+					c.stroke();
+
+					c.beginPath();
+					c.fillStyle = "white";
+					c.fillText("touch id : "+touches[i].identifier+" x:"+touches[i].clientX+" y:"+touches[i].clientY, touches[i].clientX+40, touches[i].clientY-40);
+				}
+				if (touches.length > 1) {
+					c.beginPath();
+					c.lineWidth = "2";
+					c.moveTo(touches[0].clientX, touches[0].clientY);
+					for(var i = 1, l = touches.length; i < l; i++) {
+						c.lineTo(touches[i].clientX, touches[i].clientY);
+					}
+					c.stroke();
+				}
+
+				framesDrawn++;
+				now = new Date;
+				if ((now - lastUpdate) >= 100) {
+					fps = "fps: " + (framesDrawn * 1000 / (now - lastUpdate)).toFixed(2);
+					lastUpdate = now;
+					framesDrawn = 0;
+				}
+				c.fillStyle = "white";
+				c.fillText(fps, 0, 10);
+			}
+
+			function touchHandler(e) {
+				e.preventDefault();
+				touches = e.touches;
+				//loop();
+				//window.webkitRequestAnimationFrame(loop);
+			}
+
+			function init() {
+				canvas = document.createElement("canvas");
+				c = canvas.getContext("2d");
+				container = document.createElement("div");
+				container.className = "container";
+				canvas.width = window.innerWidth;
+				canvas.height = window.innerHeight;
+				container.appendChild(canvas);
+				document.body.appendChild(container);
+				c.strokeStyle = "#ffffff";
+				c.lineWidth = 2;
+
+				if (touchable) {
+					canvas.addEventListener("touchstart", touchHandler);
+					canvas.addEventListener("touchmove", touchHandler);
+					canvas.addEventListener("touchend", touchHandler);
+					window.addEventListener("orientationchange", orientationchange);
+					//setInterval(loop, 1000 / 35);
+					loop();
+				} else {
+					document.write("Not touchable.");
+				}
+			}
+
+			window.addEventListener("load", function() {
+				// Hack to prevent firing the init script before the window object's values are populated
+				setTimeout(init, 100);
+			});
+
+			var sock = new WebSocket("ws://" + window.location.host + "/websocket2.ws");
+			sock.onopen = function(evt) { console.log("Open: ", evt); };
+			sock.onclose = function(evt) { console.log("Close: ", evt); };
+			sock.onerror = function(evt) { console.log("Error: ", evt); };
+		</script>
+	</body>
+</html>`)
+		})
+		http.Handle("/websocket2.ws", websocket.Handler(func(c *websocket.Conn) {
+			websocketPointer = &Pointer{VirtualCategory: POINTING} // TODO: Fix race condition
+
+			br := bufio.NewReader(c)
+			for {
+				line, err := br.ReadString('\x00')
+				if err == nil {
+					touchPositionString := line[:len(line)-1] // Trim delimiter
+					var x, y float64
+					fmt.Sscan(touchPositionString, &x, &y)
+
+					inputEvent := InputEvent{
+						Pointer:    websocketPointer,
+						EventTypes: map[EventType]bool{AXIS_EVENT: true},
+						InputId:    0,
+						Buttons:    nil,
+						Sliders:    nil,
+						Axes:       []float64{x, y},
+					}
+					inputEventQueue2 <- inputEvent
+				} else {
+					//wsView.WsReadChan <- line
+					//close(wsView.WsReadChan)
+					break
+				}
+			}
+
+			websocketPointer = nil // TODO: Fix race condition
+		}))
+
 		// Shuryear Clock
 		{
 			contentFunc := func() string {
@@ -8490,7 +8678,19 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			glfw.PollEvents()
 		}
 
-		// Input
+		// Move all input events from inputEventQueue2 into inputEventQueue.
+	inputEventQueue2Loop:
+		for {
+			select {
+			case inputEvent := <-inputEventQueue2:
+				inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+				redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
+			default:
+				break inputEventQueue2Loop
+			}
+		}
+
+		// Process Input.
 		inputEventQueue = ProcessInputEventQueue(widget, inputEventQueue)
 
 		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
@@ -8520,6 +8720,12 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 
 			widget.LayoutNeeded()
 			widget.Render()
+
+			mousePointer.Render()
+			keyboardPointer.Render()
+			if websocketPointer != nil {
+				websocketPointer.Render()
+			}
 
 			fpsWidget.PushTimeToRender(time.Since(frameStartTime).Seconds() * 1000)
 			window.SwapBuffers()
