@@ -68,11 +68,11 @@ import (
 	gl "github.com/chsc/gogl/gl21"
 	"github.com/davecheney/profile"
 	_ "github.com/ftrvxmtrx/tga"
-	glfw "github.com/go-gl/glfw3" // devel branch with GLFW tip.
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/mb0/diff"
 	intmath "github.com/pkg/math"
 	"github.com/sergi/go-diff/diffmatchpatch"
+	glfw "github.com/shurcooL/glfw3" // Effectively, a fork using rebased devel branch of "github.com/go-gl/glfw3" with support for github.com/shurcooL/glfw on add-mods-to-char-callback branch.
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
@@ -7317,9 +7317,9 @@ func main() {
 			redraw = true // HACK
 		})
 
-		window.SetCharacterCallback(func(w *glfw.Window, char rune) {
-			// HACK: Ignore characters when Super key is held down
-			if window.GetKey(glfw.KeyLeftSuper) != glfw.Release || window.GetKey(glfw.KeyRightSuper) != glfw.Release {
+		window.SetCharacterCallback(func(w *glfw.Window, char rune, mods glfw.ModifierKey) {
+			// Ignore characters when any modifier key other than Shift is held down.
+			if mods & ^glfw.ModShift != 0 {
 				return
 			}
 
