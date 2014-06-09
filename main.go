@@ -7455,9 +7455,6 @@ func main() {
 			widgets = append(widgets, b1, b2)
 		}
 
-		// Led Sign
-		widgets = append(widgets, &BoxWidget{Widget: NewWidget(mgl64.Vec2{500, 850}, mgl64.Vec2{96, 16})})
-
 		// TEST: Bunch of buttons with spacing.
 		{
 			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{500, 900}, []Widgeter{
