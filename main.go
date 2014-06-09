@@ -8598,6 +8598,14 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			widgets = append(widgets, w)
 		}
 
+		// Test having multiple .go files stacked vertically with a FlowLayoutWidget.
+		{
+			box1 := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/go/u/u8/main.go")
+			box2 := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/go/u/u8/main_test.go")
+			boxes := NewFlowLayoutWidget(mgl64.Vec2{1130, 220}, Widgeters{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			widgets = append(widgets, boxes)
+		}
+
 	} else if false {
 		widgets = append(widgets, NewGpcFileWidget(mgl64.Vec2{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
 		widgets = append(widgets, NewTest1Widget(mgl64.Vec2{10, 50}))
