@@ -7376,7 +7376,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if !sublimeMode && false {
 
@@ -7648,6 +7648,21 @@ func main() {
 
 				gitHead := NewLivePipeExpeWidget(np, []DepNode2I{folderListing}, template)
 				nextTool10Collapsible = NewCollapsibleWidget(np, gitHead, "git show HEAD")
+
+				// TODO: Instead of always on, this should only apply when "git show HEAD" is expanded.
+				{
+					box1 := gitHead
+					box2 := editor
+
+					highlightedDiff1 := &highlightedDiff{leftSide: true}
+					highlightedDiff1.AddSources(box1.Content, box2.Content)
+					box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
+
+					// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+					highlightedDiff2 := &highlightedDiff{}
+					highlightedDiff2.AddSources(box1.Content, box2.Content)
+					box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+				}
 			}
 
 			// ---
