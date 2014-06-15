@@ -7684,9 +7684,13 @@ func main() {
 			localBranch.UpdateFunc = func(this DepNode2I) {
 				localBranch.content = ""
 				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+					MakeUpdatedLock.Unlock() // HACK: Needed because UpdateVcs() calls MakeUpdated().
 					goPackage.UpdateVcs()
+					MakeUpdatedLock.Lock() // HACK
 					if goPackage.Dir.Repo != nil {
+						MakeUpdatedLock.Unlock() // HACK: Needed because we're calling MakeUpdated() directly.
 						MakeUpdated(goPackage.Dir.Repo.VcsLocal)
+						MakeUpdatedLock.Lock() // HACK
 						localBranch.content = goPackage.Dir.Repo.VcsLocal.LocalBranch
 					}
 				}
