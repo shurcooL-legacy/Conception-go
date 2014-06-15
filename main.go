@@ -7654,14 +7654,26 @@ func main() {
 					box1 := gitHead
 					box2 := editor
 
-					highlightedDiff1 := &highlightedDiff{leftSide: true}
-					highlightedDiff1.AddSources(box1.Content, box2.Content)
-					box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
+					if true {
+						highlightedDiff1 := &highlightedDiff{leftSide: true}
+						highlightedDiff1.AddSources(box1.Content, box2.Content)
+						box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
 
-					// TODO: Avoid having two objects that do similar work, merge into one with two iterators
-					highlightedDiff2 := &highlightedDiff{}
-					highlightedDiff2.AddSources(box1.Content, box2.Content)
-					box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+						// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+						highlightedDiff2 := &highlightedDiff{}
+						highlightedDiff2.AddSources(box1.Content, box2.Content)
+						box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+					} else {
+						lineDiff1 := &lineDiff{leftSide: true}
+						lineDiff1.AddSources(box1.Content, box2.Content)
+
+						// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+						lineDiff2 := &lineDiff{}
+						lineDiff2.AddSources(box1.Content, box2.Content)
+
+						box1.HighlightersTest = append(box1.HighlightersTest, lineDiff1)
+						box2.HighlightersTest = append(box2.HighlightersTest, lineDiff2)
+					}
 				}
 			}
 
@@ -8588,24 +8600,26 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	gl.End()`), nil)
 			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{520, 200}, []Widgeter{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}))
 
-			highlightedDiff1 := &highlightedDiff{leftSide: true}
-			highlightedDiff1.AddSources(box1.Content, box2.Content)
-			box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
+			if true {
+				highlightedDiff1 := &highlightedDiff{leftSide: true}
+				highlightedDiff1.AddSources(box1.Content, box2.Content)
+				box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
 
-			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
-			highlightedDiff2 := &highlightedDiff{}
-			highlightedDiff2.AddSources(box1.Content, box2.Content)
-			box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+				// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+				highlightedDiff2 := &highlightedDiff{}
+				highlightedDiff2.AddSources(box1.Content, box2.Content)
+				box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+			} else {
+				lineDiff1 := &lineDiff{leftSide: true}
+				lineDiff1.AddSources(box1.Content, box2.Content)
 
-			/*lineDiff1 := &lineDiff{leftSide: true}
-			lineDiff1.AddSources(box1.Content, box2.Content)
+				// TODO: Avoid having two objects that do similar work, merge into one with two iterators
+				lineDiff2 := &lineDiff{}
+				lineDiff2.AddSources(box1.Content, box2.Content)
 
-			// TODO: Avoid having two objects that do similar work, merge into one with two iterators
-			lineDiff2 := &lineDiff{}
-			lineDiff2.AddSources(box1.Content, box2.Content)
-
-			box1.HighlightersTest = append(box1.HighlightersTest, lineDiff1)
-			box2.HighlightersTest = append(box2.HighlightersTest, lineDiff2)*/
+				box1.HighlightersTest = append(box1.HighlightersTest, lineDiff1)
+				box2.HighlightersTest = append(box2.HighlightersTest, lineDiff2)
+			}
 		}
 
 		{
