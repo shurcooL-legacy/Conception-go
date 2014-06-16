@@ -6956,13 +6956,19 @@ type MarkdownHandlerFunc func(req *http.Request) (markdown []byte)
 func (this MarkdownHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	markdown := this(req)
 
-	_, plain := req.URL.Query()["plain"]
-	if plain {
+	if _, plain := req.URL.Query()["plain"]; plain {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write(markdown)
+	} else if _, github := req.URL.Query()["github"]; github {
+		w.Header().Set("Content-Type", "text/html")
+		started := time.Now()
+		u1.WriteGitHubFlavoredMarkdownViaGitHub(w, markdown)
+		fmt.Println("rendered GFM via GitHub, took", time.Since(started))
 	} else {
 		w.Header().Set("Content-Type", "text/html")
-		u1.WriteMarkdownGfmAsHtmlPage(w, markdown)
+		started := time.Now()
+		u1.WriteGitHubFlavoredMarkdownViaLocal(w, markdown)
+		fmt.Println("rendered GFM locally, took", time.Since(started))
 	}
 }
 
