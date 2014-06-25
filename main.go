@@ -73,7 +73,7 @@ import (
 	"github.com/mb0/diff"
 	intmath "github.com/pkg/math"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	glfw "github.com/shurcooL/glfw3" // Effectively, a fork using rebased devel branch of "github.com/go-gl/glfw3" with support for github.com/shurcooL/glfw on add-mods-to-char-callback branch.
+	glfw "github.com/shurcooL/glfw3" // Effectively, a fork of github.com/go-gl/glfw3 but with 3.1 PR merged. Requires github.com/glfw/glfw at tip. See https://github.com/shurcooL/reusable-commands/blob/master/go-gl_glfw3_install.sh for installation steps.
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
@@ -7348,12 +7348,7 @@ func main() {
 			redraw = true // HACK
 		})
 
-		window.SetCharacterCallback(func(w *glfw.Window, char rune, mods glfw.ModifierKey) {
-			// Ignore characters when any modifier key other than Shift is held down.
-			if mods & ^glfw.ModShift != 0 {
-				return
-			}
-
+		window.SetCharacterCallback(func(w *glfw.Window, char rune) {
 			inputEvent := InputEvent{
 				Pointer:    keyboardPointer,
 				EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
