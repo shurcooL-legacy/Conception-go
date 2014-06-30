@@ -7127,7 +7127,7 @@ func initHttpHandlers() {
 			goPackage := repo.goPackages[0]
 
 			if goPackage.Dir.Repo.VcsLocal.Status != "" {
-				fmt.Fprint(buf, "### "+strings.TrimPrefix(repo.rootPath, goPackage.Bpkg.SrcRoot+"/")+"/..."+"\n\n")
+				fmt.Fprint(buf, "### "+GetRepoImportPathPattern(repo.rootPath, goPackage.Bpkg.SrcRoot)+"\n\n")
 				fmt.Fprint(buf, "```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n\n")
 				if !short {
 					fmt.Fprint(buf, "```diff\n"+u6.GoPackageWorkingDiff(goPackage)+"```\n\n")
