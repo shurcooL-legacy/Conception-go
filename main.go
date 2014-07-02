@@ -2568,6 +2568,27 @@ func (w *CollapsibleWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 
 // ---
 
+type OptionalHighlighter struct {
+	highlighter Highlighter
+	stateFunc   func() bool
+}
+
+func NewOptionalHighlighter(highlighter Highlighter, stateFunc func() bool) *OptionalHighlighter {
+	return &OptionalHighlighter{
+		highlighter: highlighter,
+		stateFunc:   stateFunc,
+	}
+}
+
+func (this *OptionalHighlighter) Highlighter() Highlighter {
+	if !this.stateFunc() {
+		return nil
+	}
+	return this.highlighter
+}
+
+// ---
+
 type ScrollPaneWidget struct {
 	Widget
 	child Widgeter
@@ -6004,11 +6025,14 @@ type TextBoxWidget struct {
 	// TESTS
 	ValidChange TextBoxWidgetValidChange // TODO: This should probably be properly moved into DepNode2 or similar.
 
-	ExtensionsTest   []Widgeter
-	HighlightersTest []Highlighter
-	LineHighlighter  func(content MultilineContentI, lineIndex int) (BackgroundColor *mgl64.Vec3)
-	PopupsTest       []Widgeter
-	DepsTest         []DepNode2I // Temporary solution until there's a better MultilineContentFunc.
+	ExtensionsTest      []Widgeter
+	HighlightersTest    []Highlighter
+	DynamicHighlighters []interface {
+		Highlighter() Highlighter
+	}
+	LineHighlighter func(content MultilineContentI, lineIndex int) (BackgroundColor *mgl64.Vec3)
+	PopupsTest      []Widgeter
+	DepsTest        []DepNode2I // Temporary solution until there's a better MultilineContentFunc.
 }
 
 type TextBoxWidgetValidChange struct {
@@ -6203,6 +6227,11 @@ func (w *TextBoxWidget) Render() {
 	for _, highlighter := range w.HighlightersTest {
 		MakeUpdated(highlighter)
 	}
+	for _, dynamicHighlighter := range w.DynamicHighlighters {
+		if highlighter := dynamicHighlighter.Highlighter(); highlighter != nil {
+			MakeUpdated(highlighter)
+		}
+	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
@@ -6302,6 +6331,11 @@ func (w *TextBoxWidget) Render() {
 			hlIters := []HighlighterIterator{}
 			for _, highlighter := range w.HighlightersTest {
 				hlIters = append(hlIters, highlighter.NewIterator(w.Content.Line(beginLineIndex).Start))
+			}
+			for _, dynamicHighlighter := range w.DynamicHighlighters {
+				if highlighter := dynamicHighlighter.Highlighter(); highlighter != nil {
+					hlIters = append(hlIters, highlighter.NewIterator(w.Content.Line(beginLineIndex).Start))
+				}
 			}
 
 			// Highlight search results.
@@ -7629,7 +7663,7 @@ func main() {
 			// ---
 
 			// git show HEAD.
-			var nextTool10Collapsible Widgeter
+			var nextTool10Collapsible *CollapsibleWidget
 			{
 				template := NewPipeTemplateDynamic()
 				template.UpdateFunc = func(this DepNode2I) {
@@ -7650,20 +7684,20 @@ func main() {
 				gitHead := NewLivePipeExpeWidget(np, []DepNode2I{folderListing}, template)
 				nextTool10Collapsible = NewCollapsibleWidget(np, gitHead, "git show HEAD")
 
-				// TODO: Instead of always on, this should only apply when "git show HEAD" is expanded.
 				{
 					box1 := gitHead
 					box2 := editor
+					stateFunc := func() bool { return nextTool10Collapsible.state.State() } // This should only be visible when "git show HEAD" is expanded.
 
 					if true {
 						highlightedDiff1 := &highlightedDiff{leftSide: true}
 						highlightedDiff1.AddSources(box1.Content, box2.Content)
-						box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
+						box1.DynamicHighlighters = append(box1.DynamicHighlighters, NewOptionalHighlighter(highlightedDiff1, stateFunc))
 
 						// TODO: Avoid having two objects that do similar work, merge into one with two iterators
 						highlightedDiff2 := &highlightedDiff{}
 						highlightedDiff2.AddSources(box1.Content, box2.Content)
-						box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+						box2.DynamicHighlighters = append(box2.DynamicHighlighters, NewOptionalHighlighter(highlightedDiff2, stateFunc))
 					} else {
 						lineDiff1 := &lineDiff{leftSide: true}
 						lineDiff1.AddSources(box1.Content, box2.Content)
@@ -7672,8 +7706,8 @@ func main() {
 						lineDiff2 := &lineDiff{}
 						lineDiff2.AddSources(box1.Content, box2.Content)
 
-						box1.HighlightersTest = append(box1.HighlightersTest, lineDiff1)
-						box2.HighlightersTest = append(box2.HighlightersTest, lineDiff2)
+						box1.DynamicHighlighters = append(box1.DynamicHighlighters, NewOptionalHighlighter(lineDiff1, stateFunc))
+						box2.DynamicHighlighters = append(box2.DynamicHighlighters, NewOptionalHighlighter(lineDiff2, stateFunc))
 					}
 				}
 			}
