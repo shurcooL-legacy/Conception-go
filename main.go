@@ -7411,7 +7411,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if !sublimeMode && false {
 
@@ -8409,7 +8409,7 @@ func main() {
 		}
 
 		// `gofmt -r rule` experiment
-		{
+		if false {
 			in := NewTextBoxWidget(np)
 			SetViewGroup(in.Content, `package main
 
@@ -8583,13 +8583,13 @@ func main() {
 		}
 
 		// TODO: Highlighting Go code + selection at a time
-		{
+		if false {
 			widgets = append(widgets, NewTextBoxWidget(mgl64.Vec2{20, 240}))
 			widgets = append(widgets, NewTextFileWidget(mgl64.Vec2{100, 240}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go"))
 		}
 
 		// TEST: Live vcs status of a single repo
-		if true {
+		if false {
 			booVcs = exp12.LookupDirectory("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/Go-Package-Store/")
 			MakeUpdated(booVcs)
 
@@ -8637,9 +8637,9 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), ...)
 	}
 	gl.End()`), nil)
-			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{520, 200}, []Widgeter{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}))
+			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{200, 250}, []Widgeter{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: HorizontalLayout}))
 
-			if true {
+			if false {
 				highlightedDiff1 := &highlightedDiff{leftSide: true}
 				highlightedDiff1.AddSources(box1.Content, box2.Content)
 				box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
@@ -8661,13 +8661,13 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			}
 		}
 
-		{
+		if false {
 			w := NewConnectionWidget(mgl64.Vec2{700, 500})
 			widgets = append(widgets, w)
 		}
 
 		// Test having multiple .go files stacked vertically with a FlowLayoutWidget.
-		{
+		if false {
 			box1 := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/go/u/u8/main.go")
 			box2 := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/go/u/u8/main_test.go")
 			boxes := NewFlowLayoutWidget(mgl64.Vec2{1130, 220}, Widgeters{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
