@@ -132,10 +132,12 @@ var (
 	selectedTextDarkColor     = selectedTextColor.Mul(0.75)
 	selectedTextInactiveColor = mgl64.Vec3{225 / 255.0, 235 / 255.0, 250 / 255.0}
 
-	lightRedColor   = mgl64.Vec3{1, 0.9, 0.9}
-	lightGreenColor = mgl64.Vec3{0.9, 1, 0.9}
-	darkRedColor    = mgl64.Vec3{1, 0.8, 0.8}
-	darkGreenColor  = mgl64.Vec3{0.8, 1, 0.8}
+	lightRedColor    = mgl64.Vec3{1, 0.867, 0.867}
+	lightGreenColor  = mgl64.Vec3{0.867, 1, 0.867}
+	mediumRedColor   = mgl64.Vec3{1, 0.767, 0.767}
+	mediumGreenColor = mgl64.Vec3{0.767, 1, 0.767}
+	darkRedColor     = mgl64.Vec3{1, 0.667, 0.667}
+	darkGreenColor   = mgl64.Vec3{0.667, 1, 0.667}
 )
 
 var np = mgl64.Vec2{} // np stands for "No Position" and it's basically the (0, 0) position, used when it doesn't matter
@@ -5606,65 +5608,111 @@ func (this *highlightedGoContent) SegmentToTextStyle(index uint32) *TextStyle {
 
 // ---
 
-type highlightedDiff struct {
-	leftSide bool
-	segments []highlightSegment
+func highlightedDiffFunc(leftContent, rightContent string, segments *[2][]highlightSegment, offsets [2]uint32) {
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(leftContent, rightContent, true)
 
-	DepNode2
+	for side := range *segments {
+		offset := offsets[side]
+
+		for _, diff := range diffs {
+			if side == 0 && diff.Type == -1 {
+				(*segments)[side] = append((*segments)[side], highlightSegment{offset: offset, color: darkRedColor})
+				offset += uint32(len(diff.Text))
+			}
+			if side == 1 && diff.Type == +1 {
+				(*segments)[side] = append((*segments)[side], highlightSegment{offset: offset, color: darkGreenColor})
+				offset += uint32(len(diff.Text))
+			}
+			if diff.Type == 0 {
+				switch side {
+				case 0:
+					(*segments)[side] = append((*segments)[side], highlightSegment{offset: offset, color: lightRedColor})
+				case 1:
+					(*segments)[side] = append((*segments)[side], highlightSegment{offset: offset, color: lightGreenColor})
+				}
+				offset += uint32(len(diff.Text))
+			}
+		}
+	}
 }
 
-func (this *highlightedDiff) NewIterator(offset uint32) HighlighterIterator {
+type highlightedDiffSide struct {
+	side int
+	*highlightedDiff
+}
+
+func (this *highlightedDiffSide) NewIterator(offset uint32) HighlighterIterator {
 	return NewHighlighterIterator(this, offset)
+}
+func (this *highlightedDiffSide) Segment(index uint32) highlightSegment {
+	return this.highlightedDiff.segment(index, this.side)
+}
+func (this *highlightedDiffSide) LenSegments() int {
+	return this.highlightedDiff.lenSegments(this.side)
+}
+func (this *highlightedDiffSide) SegmentToTextStyle(index uint32) *TextStyle {
+	return this.highlightedDiff.segmentToTextStyle(index, this.side)
+}
+
+type highlightedDiff struct {
+	segments [2][]highlightSegment
+
+	DepNode2
 }
 
 func (this *highlightedDiff) Update() {
 	left := this.GetSources()[0].(MultilineContentI)
 	right := this.GetSources()[1].(MultilineContentI)
 
-	this.segments = nil
-
 	dmp := diffmatchpatch.New()
 	diffs := dmp.DiffMain(left.Content(), right.Content(), true)
 
-	offset := uint32(0)
+	for side := range this.segments {
+		this.segments[side] = nil
 
-	for _, diff := range diffs {
-		if this.leftSide && diff.Type == -1 {
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: darkRedColor})
-			offset += uint32(len(diff.Text))
-		} else if !this.leftSide && diff.Type == +1 {
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: darkGreenColor})
-			offset += uint32(len(diff.Text))
-		} else if diff.Type == 0 {
-			this.segments = append(this.segments, highlightSegment{offset: offset})
-			offset += uint32(len(diff.Text))
+		offset := uint32(0)
+
+		for _, diff := range diffs {
+			if side == 0 && diff.Type == -1 {
+				this.segments[side] = append(this.segments[side], highlightSegment{offset: offset, color: mediumRedColor})
+				offset += uint32(len(diff.Text))
+			}
+			if side == 1 && diff.Type == +1 {
+				this.segments[side] = append(this.segments[side], highlightSegment{offset: offset, color: mediumGreenColor})
+				offset += uint32(len(diff.Text))
+			}
+			if diff.Type == 0 {
+				this.segments[side] = append(this.segments[side], highlightSegment{offset: offset})
+				offset += uint32(len(diff.Text))
+			}
 		}
-	}
 
-	// HACK: Fake last element.
-	if this.leftSide {
-		this.segments = append(this.segments, highlightSegment{offset: uint32(left.LenContent())})
-	} else {
-		this.segments = append(this.segments, highlightSegment{offset: uint32(right.LenContent())})
+		// HACK: Fake last element.
+		if side == 0 {
+			this.segments[side] = append(this.segments[side], highlightSegment{offset: uint32(left.LenContent())})
+		} else {
+			this.segments[side] = append(this.segments[side], highlightSegment{offset: uint32(right.LenContent())})
+		}
 	}
 }
 
-func (this *highlightedDiff) Segment(index uint32) highlightSegment {
+func (this *highlightedDiff) segment(index uint32, side int) highlightSegment {
 	if index < 0 {
 		//fmt.Println("warning: Segment < 0")
 		return highlightSegment{offset: 0}
-	} else if index >= uint32(len(this.segments)) {
+	} else if index >= uint32(len(this.segments[side])) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+		return highlightSegment{offset: uint32(this.segments[side][len(this.segments[side])-1].offset)}
 	} else {
-		return this.segments[index]
+		return this.segments[side][index]
 	}
 }
-func (this *highlightedDiff) LenSegments() int {
-	return len(this.segments)
+func (this *highlightedDiff) lenSegments(side int) int {
+	return len(this.segments[side])
 }
-func (this *highlightedDiff) SegmentToTextStyle(index uint32) *TextStyle {
-	color := this.Segment(index).color
+func (this *highlightedDiff) segmentToTextStyle(index uint32, side int) *TextStyle {
+	color := this.segment(index, side).color
 	colorPtr := &color
 	if color.ApproxEqual(mgl64.Vec3{}) {
 		colorPtr = nil
@@ -5825,63 +5873,100 @@ func (this *lineDiffHelper) Equal(i, j int) bool {
 }
 
 // Line-based differ.
-type lineDiff struct {
-	leftSide bool
-	segments []highlightSegment
-
-	DepNode2
+type lineDiffSide struct {
+	side int
+	*lineDiff
 }
 
-func (this *lineDiff) NewIterator(offset uint32) HighlighterIterator {
+func (this *lineDiffSide) NewIterator(offset uint32) HighlighterIterator {
 	return NewHighlighterIterator(this, offset)
+}
+func (this *lineDiffSide) Segment(index uint32) highlightSegment {
+	return this.lineDiff.segment(index, this.side)
+}
+func (this *lineDiffSide) LenSegments() int {
+	return this.lineDiff.lenSegments(this.side)
+}
+func (this *lineDiffSide) SegmentToTextStyle(index uint32) *TextStyle {
+	return this.lineDiff.segmentToTextStyle(index, this.side)
+}
+
+type lineDiff struct {
+	segments [2][]highlightSegment
+
+	DepNode2
 }
 
 func (this *lineDiff) Update() {
 	left := this.GetSources()[0].(MultilineContentI)
 	right := this.GetSources()[1].(MultilineContentI)
 
-	this.segments = nil
-
 	dmp := lineDiffHelper{left: left, right: right}
 	diffs := diff.Diff(left.LenLines(), right.LenLines(), &dmp)
 
-	// HACK: Fake first element.
-	this.segments = append(this.segments, highlightSegment{offset: 0})
+	for side := range this.segments {
+		this.segments[side] = nil
 
-	for _, diff := range diffs {
-		if !this.leftSide && diff.Ins > 0 {
-			beginOffset := right.Line(diff.B).Start
-			endOffset := right.Line(diff.B + diff.Ins).Start
-			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: darkGreenColor})
-			this.segments = append(this.segments, highlightSegment{offset: endOffset})
-		} else if this.leftSide && diff.Del > 0 {
-			beginOffset := left.Line((diff.A)).Start
-			endOffset := left.Line((diff.A + diff.Del)).Start
-			this.segments = append(this.segments, highlightSegment{offset: beginOffset, color: darkRedColor})
-			this.segments = append(this.segments, highlightSegment{offset: endOffset})
-		}
+		// HACK: Fake first element.
+		this.segments[side] = append(this.segments[side], highlightSegment{offset: 0})
 	}
 
-	// HACK: Fake last element.
-	this.segments = append(this.segments, highlightSegment{offset: uint32(500000000)}) // TODO, HACK
+	for _, diff := range diffs {
+		if diff.Del > 0 || diff.Ins > 0 {
+			beginOffsetLeft := left.Line((diff.A)).Start
+			endOffsetLeft := left.Line((diff.A + diff.Del)).Start
+			beginOffsetRight := right.Line(diff.B).Start
+			endOffsetRight := right.Line(diff.B + diff.Ins).Start
+
+			leftContent := left.Content()[beginOffsetLeft:endOffsetLeft]
+			rightContent := right.Content()[beginOffsetRight:endOffsetRight]
+
+			highlightedDiffFunc(leftContent, rightContent, &this.segments, [2]uint32{beginOffsetLeft, beginOffsetRight})
+
+			this.segments[0] = append(this.segments[0], highlightSegment{offset: endOffsetLeft})
+			this.segments[1] = append(this.segments[1], highlightSegment{offset: endOffsetRight})
+		} /* else {
+			for side := range this.segments {
+				if side == 0 && diff.Del > 0 {
+					beginOffset := left.Line((diff.A)).Start
+					endOffset := left.Line((diff.A + diff.Del)).Start
+
+					this.segments[side] = append(this.segments[side], highlightSegment{offset: beginOffset, color: darkRedColor})
+					this.segments[side] = append(this.segments[side], highlightSegment{offset: endOffset})
+				}
+				if side == 1 && diff.Ins > 0 {
+					beginOffset := right.Line(diff.B).Start
+					endOffset := right.Line(diff.B + diff.Ins).Start
+
+					this.segments[side] = append(this.segments[side], highlightSegment{offset: beginOffset, color: darkGreenColor})
+					this.segments[side] = append(this.segments[side], highlightSegment{offset: endOffset})
+				}
+			}
+		}*/
+	}
+
+	for side := range this.segments {
+		// HACK: Fake last element.
+		this.segments[side] = append(this.segments[side], highlightSegment{offset: uint32(500000000)}) // TODO, HACK
+	}
 }
 
-func (this *lineDiff) Segment(index uint32) highlightSegment {
+func (this *lineDiff) segment(index uint32, side int) highlightSegment {
 	if index < 0 {
 		//fmt.Println("warning: Segment < 0")
 		return highlightSegment{offset: 0}
-	} else if index >= uint32(len(this.segments)) {
+	} else if index >= uint32(len(this.segments[side])) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+		return highlightSegment{offset: uint32(this.segments[side][len(this.segments[side])-1].offset)}
 	} else {
-		return this.segments[index]
+		return this.segments[side][index]
 	}
 }
-func (this *lineDiff) LenSegments() int {
-	return len(this.segments)
+func (this *lineDiff) lenSegments(side int) int {
+	return len(this.segments[side])
 }
-func (this *lineDiff) SegmentToTextStyle(index uint32) *TextStyle {
-	color := this.Segment(index).color
+func (this *lineDiff) segmentToTextStyle(index uint32, side int) *TextStyle {
+	color := this.segment(index, side).color
 	colorPtr := &color
 	if color.ApproxEqual(mgl64.Vec3{}) {
 		colorPtr = nil
@@ -7689,25 +7774,18 @@ func main() {
 					box2 := editor
 					stateFunc := func() bool { return nextTool10Collapsible.state.State() } // This should only be visible when "git show HEAD" is expanded.
 
-					if true {
-						highlightedDiff1 := &highlightedDiff{leftSide: true}
-						highlightedDiff1.AddSources(box1.Content, box2.Content)
-						box1.DynamicHighlighters = append(box1.DynamicHighlighters, NewOptionalHighlighter(highlightedDiff1, stateFunc))
+					if false {
+						highlightedDiff := &highlightedDiff{}
+						highlightedDiff.AddSources(box1.Content, box2.Content)
 
-						// TODO: Avoid having two objects that do similar work, merge into one with two iterators
-						highlightedDiff2 := &highlightedDiff{}
-						highlightedDiff2.AddSources(box1.Content, box2.Content)
-						box2.DynamicHighlighters = append(box2.DynamicHighlighters, NewOptionalHighlighter(highlightedDiff2, stateFunc))
+						box1.DynamicHighlighters = append(box1.DynamicHighlighters, NewOptionalHighlighter(&highlightedDiffSide{highlightedDiff: highlightedDiff, side: 0}, stateFunc))
+						box2.DynamicHighlighters = append(box2.DynamicHighlighters, NewOptionalHighlighter(&highlightedDiffSide{highlightedDiff: highlightedDiff, side: 1}, stateFunc))
 					} else {
-						lineDiff1 := &lineDiff{leftSide: true}
-						lineDiff1.AddSources(box1.Content, box2.Content)
+						lineDiff := &lineDiff{}
+						lineDiff.AddSources(box1.Content, box2.Content)
 
-						// TODO: Avoid having two objects that do similar work, merge into one with two iterators
-						lineDiff2 := &lineDiff{}
-						lineDiff2.AddSources(box1.Content, box2.Content)
-
-						box1.DynamicHighlighters = append(box1.DynamicHighlighters, NewOptionalHighlighter(lineDiff1, stateFunc))
-						box2.DynamicHighlighters = append(box2.DynamicHighlighters, NewOptionalHighlighter(lineDiff2, stateFunc))
+						box1.DynamicHighlighters = append(box1.DynamicHighlighters, NewOptionalHighlighter(&lineDiffSide{lineDiff: lineDiff, side: 0}, stateFunc))
+						box2.DynamicHighlighters = append(box2.DynamicHighlighters, NewOptionalHighlighter(&lineDiffSide{lineDiff: lineDiff, side: 1}, stateFunc))
 					}
 				}
 			}
@@ -8624,7 +8702,8 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), ...)
 	}
 	gl.End()`), nil)
-			box2 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(`func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
+			box2 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(`
+func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	const TwoPi = math.Pi * 2
 
 	const x = 64
@@ -8640,24 +8719,17 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			widgets = append(widgets, NewFlowLayoutWidget(mgl64.Vec2{200, 250}, []Widgeter{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: HorizontalLayout}))
 
 			if false {
-				highlightedDiff1 := &highlightedDiff{leftSide: true}
-				highlightedDiff1.AddSources(box1.Content, box2.Content)
-				box1.HighlightersTest = append(box1.HighlightersTest, highlightedDiff1)
+				highlightedDiff := &highlightedDiff{}
+				highlightedDiff.AddSources(box1.Content, box2.Content)
 
-				// TODO: Avoid having two objects that do similar work, merge into one with two iterators
-				highlightedDiff2 := &highlightedDiff{}
-				highlightedDiff2.AddSources(box1.Content, box2.Content)
-				box2.HighlightersTest = append(box2.HighlightersTest, highlightedDiff2)
+				box1.HighlightersTest = append(box1.HighlightersTest, &highlightedDiffSide{highlightedDiff: highlightedDiff, side: 0})
+				box2.HighlightersTest = append(box2.HighlightersTest, &highlightedDiffSide{highlightedDiff: highlightedDiff, side: 1})
 			} else {
-				lineDiff1 := &lineDiff{leftSide: true}
-				lineDiff1.AddSources(box1.Content, box2.Content)
+				lineDiff := &lineDiff{}
+				lineDiff.AddSources(box1.Content, box2.Content)
 
-				// TODO: Avoid having two objects that do similar work, merge into one with two iterators
-				lineDiff2 := &lineDiff{}
-				lineDiff2.AddSources(box1.Content, box2.Content)
-
-				box1.HighlightersTest = append(box1.HighlightersTest, lineDiff1)
-				box2.HighlightersTest = append(box2.HighlightersTest, lineDiff2)
+				box1.HighlightersTest = append(box1.HighlightersTest, &lineDiffSide{lineDiff: lineDiff, side: 0})
+				box2.HighlightersTest = append(box2.HighlightersTest, &lineDiffSide{lineDiff: lineDiff, side: 1})
 			}
 		}
 
