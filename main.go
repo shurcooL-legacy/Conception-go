@@ -5625,12 +5625,7 @@ func highlightedDiffFunc(leftContent, rightContent string, segments *[2][]highli
 				offset += uint32(len(diff.Text))
 			}
 			if diff.Type == 0 {
-				switch side {
-				case 0:
-					(*segments)[side] = append((*segments)[side], highlightSegment{offset: offset, color: lightRedColor})
-				case 1:
-					(*segments)[side] = append((*segments)[side], highlightSegment{offset: offset, color: lightGreenColor})
-				}
+				(*segments)[side] = append((*segments)[side], highlightSegment{offset: offset})
 				offset += uint32(len(diff.Text))
 			}
 		}
@@ -5891,8 +5886,21 @@ func (this *lineDiffSide) SegmentToTextStyle(index uint32) *TextStyle {
 	return this.lineDiff.segmentToTextStyle(index, this.side)
 }
 
+func (this *lineDiffSide) LineBackgroundColor(lineIndex int) (BackgroundColor *mgl64.Vec3) {
+	if this.lineDiff.lines[this.side][lineIndex] {
+		switch this.side {
+		case 0:
+			return &lightRedColor
+		case 1:
+			return &lightGreenColor
+		}
+	}
+	return nil
+}
+
 type lineDiff struct {
 	segments [2][]highlightSegment
+	lines    [2][]bool // For LineBackgroundColor, true indicates the line with that index was modified (deleted or inserted).
 
 	DepNode2
 }
@@ -5910,6 +5918,8 @@ func (this *lineDiff) Update() {
 		// HACK: Fake first element.
 		this.segments[side] = append(this.segments[side], highlightSegment{offset: 0})
 	}
+	this.lines[0] = make([]bool, left.LenLines())
+	this.lines[1] = make([]bool, right.LenLines())
 
 	for _, diff := range diffs {
 		if diff.Del > 0 || diff.Ins > 0 {
@@ -5917,6 +5927,13 @@ func (this *lineDiff) Update() {
 			endOffsetLeft := left.Line((diff.A + diff.Del)).Start
 			beginOffsetRight := right.Line(diff.B).Start
 			endOffsetRight := right.Line(diff.B + diff.Ins).Start
+
+			for line := diff.A; line < diff.A+diff.Del; line++ {
+				this.lines[0][line] = true
+			}
+			for line := diff.B; line < diff.B+diff.Ins; line++ {
+				this.lines[1][line] = true
+			}
 
 			leftContent := left.Content()[beginOffsetLeft:endOffsetLeft]
 			rightContent := right.Content()[beginOffsetRight:endOffsetRight]
@@ -5974,6 +5991,28 @@ func (this *lineDiff) segmentToTextStyle(index uint32, side int) *TextStyle {
 	return &TextStyle{
 		BackgroundColor: &colorPtr,
 	}
+}
+
+// ---
+
+type LineHighlighter interface {
+	LineBackgroundColor(lineIndex int) (BackgroundColor *mgl64.Vec3)
+}
+
+type gitDiffLineHighlighter struct {
+	content MultilineContentI
+}
+
+func (this gitDiffLineHighlighter) LineBackgroundColor(lineIndex int) (BackgroundColor *mgl64.Vec3) {
+	if this.content.Line(lineIndex).Length > 0 {
+		switch lineFirstChar := this.content.Content()[this.content.Line(lineIndex).Start]; lineFirstChar {
+		case '+':
+			return &lightGreenColor
+		case '-':
+			return &lightRedColor
+		}
+	}
+	return nil
 }
 
 // ---
@@ -6115,7 +6154,7 @@ type TextBoxWidget struct {
 	DynamicHighlighters []interface {
 		Highlighter() Highlighter
 	}
-	LineHighlighter func(content MultilineContentI, lineIndex int) (BackgroundColor *mgl64.Vec3)
+	LineHighlighter LineHighlighter
 	PopupsTest      []Widgeter
 	DepsTest        []DepNode2I // Temporary solution until there's a better MultilineContentFunc.
 }
@@ -6378,7 +6417,7 @@ func (w *TextBoxWidget) Render() {
 		}
 
 		for lineIndex := beginLineIndex; lineIndex < endLineIndex; lineIndex++ {
-			if backgroundColor := w.LineHighlighter(w.Content, lineIndex); backgroundColor != nil {
+			if backgroundColor := w.LineHighlighter.LineBackgroundColor(lineIndex); backgroundColor != nil {
 				DrawBorderlessBox(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, mgl64.Vec2{w.size[0], fontHeight}, *backgroundColor)
 			}
 		}
@@ -7728,21 +7767,8 @@ func main() {
 			}
 			template.AddSources(folderListing)
 
-			lineHighlighter := func(content MultilineContentI, lineIndex int) (BackgroundColor *mgl64.Vec3) {
-				if content.Line(lineIndex).Length > 0 {
-					lineFirstChar := content.Content()[content.Line(lineIndex).Start]
-					switch lineFirstChar {
-					case '+':
-						return &lightGreenColor
-					case '-':
-						return &lightRedColor
-					}
-				}
-				return nil
-			}
-
 			gitDiff := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
-			gitDiff.LineHighlighter = lineHighlighter
+			gitDiff.LineHighlighter = gitDiffLineHighlighter{gitDiff.Content}
 			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff, "git diff")
 
 			// ---
@@ -8728,8 +8754,14 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				lineDiff := &lineDiff{}
 				lineDiff.AddSources(box1.Content, box2.Content)
 
-				box1.HighlightersTest = append(box1.HighlightersTest, &lineDiffSide{lineDiff: lineDiff, side: 0})
-				box2.HighlightersTest = append(box2.HighlightersTest, &lineDiffSide{lineDiff: lineDiff, side: 1})
+				lineDiffSide0 := &lineDiffSide{lineDiff: lineDiff, side: 0}
+				lineDiffSide1 := &lineDiffSide{lineDiff: lineDiff, side: 1}
+
+				box1.HighlightersTest = append(box1.HighlightersTest, lineDiffSide0)
+				box2.HighlightersTest = append(box2.HighlightersTest, lineDiffSide1)
+
+				box1.LineHighlighter = lineDiffSide0
+				box2.LineHighlighter = lineDiffSide1
 			}
 		}
 
