@@ -6154,9 +6154,10 @@ type TextBoxWidget struct {
 	DynamicHighlighters []interface {
 		Highlighter() Highlighter
 	}
-	LineHighlighter LineHighlighter
-	PopupsTest      []Widgeter
-	DepsTest        []DepNode2I // Temporary solution until there's a better MultilineContentFunc.
+	LineHighlighter        LineHighlighter
+	DynamicLineHighlighter func() LineHighlighter
+	PopupsTest             []Widgeter
+	DepsTest               []DepNode2I // Temporary solution until there's a better MultilineContentFunc.
 }
 
 type TextBoxWidgetValidChange struct {
@@ -6355,6 +6356,10 @@ func (w *TextBoxWidget) Render() {
 		if highlighter := dynamicHighlighter.Highlighter(); highlighter != nil {
 			MakeUpdated(highlighter)
 		}
+	}
+	// HACK: DynamicLineHighlighter currently simply overrides existing LineHighlighter.
+	if w.DynamicLineHighlighter != nil {
+		w.LineHighlighter = w.DynamicLineHighlighter()
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
@@ -7535,7 +7540,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if !sublimeMode && false {
 
@@ -7810,8 +7815,24 @@ func main() {
 						lineDiff := &lineDiff{}
 						lineDiff.AddSources(box1.Content, box2.Content)
 
-						box1.DynamicHighlighters = append(box1.DynamicHighlighters, NewOptionalHighlighter(&lineDiffSide{lineDiff: lineDiff, side: 0}, stateFunc))
-						box2.DynamicHighlighters = append(box2.DynamicHighlighters, NewOptionalHighlighter(&lineDiffSide{lineDiff: lineDiff, side: 1}, stateFunc))
+						lineDiffSide0 := &lineDiffSide{lineDiff: lineDiff, side: 0}
+						lineDiffSide1 := &lineDiffSide{lineDiff: lineDiff, side: 1}
+
+						box1.DynamicHighlighters = append(box1.DynamicHighlighters, NewOptionalHighlighter(lineDiffSide0, stateFunc))
+						box2.DynamicHighlighters = append(box2.DynamicHighlighters, NewOptionalHighlighter(lineDiffSide1, stateFunc))
+
+						box1.DynamicLineHighlighter = func() LineHighlighter {
+							if !stateFunc() {
+								return nil
+							}
+							return lineDiffSide0
+						}
+						box2.DynamicLineHighlighter = func() LineHighlighter {
+							if !stateFunc() {
+								return nil
+							}
+							return lineDiffSide1
+						}
 					}
 				}
 			}
