@@ -2046,7 +2046,7 @@ func (w *KatWidget) NotifyChange() {
 			redraw = true
 		}
 		if direction.Len() != 0 {
-			rotM := mgl64.Rotate2D(w.rotation)
+			rotM := mgl64.Rotate2D(mgl64.DegToRad(w.rotation))
 			direction = rotM.Mul2x1(direction)
 
 			w.target = w.pos.Add(direction.Normalize().Mul(speed * timePassed))
