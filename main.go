@@ -5923,8 +5923,8 @@ func (this *lineDiff) Update() {
 
 	for _, diff := range diffs {
 		if diff.Del > 0 || diff.Ins > 0 {
-			beginOffsetLeft := left.Line((diff.A)).Start
-			endOffsetLeft := left.Line((diff.A + diff.Del)).Start
+			beginOffsetLeft := left.Line(diff.A).Start
+			endOffsetLeft := left.Line(diff.A + diff.Del).Start
 			beginOffsetRight := right.Line(diff.B).Start
 			endOffsetRight := right.Line(diff.B + diff.Ins).Start
 
@@ -5945,8 +5945,8 @@ func (this *lineDiff) Update() {
 		} /* else {
 			for side := range this.segments {
 				if side == 0 && diff.Del > 0 {
-					beginOffset := left.Line((diff.A)).Start
-					endOffset := left.Line((diff.A + diff.Del)).Start
+					beginOffset := left.Line(diff.A).Start
+					endOffset := left.Line(diff.A + diff.Del).Start
 
 					this.segments[side] = append(this.segments[side], highlightSegment{offset: beginOffset, color: darkRedColor})
 					this.segments[side] = append(this.segments[side], highlightSegment{offset: endOffset})
@@ -5997,15 +5997,105 @@ func (this *lineDiff) segmentToTextStyle(index uint32, side int) *TextStyle {
 
 type LineHighlighter interface {
 	LineBackgroundColor(lineIndex int) (BackgroundColor *mgl64.Vec3)
+
+	DepNode2I
 }
 
-type gitDiffLineHighlighter struct {
-	content MultilineContentI
+type diffHighlighter struct {
+	segments []highlightSegment
+
+	DepNode2
 }
 
-func (this gitDiffLineHighlighter) LineBackgroundColor(lineIndex int) (BackgroundColor *mgl64.Vec3) {
-	if this.content.Line(lineIndex).Length > 0 {
-		switch lineFirstChar := this.content.Content()[this.content.Line(lineIndex).Start]; lineFirstChar {
+func (this *diffHighlighter) Update() {
+	content := this.GetSources()[0].(MultilineContentI)
+
+	this.segments = nil
+
+	// HACK: Fake first element.
+	this.segments = append(this.segments, highlightSegment{offset: 0})
+
+	lastDel, lastIns := -1, -1
+	for lineIndex := 0; lineIndex < content.LenLines(); lineIndex++ {
+		var lineFirstChar byte
+		if content.Line(lineIndex).Length > 0 {
+			lineFirstChar = content.Content()[content.Line(lineIndex).Start]
+		}
+		switch lineFirstChar {
+		case '+':
+			if lastIns == -1 {
+				lastIns = lineIndex
+			}
+		case '-':
+			if lastDel == -1 {
+				lastDel = lineIndex
+			}
+		default:
+			if lastDel != -1 && lastIns != -1 {
+				if lastDel == -1 {
+					lastDel = lastIns
+				} else if lastIns == -1 {
+					lastIns = lineIndex
+				}
+
+				beginOffsetLeft := content.Line(lastDel).Start
+				endOffsetLeft := content.Line(lastIns).Start
+				beginOffsetRight := content.Line(lastIns).Start
+				endOffsetRight := content.Line(lineIndex).Start
+
+				leftContent := content.Content()[beginOffsetLeft:endOffsetLeft]
+				rightContent := content.Content()[beginOffsetRight:endOffsetRight]
+
+				var sectionSegments [2][]highlightSegment
+				highlightedDiffFunc(leftContent, rightContent, &sectionSegments, [2]uint32{beginOffsetLeft, beginOffsetRight})
+
+				sectionSegments[0] = append(sectionSegments[0], highlightSegment{offset: endOffsetLeft})
+				sectionSegments[1] = append(sectionSegments[1], highlightSegment{offset: endOffsetRight})
+
+				this.segments = append(this.segments, sectionSegments[0]...)
+				this.segments = append(this.segments, sectionSegments[1]...)
+			}
+			lastDel, lastIns = -1, -1
+		}
+	}
+
+	// HACK: Fake last element.
+	this.segments = append(this.segments, highlightSegment{offset: uint32(500000000)}) // TODO, HACK
+}
+
+func (this *diffHighlighter) NewIterator(offset uint32) HighlighterIterator {
+	return NewHighlighterIterator(this, offset)
+}
+func (this *diffHighlighter) Segment(index uint32) highlightSegment {
+	if index < 0 {
+		//fmt.Println("warning: Segment < 0")
+		return highlightSegment{offset: 0}
+	} else if index >= uint32(len(this.segments)) {
+		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
+		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+	} else {
+		return this.segments[index]
+	}
+}
+func (this *diffHighlighter) LenSegments() int {
+	return len(this.segments)
+}
+func (this *diffHighlighter) SegmentToTextStyle(index uint32) *TextStyle {
+	color := this.Segment(index).color
+	colorPtr := &color
+	if color.ApproxEqual(mgl64.Vec3{}) {
+		colorPtr = nil
+	}
+	return &TextStyle{
+		BackgroundColor: &colorPtr,
+	}
+}
+
+func (this *diffHighlighter) LineBackgroundColor(lineIndex int) (BackgroundColor *mgl64.Vec3) {
+	content := this.GetSources()[0].(MultilineContentI)
+
+	if content.Line(lineIndex).Length > 0 {
+		switch lineFirstChar := content.Content()[content.Line(lineIndex).Start]; lineFirstChar {
 		case '+':
 			return &lightGreenColor
 		case '-':
@@ -6360,6 +6450,9 @@ func (w *TextBoxWidget) Render() {
 	// HACK: DynamicLineHighlighter currently simply overrides existing LineHighlighter.
 	if w.DynamicLineHighlighter != nil {
 		w.LineHighlighter = w.DynamicLineHighlighter()
+	}
+	if w.LineHighlighter != nil {
+		MakeUpdated(w.LineHighlighter)
 	}
 
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
@@ -7773,7 +7866,11 @@ func main() {
 			template.AddSources(folderListing)
 
 			gitDiff := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
-			gitDiff.LineHighlighter = gitDiffLineHighlighter{gitDiff.Content}
+			diffHighlighter := &diffHighlighter{}
+			diffHighlighter.AddSources(gitDiff.Content)
+			gitDiff.HighlightersTest = append(gitDiff.HighlightersTest, diffHighlighter)
+			gitDiff.LineHighlighter = diffHighlighter
+
 			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff, "git diff")
 
 			// ---
