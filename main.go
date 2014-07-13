@@ -7047,17 +7047,18 @@ func (this *Pointer) Render() {
 
 		const size float64 = fontHeight
 		gl.Color3d(1, 1, 1)
-		gl.Begin(gl.TRIANGLES)
+		gl.Begin(gl.TRIANGLE_FAN)
 		gl.Vertex2d(0, 0)
-		gl.Vertex2d(0, float64(size))
-		gl.Vertex2d(float64(size/math.Sqrt2), float64(size/math.Sqrt2))
+		gl.Vertex2d(0, size)
+		gl.Vertex2d(size*0.85*math.Sin(math.Pi/8), size*0.85*math.Cos(math.Pi/8))
+		gl.Vertex2d(size/math.Sqrt2, size/math.Sqrt2)
 		gl.End()
 		gl.Color3d(0, 0, 0)
 		gl.Begin(gl.LINES)
 		gl.Vertex2d(0, 0)
-		gl.Vertex2d(0, float64(size))
+		gl.Vertex2d(0, size)
 		gl.Vertex2d(0, 0)
-		gl.Vertex2d(float64(size/math.Sqrt2), float64(size/math.Sqrt2))
+		gl.Vertex2d(size/math.Sqrt2, size/math.Sqrt2)
 		gl.End()
 	}
 }
