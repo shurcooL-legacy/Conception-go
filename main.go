@@ -7045,8 +7045,14 @@ func (this *Pointer) Render() {
 		defer gl.PopMatrix()
 		gl.Translated(float64(float64(NearInt64(this.State.Axes[0]))+0.5), float64(float64(NearInt64(this.State.Axes[1]))+0.5), 0)
 
-		gl.Color3d(0, 0, 0)
 		const size float64 = fontHeight
+		gl.Color3d(1, 1, 1)
+		gl.Begin(gl.TRIANGLES)
+		gl.Vertex2d(0, 0)
+		gl.Vertex2d(0, float64(size))
+		gl.Vertex2d(float64(size/math.Sqrt2), float64(size/math.Sqrt2))
+		gl.End()
+		gl.Color3d(0, 0, 0)
 		gl.Begin(gl.LINES)
 		gl.Vertex2d(0, 0)
 		gl.Vertex2d(0, float64(size))
