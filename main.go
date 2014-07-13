@@ -6031,16 +6031,16 @@ func (this *diffHighlighter) Update() {
 				lastDel = lineIndex
 			}
 		default:
-			if lastDel != -1 && lastIns != -1 {
+			if lastDel != -1 && lastIns != -1 && lastDel+1 == lastIns && lastIns+1 == lineIndex {
 				if lastDel == -1 {
 					lastDel = lastIns
 				} else if lastIns == -1 {
 					lastIns = lineIndex
 				}
 
-				beginOffsetLeft := content.Line(lastDel).Start
+				beginOffsetLeft := content.Line(lastDel).Start + 1
 				endOffsetLeft := content.Line(lastIns).Start
-				beginOffsetRight := content.Line(lastIns).Start
+				beginOffsetRight := content.Line(lastIns).Start + 1
 				endOffsetRight := content.Line(lineIndex).Start
 
 				leftContent := content.Content()[beginOffsetLeft:endOffsetLeft]
