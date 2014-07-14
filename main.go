@@ -6031,20 +6031,28 @@ func (this *diffHighlighter) Update() {
 				lastDel = lineIndex
 			}
 		default:
-			if lastDel != -1 && lastIns != -1 && lastDel+1 == lastIns && lastIns+1 == lineIndex {
+			if lastDel != -1 || lastIns != -1 {
 				if lastDel == -1 {
 					lastDel = lastIns
 				} else if lastIns == -1 {
 					lastIns = lineIndex
 				}
 
-				beginOffsetLeft := content.Line(lastDel).Start + 1
+				beginOffsetLeft := content.Line(lastDel).Start
 				endOffsetLeft := content.Line(lastIns).Start
-				beginOffsetRight := content.Line(lastIns).Start + 1
+				beginOffsetRight := content.Line(lastIns).Start
 				endOffsetRight := content.Line(lineIndex).Start
 
-				leftContent := content.Content()[beginOffsetLeft:endOffsetLeft]
-				rightContent := content.Content()[beginOffsetRight:endOffsetRight]
+				// This is needed to filter out the "-" and "+" at the beginning of each line from being highlighted.
+				// TODO: Still not completely filtered out.
+				leftContent := ""
+				for line := lastDel; line < lastIns; line++ {
+					leftContent += "\x00" + content.Content()[content.Line(line).Start+1:content.Line(line).End()] + "\n"
+				}
+				rightContent := ""
+				for line := lastIns; line < lineIndex; line++ {
+					rightContent += "\x00" + content.Content()[content.Line(line).Start+1:content.Line(line).End()] + "\n"
+				}
 
 				var sectionSegments [2][]highlightSegment
 				highlightedDiffFunc(leftContent, rightContent, &sectionSegments, [2]uint32{beginOffsetLeft, beginOffsetRight})
