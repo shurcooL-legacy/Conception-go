@@ -147,6 +147,7 @@ var globalWindow *glfw.Window
 var keepUpdatedTEST = []DepNode2I{}
 var globalTypeCheckedPackage *typeCheckedPackage
 var globalGoSymbols *goSymbolsB
+var con2RunBinPath = filepath.Join(os.TempDir(), "Conception-go", "Con2RunBin")
 
 func CheckGLError() {
 	errorCode := gl.GetError()
@@ -8022,7 +8023,7 @@ func main() {
 					template3.Template = NewPipeTemplate(pipe.Script(
 						pipe.Println(fmt.Sprintf("Building %q.", goPackage.Bpkg.ImportPath)),
 						pipe.Line(
-							pipe_util.ExecCombinedOutput("go", "build", "-o", "./Con2RunBin", goPackage.Bpkg.ImportPath),
+							pipe_util.ExecCombinedOutput("go", "build", "-o", con2RunBinPath, goPackage.Bpkg.ImportPath),
 							pipe.TaskFunc(func(s *pipe.State) error {
 								var b bytes.Buffer
 								b.ReadFrom(s.Stdin)
@@ -8032,7 +8033,7 @@ func main() {
 							}),
 						),
 						pipe.Println("Running."),
-						pipe.Exec("./Con2RunBin"),
+						pipe.Exec(con2RunBinPath),
 						pipe.Println("Done."),
 					))
 					template3.Template.Dir = goPackage.Bpkg.Dir
@@ -9050,7 +9051,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	}
 
 	_ = widget.Close()
-	os.Remove("./Con2RunBin") // TODO: Generalize this
+	os.Remove(con2RunBinPath) // TODO: Generalize this
 
 	fmt.Println("Graceful exit.")
 }
