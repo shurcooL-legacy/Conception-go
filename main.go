@@ -8035,7 +8035,7 @@ func main() {
 						pipe.Exec("./Con2RunBin"),
 						pipe.Println("Done."),
 					))
-					//template3.Template.Dir = ""
+					template3.Template.Dir = goPackage.Bpkg.Dir
 				}
 			}
 			template3.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
