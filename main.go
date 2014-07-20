@@ -7062,11 +7062,14 @@ func (this *Pointer) Render() {
 		gl.Vertex2d(size*0.85*math.Sin(math.Pi/8), size*0.85*math.Cos(math.Pi/8))
 		gl.Vertex2d(size/math.Sqrt2, size/math.Sqrt2)
 		gl.End()
+
+		gl.Begin(gl.LINE_LOOP)
 		gl.Color3d(0, 0, 0)
-		gl.Begin(gl.LINES)
 		gl.Vertex2d(0, 0)
 		gl.Vertex2d(0, size)
-		gl.Vertex2d(0, 0)
+		gl.Color3d(0.75, 0.75, 0.75)
+		gl.Vertex2d(size*0.85*math.Sin(math.Pi/8), size*0.85*math.Cos(math.Pi/8))
+		gl.Color3d(0, 0, 0)
 		gl.Vertex2d(size/math.Sqrt2, size/math.Sqrt2)
 		gl.End()
 	}
