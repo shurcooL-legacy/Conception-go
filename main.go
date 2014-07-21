@@ -1769,8 +1769,7 @@ func DrawBorderlessGradientBox(pos, size mgl64.Vec2, topColor, bottomColor mgl64
 }
 
 func DrawBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
-	gl.Color3dv((*float64)(&borderColor[0]))
-	gl.Rectd(float64(pos[0]-1), float64(pos[1]-1), float64(pos.Add(size)[0]+1), float64(pos.Add(size)[1]+1))
+	DrawBorderlessBox(pos.Add(mgl64.Vec2{-1, -1}), size.Add(mgl64.Vec2{2, 2}), borderColor)
 	DrawBorderlessBox(pos, size, backgroundColor)
 }
 func DrawNBox(pos, size mgl64.Vec2) {
