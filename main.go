@@ -79,6 +79,7 @@ import (
 	"github.com/shurcooL/go/exp/12"
 	"github.com/shurcooL/go/exp/13"
 	"github.com/shurcooL/go/exp/14"
+	"github.com/shurcooL/go/github_flavored_markdown"
 	"github.com/shurcooL/go/pipe_util"
 	"github.com/shurcooL/go/u/u1"
 	"github.com/shurcooL/go/u/u5"
@@ -7394,6 +7395,7 @@ func initHttpHandlers() {
 		}()
 		outChan := GoReduce(inChan, 8, reduceFunc)
 
+		var summary = bytes.NewBufferString("# GOPATH diff Summary\n\n")
 		var buf = new(bytes.Buffer)
 
 		for out := range outChan {
@@ -7402,20 +7404,23 @@ func initHttpHandlers() {
 			goPackage := repo.goPackages[0]
 
 			if goPackage.Dir.Repo.VcsLocal.Status != "" {
-				fmt.Fprint(buf, "### "+GetRepoImportPathPattern(repo.rootPath, goPackage.Bpkg.SrcRoot)+"\n\n")
+				repoImportPathPattern := GetRepoImportPathPattern(repo.rootPath, goPackage.Bpkg.SrcRoot)
+				fmt.Fprintf(summary, "- [%s](%s)\n", repoImportPathPattern, github_flavored_markdown.HeaderLink(repoImportPathPattern))
+				fmt.Fprint(buf, "### "+repoImportPathPattern+"\n\n")
 				fmt.Fprint(buf, "```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n\n")
 				if !short {
 					fmt.Fprint(buf, "```diff\n"+u6.GoPackageWorkingDiff(goPackage)+"```\n\n")
 				}
 			}
 		}
+		fmt.Fprint(summary, "\n")
 		if buf.Len() == 0 {
 			fmt.Fprint(buf, "### working directory clean (across GOPATH workspaces)")
 		}
 
 		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
 
-		return buf.Bytes()
+		return append(summary.Bytes(), buf.Bytes()...)
 	}))
 	http.Handle("/inline/", http.StripPrefix("/inline", MarkdownHandlerFunc(func(req *http.Request) []byte {
 		importPath := req.URL.Path[1:]
