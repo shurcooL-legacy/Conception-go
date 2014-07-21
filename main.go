@@ -7311,17 +7311,10 @@ func initHttpHandlers() {
 				b += "Remote: " + goPackage.Dir.Repo.VcsRemote.RemoteRev + "\n"
 				b += "```\n"
 
-				// TODO: Reuse u6.GoPackageWorkingDiff.
 				// git diff
-				if goPackage.Dir.Repo.VcsLocal.Status != "" {
-					if goPackage.Dir.Repo.Vcs.Type() == vcs.Git {
-						cmd := exec.Command("git", "diff", "--no-ext-diff")
-						cmd.Dir = goPackage.Bpkg.Dir
-						if outputBytes, err := cmd.CombinedOutput(); err == nil {
-							b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
-							b += "\n```diff\n" + string(outputBytes) + "\n```\n"
-						}
-					}
+				if workingDiff := u6.GoPackageWorkingDiff(goPackage); workingDiff != "" {
+					b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
+					b += "\n```diff\n" + workingDiff + "\n```\n"
 				}
 			}
 
