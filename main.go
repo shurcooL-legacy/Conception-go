@@ -7649,7 +7649,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if !sublimeMode && false {
 
@@ -7811,6 +7811,35 @@ func main() {
 			})
 			widgets = append(widgets, dumpButton)
 		}
+
+	} else if !sublimeMode {
+
+		editor := NewTextBoxWidgetExternalContent(mgl64.Vec2{0, 200}, NewMultilineContentString(`package main
+
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+
+	"github.com/shurcooL/markdownfmt/markdown"
+)
+
+func main() {
+	input, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		panic(err)
+	}
+
+	output, err := markdown.Process("", input, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Print(string(output))
+}
+`), &TextBoxWidgetOptions{PopupTest: true, FindPanel: true})
+
+		widgets = append(widgets, editor)
 
 	} else if sublimeMode {
 
