@@ -6116,13 +6116,38 @@ func (this *diffHighlighter) LineBackgroundColor(lineIndex int) (BackgroundColor
 
 // ---
 
-func NewFindPanel(pos mgl64.Vec2) *TextBoxWidget {
-	/*return NewFlowLayoutWidget(pos, []Widgeter{
-		NewSpacerWidget(np, NewTextBoxWidget(np)),
+type FindPanel struct {
+	FindBox *TextBoxWidget
+
+	Widgeter
+}
+
+func NewFindPanel(pos mgl64.Vec2, findResults *FindResults) *FindPanel {
+	findBox := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
+
+	numResultsStringer := &DepStringerFunc{}
+	numResultsStringer.UpdateFunc = func(this DepNode2I) {
+		findResults := this.GetSources()[0].(*FindResults)
+		numResultsStringer.content = fmt.Sprintf("%d matches", findResults.NumResults())
+	}
+	numResultsStringer.AddSources(findResults)
+
+	findPanelWidget := NewFlowLayoutWidget(pos, []Widgeter{
+		NewSpacerWidget(np, findBox),
+		NewSpacerWidget(np, NewStringerWidget(np, numResultsStringer)),
 		NewSpacerWidget(np, NewButtonWidget(np, nil)),
 		NewSpacerWidget(np, NewButtonWidget(np, nil)),
-	}, nil)*/
-	return NewTextBoxWidget(pos)
+	}, nil)
+
+	return &FindPanel{
+		FindBox:  findBox,
+		Widgeter: findPanelWidget,
+	}
+}
+
+func (this *FindPanel) SetKeyboardFocus() {
+	// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+	keyboardPointer.OriginMapping = []Widgeter{this.FindBox}
 }
 
 // ---
@@ -6153,16 +6178,26 @@ func (this *FindResults) Update() {
 	if findTarget != "" {
 		var offset uint32
 		nonresults := strings.Split(content, findTarget)
-		for _, nonresult := range nonresults {
-			offset += uint32(len(nonresult))
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{1, 1, 1}})
-			offset += uint32(len(findTarget))
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0, 0}})
+		if len(nonresults) > 1 {
+			for _, nonresult := range nonresults {
+				offset += uint32(len(nonresult))
+				this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{1, 1, 1}})
+				offset += uint32(len(findTarget))
+				this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0, 0}})
+			}
 		}
 	}
 
 	// HACK: Fake last element.
 	this.segments = append(this.segments, highlightSegment{offset: uint32(len(content))})
+}
+
+// NumResults returns current number of find results.
+func (this *FindResults) NumResults() int {
+	if len(this.segments) <= 2 {
+		return 0
+	}
+	return len(this.segments)/2 - 2
 }
 
 func (this *FindResults) NewIterator(offset uint32) HighlighterIterator {
@@ -6239,7 +6274,7 @@ type TextBoxWidget struct {
 	layoutDepNode2 DepNode2Func
 	scrollToCaret  DepNode2Func // TODO: DepNode2Event?
 
-	findPanel            *TextBoxWidget
+	findPanel            *FindPanel
 	findResults          *FindResults
 	wholeWordHighlighter *WholeWordHighlighter
 
@@ -6265,7 +6300,7 @@ type TextBoxWidgetValidChange struct {
 }
 
 type TextBoxWidgetOptions struct {
-	SingleLine bool // TODO
+	SingleLine bool
 	Private    bool
 	PopupTest  bool
 	ValidFunc  func(MultilineContentI) bool
@@ -6318,13 +6353,12 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 	}
 
 	if w.options.FindPanel {
-		w.findPanel = NewFindPanel(mgl64.Vec2{200, 800})
-
 		w.wholeWordHighlighter = &WholeWordHighlighter{}
 		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition, &w.layoutDepNode2) // layoutDepNode2 is needed to ensure caret position is kept within bounds as a prerequisite.
 
 		w.findResults = &FindResults{Owner: w}
-		w.findResults.AddSources(w.Content, w.findPanel.Content, w.wholeWordHighlighter)
+		w.findPanel = NewFindPanel(mgl64.Vec2{0, 0}, w.findResults) // TODO: Make it appear on bottom.
+		w.findResults.AddSources(w.Content, w.findPanel.FindBox.Content, w.wholeWordHighlighter)
 	}
 
 	return w
@@ -6366,7 +6400,7 @@ func (w *TextBoxWidget) RestoreView(view TextBoxScrollPaneView) {
 
 func (w *TextBoxWidget) isFindPanelVisible() bool {
 	for _, widget := range w.PopupsTest {
-		if widget, ok := widget.(*TextBoxWidget); ok && widget == w.findPanel {
+		if findPanel, ok := widget.(*FindPanel); ok && findPanel == w.findPanel {
 			return true
 		}
 	}
@@ -6910,10 +6944,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 				popupTest.ExtensionsTest = append(popupTest.ExtensionsTest, closeOnEscape)
 
-				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-				popupTest.SetKeyboardFocus()
-
 				w.PopupsTest = append(w.PopupsTest, popupTest)
+
+				popupTest.SetKeyboardFocus()
 			}
 		// Find panel.
 		case glfw.KeyF:
@@ -6957,22 +6990,27 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 									// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 									keyboardPointer.OriginMapping = originalMapping
+
+								// HACK: I should make it so Cmd+F triggers the parent's Cmd+F handler, instead of faking it here...
+								case glfw.KeyF:
+									if inputEvent.ModifierKey == glfw.ModSuper {
+										w.findPanel.FindBox.caretPosition.SelectAll()
+									}
 								}
 							}
 						},
 					}
-					popupTest.ExtensionsTest = []Widgeter{closeOnEscape} // HACK: Since I'm reusing an existing object, I need to update its extension rather than add new one. But doing it this way effectively prevents any other extensions to be added elsewhere, etc.
+					w.findPanel.FindBox.ExtensionsTest = []Widgeter{closeOnEscape} // HACK: Since I'm reusing an existing object, I need to update its extension rather than add new one. But doing it this way effectively prevents any other extensions to be added elsewhere, etc. Number of times I was bitten by this hack so far: 1.
 
 					w.PopupsTest = append(w.PopupsTest, popupTest)
 				}
 
-				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-				keyboardPointer.OriginMapping = []Widgeter{popupTest}
+				popupTest.SetKeyboardFocus()
 
 				if w.caretPosition.anySelection() {
-					SetViewGroup(w.findPanel.Content, w.caretPosition.GetSelectionContent())
+					SetViewGroup(w.findPanel.FindBox.Content, w.caretPosition.GetSelectionContent())
 				}
-				w.findPanel.caretPosition.SelectAll()
+				w.findPanel.FindBox.caretPosition.SelectAll()
 			}
 		case glfw.KeyEscape:
 			// Close the last popup, if any.
