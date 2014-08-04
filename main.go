@@ -6122,15 +6122,21 @@ type FindPanel struct {
 	Widgeter
 }
 
-func NewFindPanel(pos mgl64.Vec2, findResults *FindResults) *FindPanel {
+func NewFindPanel(pos mgl64.Vec2, findResults *FindResults, caretPosition *CaretPosition) *FindPanel {
 	findBox := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
 
 	numResultsStringer := &DepStringerFunc{}
 	numResultsStringer.UpdateFunc = func(this DepNode2I) {
 		findResults := this.GetSources()[0].(*FindResults)
-		numResultsStringer.content = fmt.Sprintf("%d matches", findResults.NumResults())
+		caretPosition := this.GetSources()[1].(*CaretPosition)
+
+		numResultsStringer.content = ""
+		if index, match := findResults.MatchesResult(caretPosition.SelectionRange()); match {
+			numResultsStringer.content += fmt.Sprintf("%d of ", index+1)
+		}
+		numResultsStringer.content += fmt.Sprintf("%d matches", findResults.NumResults())
 	}
-	numResultsStringer.AddSources(findResults)
+	numResultsStringer.AddSources(findResults, caretPosition)
 
 	findPanelWidget := NewFlowLayoutWidget(pos, []Widgeter{
 		NewSpacerWidget(np, findBox),
@@ -6179,7 +6185,7 @@ func (this *FindResults) Update() {
 		var offset uint32
 		nonresults := strings.Split(content, findTarget)
 		if len(nonresults) > 1 {
-			for _, nonresult := range nonresults {
+			for _, nonresult := range nonresults[:len(nonresults)-1] {
 				offset += uint32(len(nonresult))
 				this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{1, 1, 1}})
 				offset += uint32(len(findTarget))
@@ -6197,7 +6203,17 @@ func (this *FindResults) NumResults() int {
 	if len(this.segments) <= 2 {
 		return 0
 	}
-	return len(this.segments)/2 - 2
+	return (len(this.segments) - 2) / 2
+}
+
+// MatchesResult returns true and index of result matched to the given start and end content index.
+func (this *FindResults) MatchesResult(start uint32, end uint32) (index int, match bool) {
+	for ; index < this.NumResults(); index++ {
+		if start == this.segments[1+2*index].offset && end == this.segments[1+2*index+1].offset {
+			return index, true
+		}
+	}
+	return index, false
 }
 
 func (this *FindResults) NewIterator(offset uint32) HighlighterIterator {
@@ -6357,7 +6373,7 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition, &w.layoutDepNode2) // layoutDepNode2 is needed to ensure caret position is kept within bounds as a prerequisite.
 
 		w.findResults = &FindResults{Owner: w}
-		w.findPanel = NewFindPanel(mgl64.Vec2{0, 0}, w.findResults) // TODO: Make it appear on bottom.
+		w.findPanel = NewFindPanel(mgl64.Vec2{0, 0}, w.findResults, w.caretPosition) // TODO: Make it appear on bottom instead of (0, 0) top left corner.
 		w.findResults.AddSources(w.Content, w.findPanel.FindBox.Content, w.wholeWordHighlighter)
 	}
 
