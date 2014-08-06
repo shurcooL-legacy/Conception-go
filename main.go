@@ -6208,12 +6208,31 @@ func (this *FindResults) NumResults() int {
 
 // MatchesResult returns true and index of result matched to the given start and end content index.
 func (this *FindResults) MatchesResult(start uint32, end uint32) (index int, match bool) {
+	// TODO: Should use binary search to optimize.
 	for ; index < this.NumResults(); index++ {
 		if start == this.segments[1+2*index].offset && end == this.segments[1+2*index+1].offset {
 			return index, true
 		}
 	}
 	return index, false
+}
+
+// TODO: Use a named const for direction or something to indicate it can only be +1 or -1.
+func (this *FindResults) NextResult(start uint32, end uint32, direction int) (nextStart uint32, nextEnd uint32) {
+	// TODO: Should use binary search to optimize.
+	for index := 0; index < this.NumResults(); index++ {
+		if start == this.segments[1+2*index].offset && end == this.segments[1+2*index+1].offset {
+			index += direction
+			if index < 0 {
+				index = this.NumResults() - 1
+			} else if index >= this.NumResults() {
+				index = 0
+			}
+			return this.segments[1+2*index].offset, this.segments[1+2*index+1].offset
+		}
+	}
+	// TOOD: Handle initial selection...
+	panic(0)
 }
 
 func (this *FindResults) NewIterator(offset uint32) HighlighterIterator {
@@ -6380,14 +6399,38 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 	return w
 }
 
-func (w *TextBoxWidget) CenterOnCaretPosition(caretPosition uint32) {
-	w.caretPosition.TrySet(caretPosition)
-
+// TOOD: Improve horizontal centering.
+func (w *TextBoxWidget) CenterOnCaretPosition() {
 	// HACK: This kinda conflicts/overlaps with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
 	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
 		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
 
 		scrollPane.CenterOnArea(mgl64.Vec2{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mgl64.Vec2{0, fontHeight})
+	}
+}
+
+// TOOD: Improve horizontal centering.
+func (w *TextBoxWidget) CenterOnCaretPositionIfOffscreen() {
+	// HACK: This kinda conflicts/overlaps with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
+		expandedCaretPosition, caretLine := w.caretPosition.caretPosition.ExpandedPosition()
+
+		// Check for visible lines.
+		// TODO: Generalize this.
+		const debugSmallerViewport = fontHeight
+		beginLineIndex, endLineIndex := 0, w.Content.LenLines()
+		if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+			beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
+		}
+		_, height := globalWindow.GetSize() // HACK: Should be some viewport
+		height -= debugSmallerViewport
+		if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
+			endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
+		}
+
+		if int(caretLine) <= beginLineIndex || int(caretLine) >= endLineIndex {
+			scrollPane.CenterOnArea(mgl64.Vec2{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mgl64.Vec2{0, fontHeight})
+		}
 	}
 }
 
@@ -6914,7 +6957,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 									// TODO: There's a race condition here, to do the thing below I need to have finished changing the file, but
 									//       that currently reloads ASTs, etc. causing crashes sometimes depending on order of file ASTs being processed.
 
-									w.CenterOnCaretPosition(uint32(file.Offset(declNode.Pos())))
+									w.caretPosition.TrySet(uint32(file.Offset(declNode.Pos())))
+									w.CenterOnCaretPosition()
 								}
 							}
 						}
@@ -7012,6 +7056,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 									if inputEvent.ModifierKey == glfw.ModSuper {
 										w.findPanel.FindBox.caretPosition.SelectAll()
 									}
+								// HACK: I should make it so Cmd+G triggers the parent's Cmd+G handler, instead of faking it here...
+								case glfw.KeyG:
+									w.ProcessEvent(inputEvent)
 								}
 							}
 						},
@@ -7027,6 +7074,24 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					SetViewGroup(w.findPanel.FindBox.Content, w.caretPosition.GetSelectionContent())
 				}
 				w.findPanel.FindBox.caretPosition.SelectAll()
+			}
+		case glfw.KeyG:
+			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
+				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
+				if !(w.options.PopupTest && w.options.FindPanel) {
+					break
+				}
+
+				direction := 1
+				if shift := inputEvent.ModifierKey&glfw.ModShift != 0; shift {
+					direction = -1
+				}
+
+				selStart, selEnd := w.caretPosition.SelectionRange()
+				start, end := w.findResults.NextResult(selStart, selEnd, direction)
+				w.caretPosition.TrySet(start)
+				w.caretPosition.caretPosition.willMoveH(int32(end - start))
+				w.CenterOnCaretPositionIfOffscreen()
 			}
 		case glfw.KeyEscape:
 			// Close the last popup, if any.
@@ -8173,7 +8238,8 @@ func main() {
 											if file := typeCheckedPackage.fset.File(obj.Pos()); file != nil {
 												// TODO: Change folderListing selection if it's in a different file
 
-												editor.CenterOnCaretPosition(uint32(file.Offset(obj.Pos())))
+												editor.caretPosition.TrySet(uint32(file.Offset(obj.Pos())))
+												editor.CenterOnCaretPosition()
 											}
 										}
 									}
@@ -8216,7 +8282,8 @@ func main() {
 							// TODO: There's a race condition here, to do the thing below I need to have finished changing the file, but
 							//       that currently reloads ASTs, etc. causing crashes sometimes depending on order of file ASTs being processed.
 
-							editor.CenterOnCaretPosition(uint32(file.Offset(declNode.Pos())))
+							editor.caretPosition.TrySet(uint32(file.Offset(declNode.Pos())))
+							editor.CenterOnCaretPosition()
 						}
 					}
 				}
