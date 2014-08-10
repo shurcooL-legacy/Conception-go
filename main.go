@@ -6428,7 +6428,7 @@ func (w *TextBoxWidget) CenterOnCaretPositionIfOffscreen() {
 			endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
 		}
 
-		if int(caretLine) <= beginLineIndex || int(caretLine) >= endLineIndex {
+		if int(caretLine) < beginLineIndex || int(caretLine) >= endLineIndex {
 			scrollPane.CenterOnArea(mgl64.Vec2{float64(expandedCaretPosition * fontWidth), float64(caretLine * fontHeight)}, mgl64.Vec2{0, fontHeight})
 		}
 	}
@@ -6601,21 +6601,21 @@ func (w *TextBoxWidget) Render() {
 		}
 	}
 
+	// Render only visible lines.
+	// TODO: Generalize this.
+	const debugSmallerViewport = fontHeight
+	beginLineIndex, endLineIndex := 0, w.Content.LenLines()
+	if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
+		beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
+	}
+	_, height := globalWindow.GetSize() // HACK: Should be some viewport
+	height -= debugSmallerViewport
+	if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
+		endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
+	}
+
 	// Line Highlighter
 	if w.LineHighlighter != nil {
-		// Render only visible lines.
-		// TODO: Generalize this.
-		const debugSmallerViewport = fontHeight
-		beginLineIndex, endLineIndex := 0, w.Content.LenLines()
-		if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
-			beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
-		}
-		_, height := globalWindow.GetSize() // HACK: Should be some viewport
-		height -= debugSmallerViewport
-		if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
-			endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
-		}
-
 		for lineIndex := beginLineIndex; lineIndex < endLineIndex; lineIndex++ {
 			if backgroundColor := w.LineHighlighter.LineBackgroundColor(lineIndex); backgroundColor != nil {
 				DrawBorderlessBox(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, mgl64.Vec2{w.size[0], fontHeight}, *backgroundColor)
@@ -6639,19 +6639,6 @@ func (w *TextBoxWidget) Render() {
 	{
 		gl.Color3d(0, 0, 0)
 		if !w.options.Private {
-			// Render only visible lines.
-			// TODO: Generalize this.
-			const debugSmallerViewport = fontHeight
-			beginLineIndex, endLineIndex := 0, w.Content.LenLines()
-			if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
-				beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
-			}
-			_, height := globalWindow.GetSize() // HACK: Should be some viewport
-			height -= debugSmallerViewport
-			if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
-				endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
-			}
-
 			hlIters := []HighlighterIterator{}
 			for _, highlighter := range w.HighlightersTest {
 				hlIters = append(hlIters, highlighter.NewIterator(w.Content.Line(beginLineIndex).Start))
@@ -6701,11 +6688,15 @@ func (w *TextBoxWidget) Render() {
 		}
 	}
 
-	// Go Errors
+	// Display Go Errors via line highlighting.
 	for _, uri := range w.Content.GetAllUris() {
 		if _, ok := goCompileErrorsManagerTest.All[uri]; ok {
 			glt := NewOpenGlStream(np)
 			for lineIndex, messages := range goCompileErrorsManagerTest.All[uri] {
+				if lineIndex < beginLineIndex || lineIndex >= endLineIndex {
+					continue // Skip lines that are offscreen.
+				}
+
 				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Line(lineIndex).Start:w.Content.Line(lineIndex).End()])
 				for sameLineIndex, message := range messages {
 					pos := w.pos.Add(mgl64.Vec2{fontWidth * float64(expandedLineLength+1), fontHeight * float64(lineIndex+sameLineIndex)})
