@@ -251,7 +251,7 @@ func (o *OpenGlStream) PrintLine(s string) {
 	if o.BorderColor != nil {
 		gl.PushAttrib(gl.CURRENT_BIT)
 
-		expandedLineLength := ExpandedLength(s)
+		expandedLineLength := ExpandedLength(s, o.advance)
 
 		backgroundColor := nearlyWhiteColor
 		if o.BackgroundColor != nil {
@@ -1378,7 +1378,7 @@ func (this *GoCompileErrorsTest) Update() {
 	}
 
 	source := this.DepNode2.GetSources()[0].(MultilineContentI)
-	outChan := GoReduceLinesFromReader(NewContentReader(source), 4, reduceFunc)
+	outChan := GoReduceLinesFromReader(NewContentReader(source), 4, reduceFunc) // TODO: Preserve order (for error messages on same line) by using an order preserving version of GoReduce...
 	//outChan := GoReduceLinesFromReader(NewContentReader(this.DepNode2.Sources[0].(MultilineContentI)), 4, reduceFunc)
 
 	this.Out = nil
@@ -4312,16 +4312,16 @@ func setupInternals3(pos mgl64.Vec2, titleString string, a reflect.Value) Widget
 
 // ---
 
-func ExpandedLength(s string) (expandedLineLength uint32) {
+func ExpandedLength(s string, currentAdvance uint32) (expandedLineLength uint32) {
 	segments := strings.Split(s, "\t")
-	var advance uint32
+	var advance uint32 = currentAdvance
 	for segmentIndex, segment := range segments {
 		advance += uint32(len(segment))
 		if segmentIndex != len(segments)-1 {
 			advance += 4 - (advance % 4)
 		}
 	}
-	return advance
+	return advance - currentAdvance
 }
 
 func ExpandedToLogical(s string, expanded uint32) uint32 {
@@ -4597,7 +4597,7 @@ func (cp *caretPositionInternal) TrySet(position uint32) {
 // ExpandedPosition returns logical character units.
 // Multiply by (fontWidth, fontHeight) to get physical coords.
 func (cp *caretPositionInternal) ExpandedPosition() (x uint32, y uint32) {
-	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(cp.lineIndex).Start : cp.w.Line(cp.lineIndex).Start+cp.positionWithinLine])
+	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(cp.lineIndex).Start:cp.w.Line(cp.lineIndex).Start+cp.positionWithinLine], 0)
 
 	return expandedCaretPosition, uint32(cp.lineIndex)
 }
@@ -4610,7 +4610,7 @@ func (cp *caretPositionInternal) SetHint(caretPosition uint32, beginLineIndex in
 		caretPosition -= cp.w.Line(caretLine).Length + 1
 		caretLine++
 	}
-	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start : cp.w.Line(caretLine).Start+caretPosition])
+	expandedCaretPosition := ExpandedLength(cp.w.Content()[cp.w.Line(caretLine).Start:cp.w.Line(caretLine).Start+caretPosition], 0)
 
 	cp.targetExpandedX, y = expandedCaretPosition, uint32(caretLine)
 
@@ -4896,7 +4896,7 @@ func (w *MultilineContent) updateLines() {
 	w.lines = make([]contentLine, len(lines))
 	w.longestLine = 0
 	for lineIndex, line := range lines {
-		expandedLineLength := ExpandedLength(line)
+		expandedLineLength := ExpandedLength(line, 0)
 		if expandedLineLength > w.longestLine {
 			w.longestLine = expandedLineLength
 		}
@@ -6697,10 +6697,10 @@ func (w *TextBoxWidget) Render() {
 					continue // Skip lines that are offscreen.
 				}
 
-				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Line(lineIndex).Start:w.Content.Line(lineIndex).End()])
+				expandedLineLength := ExpandedLength(w.Content.Content()[w.Content.Line(lineIndex).Start:w.Content.Line(lineIndex).End()], 0)
 				for sameLineIndex, message := range messages {
 					pos := w.pos.Add(mgl64.Vec2{fontWidth * float64(expandedLineLength+1), fontHeight * float64(lineIndex+sameLineIndex)})
-					DrawInnerRoundedBox(pos, mgl64.Vec2{fontWidth * float64(len(message)), fontHeight}, darkColor, darkRedColor)
+					DrawInnerRoundedBox(pos, mgl64.Vec2{fontWidth * float64(ExpandedLength(message, 0)), fontHeight}, darkColor, darkRedColor)
 					gl.Color3d(0, 0, 0)
 					glt.SetPos(pos)
 					glt.PrintLine(message)
