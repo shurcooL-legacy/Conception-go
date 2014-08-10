@@ -1115,9 +1115,9 @@ func NewTest6OracleWidget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, s
 			cmd := exec.Command("oracle", fmt.Sprintf("--pos=%s:#%d", fileUri[len("file://"):], caretPosition), mode, pkg.Bpkg.ImportPath)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				return "Error:\n" + err.Error()
+				return strings.Join(cmd.Args, " ") + "\nError:\n" + err.Error() + "\nOutput:\n" + string(out)
 			}
-			return string(out)
+			return strings.Join(cmd.Args, " ") + "\n" + string(out)
 		} else {
 			return "<no file or mode selected>"
 		}
@@ -7768,7 +7768,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if !sublimeMode && false {
 
