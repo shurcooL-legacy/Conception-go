@@ -6170,13 +6170,13 @@ type FindResults struct {
 
 func (this *FindResults) Update() {
 	content := this.GetSources()[0].(MultilineContentI).Content()
-	findTarget := this.GetSources()[1].(MultilineContentI).Content()
-	/*wholeWordHighlighter := this.GetSources()[2].(*WholeWordHighlighter)
-
-	// If the find panel is not visible, but a whole word is selected, use it as the find target instead.
-	if !this.Owner.isFindPanelVisible() && wholeWordHighlighter.IsWholeWord() {
+	var findTarget string
+	if findBox, ok := this.GetSources()[1].(MultilineContentI); ok {
+		findTarget = findBox.Content()
+	} else if _, ok := this.GetSources()[1].(*WholeWordHighlighter); ok {
+		// If the find panel is not visible, but a whole word is selected, use it as the find target instead.
 		findTarget = this.Owner.caretPosition.GetSelectionContent()
-	}*/
+	}
 
 	this.segments = nil
 
@@ -6204,7 +6204,8 @@ func (this *FindResults) Update() {
 	if this.Owner.isFindPanelVisible() {
 		this.Owner.RestoreView(this.Owner.findPanel.OriginalView)
 		selStart, selEnd := this.Owner.caretPosition.SelectionRange()
-		if start, end, ok := this.GetResult(selStart, selEnd, +1); ok {
+		_ = selEnd // TODO: Verify if this the right way to not skip first selection...
+		if start, end, ok := this.GetResult(selStart, selStart, +1); ok {
 			this.Owner.caretPosition.TrySet(start)
 			this.Owner.caretPosition.caretPosition.willMoveH(int32(end - start))
 			this.Owner.CenterOnCaretPositionIfOffscreen()
@@ -6349,6 +6350,7 @@ type TextBoxWidget struct {
 	findPanel            *FindPanel
 	findResults          *FindResults
 	wholeWordHighlighter *WholeWordHighlighter
+	wholeWordResults     *FindResults
 
 	options TextBoxWidgetOptions
 
@@ -6425,13 +6427,15 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 	}
 
 	if w.options.FindPanel {
+		w.findResults = &FindResults{Owner: w}
+		w.findPanel = NewFindPanel(mgl64.Vec2{0, 0}, w.findResults, w.caretPosition) // TODO: Make it appear on bottom instead of (0, 0) top left corner.
+		w.findResults.AddSources(w.Content, w.findPanel.FindBox.Content)
+
 		w.wholeWordHighlighter = &WholeWordHighlighter{}
 		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition, &w.layoutDepNode2) // layoutDepNode2 is needed to ensure caret position is kept within bounds as a prerequisite.
 
-		w.findResults = &FindResults{Owner: w}
-		w.findPanel = NewFindPanel(mgl64.Vec2{0, 0}, w.findResults, w.caretPosition) // TODO: Make it appear on bottom instead of (0, 0) top left corner.
-		// TODO: Re-enable wholeWordHighlighter.
-		w.findResults.AddSources(w.Content, w.findPanel.FindBox.Content /*, w.wholeWordHighlighter*/)
+		w.wholeWordResults = &FindResults{Owner: w}
+		w.wholeWordResults.AddSources(w.Content, w.wholeWordHighlighter)
 	}
 
 	return w
@@ -6534,12 +6538,14 @@ func (w *TextBoxWidget) PollLogic() {
 		MakeUpdated(dep)
 	}
 
-	if w.wholeWordHighlighter != nil {
-		MakeUpdated(w.wholeWordHighlighter)
-	}
-
-	if w.findResults != nil && (w.isFindPanelVisible() || (w.wholeWordHighlighter != nil && w.wholeWordHighlighter.IsWholeWord())) {
+	if w.findResults != nil && w.isFindPanelVisible() {
 		MakeUpdated(w.findResults)
+	} else if w.wholeWordHighlighter != nil && !w.isFindPanelVisible() {
+		MakeUpdated(w.wholeWordHighlighter)
+		// TODO: Improve this... Need to add logic support for DepNode2 system?
+		if w.wholeWordHighlighter.IsWholeWord() {
+			MakeUpdated(w.wholeWordResults)
+		}
 	}
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
@@ -6687,9 +6693,11 @@ func (w *TextBoxWidget) Render() {
 				}
 			}
 
-			// Highlight search results.
-			if w.findResults != nil && (w.isFindPanelVisible() || (w.wholeWordHighlighter != nil && w.wholeWordHighlighter.IsWholeWord())) {
+			// Highlight search results or whole words.
+			if w.findResults != nil && w.isFindPanelVisible() {
 				hlIters = append(hlIters, w.findResults.NewIterator(w.Content.Line(beginLineIndex).Start))
+			} else if w.wholeWordHighlighter != nil && !w.isFindPanelVisible() && w.wholeWordHighlighter.IsWholeWord() {
+				hlIters = append(hlIters, w.wholeWordResults.NewIterator(w.Content.Line(beginLineIndex).Start))
 			}
 
 			// HACK, TODO: Manually add NewSelectionHighlighter for now, need to make this better
