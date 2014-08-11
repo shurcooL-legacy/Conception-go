@@ -6117,7 +6117,8 @@ func (this *diffHighlighter) LineBackgroundColor(lineIndex int) (BackgroundColor
 // ---
 
 type FindPanel struct {
-	FindBox *TextBoxWidget
+	FindBox      *TextBoxWidget
+	OriginalView TextBoxScrollPaneView // View as it was when FindPanel was opened.
 
 	Widgeter
 }
@@ -6139,6 +6140,7 @@ func NewFindPanel(pos mgl64.Vec2, findResults *FindResults, caretPosition *Caret
 	numResultsStringer.AddSources(findResults, caretPosition)
 
 	findPanelWidget := NewFlowLayoutWidget(pos, []Widgeter{
+		NewSpacerWidget(np, NewTextLabelWidgetString(np, "Find:")),
 		NewSpacerWidget(np, findBox),
 		NewSpacerWidget(np, NewStringerWidget(np, numResultsStringer)),
 		NewSpacerWidget(np, NewButtonWidget(np, nil)),
@@ -6169,12 +6171,12 @@ type FindResults struct {
 func (this *FindResults) Update() {
 	content := this.GetSources()[0].(MultilineContentI).Content()
 	findTarget := this.GetSources()[1].(MultilineContentI).Content()
-	wholeWordHighlighter := this.GetSources()[2].(*WholeWordHighlighter)
+	/*wholeWordHighlighter := this.GetSources()[2].(*WholeWordHighlighter)
 
 	// If the find panel is not visible, but a whole word is selected, use it as the find target instead.
 	if !this.Owner.isFindPanelVisible() && wholeWordHighlighter.IsWholeWord() {
 		findTarget = this.Owner.caretPosition.GetSelectionContent()
-	}
+	}*/
 
 	this.segments = nil
 
@@ -6196,6 +6198,18 @@ func (this *FindResults) Update() {
 
 	// HACK: Fake last element.
 	this.segments = append(this.segments, highlightSegment{offset: uint32(len(content))})
+
+	// TODO: Is this the best place to do this? Shouldn't Update() not have event side-effects?
+	// If find panel is visible, update the selection.
+	if this.Owner.isFindPanelVisible() {
+		this.Owner.RestoreView(this.Owner.findPanel.OriginalView)
+		selStart, selEnd := this.Owner.caretPosition.SelectionRange()
+		if start, end, ok := this.GetResult(selStart, selEnd, +1); ok {
+			this.Owner.caretPosition.TrySet(start)
+			this.Owner.caretPosition.caretPosition.willMoveH(int32(end - start))
+			this.Owner.CenterOnCaretPositionIfOffscreen()
+		}
+	}
 }
 
 // NumResults returns current number of find results.
@@ -6218,21 +6232,44 @@ func (this *FindResults) MatchesResult(start uint32, end uint32) (index int, mat
 }
 
 // TODO: Use a named const for direction or something to indicate it can only be +1 or -1.
-func (this *FindResults) NextResult(start uint32, end uint32, direction int) (nextStart uint32, nextEnd uint32) {
+func (this *FindResults) GetResult(start uint32, end uint32, direction int) (resultStart uint32, resultEnd uint32, ok bool) {
+	if this.NumResults() == 0 {
+		return 0, 0, false
+	}
+
+	switch direction {
+	case +1:
+		resultStart, resultEnd = this.nextResult(end)
+		return resultStart, resultEnd, true
+	case -1:
+		resultStart, resultEnd = this.prevResult(start)
+		return resultStart, resultEnd, true
+	default:
+		panic(0)
+	}
+}
+
+// TODO: Dedup with prevResult.
+// Pre-condition: this.NumResults() >= 1.
+func (this *FindResults) nextResult(end uint32) (resultStart uint32, resultEnd uint32) {
 	// TODO: Should use binary search to optimize.
 	for index := 0; index < this.NumResults(); index++ {
-		if start == this.segments[1+2*index].offset && end == this.segments[1+2*index+1].offset {
-			index += direction
-			if index < 0 {
-				index = this.NumResults() - 1
-			} else if index >= this.NumResults() {
-				index = 0
-			}
+		if end <= this.segments[1+2*index].offset {
 			return this.segments[1+2*index].offset, this.segments[1+2*index+1].offset
 		}
 	}
-	// TOOD: Handle initial selection...
-	panic(0)
+	index := 0
+	return this.segments[1+2*index].offset, this.segments[1+2*index+1].offset
+}
+func (this *FindResults) prevResult(start uint32) (resultStart uint32, resultEnd uint32) {
+	// TODO: Should use binary search to optimize.
+	for index := this.NumResults() - 1; index >= 0; index-- {
+		if this.segments[1+2*index+1].offset <= start {
+			return this.segments[1+2*index].offset, this.segments[1+2*index+1].offset
+		}
+	}
+	index := this.NumResults() - 1
+	return this.segments[1+2*index].offset, this.segments[1+2*index+1].offset
 }
 
 func (this *FindResults) NewIterator(offset uint32) HighlighterIterator {
@@ -6393,7 +6430,8 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 
 		w.findResults = &FindResults{Owner: w}
 		w.findPanel = NewFindPanel(mgl64.Vec2{0, 0}, w.findResults, w.caretPosition) // TODO: Make it appear on bottom instead of (0, 0) top left corner.
-		w.findResults.AddSources(w.Content, w.findPanel.FindBox.Content, w.wholeWordHighlighter)
+		// TODO: Re-enable wholeWordHighlighter.
+		w.findResults.AddSources(w.Content, w.findPanel.FindBox.Content /*, w.wholeWordHighlighter*/)
 	}
 
 	return w
@@ -7011,7 +7049,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 				if !w.isFindPanelVisible() {
 					originalMapping := keyboardPointer.OriginMapping // HACK
-					originalView := w.SaveView()
+					w.findPanel.OriginalView = w.SaveView()
 					closeOnEscape := &CustomWidget{
 						Widget: NewWidget(np, np),
 						ProcessEventFunc: func(inputEvent InputEvent) {
@@ -7037,7 +7075,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 										}
 									}
 
-									w.RestoreView(originalView)
+									w.RestoreView(w.findPanel.OriginalView)
 
 									// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 									keyboardPointer.OriginMapping = originalMapping
@@ -7073,16 +7111,17 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					break
 				}
 
-				direction := 1
+				direction := +1
 				if shift := inputEvent.ModifierKey&glfw.ModShift != 0; shift {
 					direction = -1
 				}
 
 				selStart, selEnd := w.caretPosition.SelectionRange()
-				start, end := w.findResults.NextResult(selStart, selEnd, direction)
-				w.caretPosition.TrySet(start)
-				w.caretPosition.caretPosition.willMoveH(int32(end - start))
-				w.CenterOnCaretPositionIfOffscreen()
+				if start, end, ok := w.findResults.GetResult(selStart, selEnd, direction); ok {
+					w.caretPosition.TrySet(start)
+					w.caretPosition.caretPosition.willMoveH(int32(end - start))
+					w.CenterOnCaretPositionIfOffscreen()
+				}
 			}
 		case glfw.KeyEscape:
 			// Close the last popup, if any.
