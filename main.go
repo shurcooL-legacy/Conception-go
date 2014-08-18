@@ -7383,10 +7383,14 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 
 // ---
 
-type MarkdownHandlerFunc func(req *http.Request) (markdown []byte)
+type MarkdownHandlerFunc func(req *http.Request) (markdown []byte, err error)
 
 func (this MarkdownHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	markdown := this(req)
+	markdown, err := this(req)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	if _, plain := req.URL.Query()["plain"]; plain {
 		w.Header().Set("Content-Type", "text/plain")
@@ -7415,7 +7419,7 @@ func initHttpHandlers() {
 		fmt.Fprintf(w, "%#v\n", widgets)
 	})*/
 	http.Handle("/favicon.ico", http.NotFoundHandler())
-	http.Handle("/status/", http.StripPrefix("/status", MarkdownHandlerFunc(func(req *http.Request) []byte {
+	http.Handle("/status/", http.StripPrefix("/status", MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 
 		// HACK: Handle .go files specially, just assume they're in "./GoLand"
 		/*if strings.HasSuffix(req.URL.Path, ".go") {
@@ -7490,9 +7494,9 @@ func initHttpHandlers() {
 			b += fmt.Sprintf("Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
 		}
 
-		return []byte(b)
+		return []byte(b), nil
 	})))
-	http.Handle("/status", MarkdownHandlerFunc(func(req *http.Request) []byte {
+	http.Handle("/status", MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		started := time.Now()
 
 		_, short := req.URL.Query()["short"]
@@ -7574,9 +7578,9 @@ func initHttpHandlers() {
 
 		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
 
-		return append(summary.Bytes(), buf.Bytes()...)
+		return append(summary.Bytes(), buf.Bytes()...), nil
 	}))
-	http.Handle("/inline/", http.StripPrefix("/inline", MarkdownHandlerFunc(func(req *http.Request) []byte {
+	http.Handle("/inline/", http.StripPrefix("/inline", MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		importPath := req.URL.Path[1:]
 
 		// TODO: Cache this via DepNode2I
@@ -7585,7 +7589,7 @@ func initHttpHandlers() {
 		exp11.InlineDotImports(buf, importPath)
 		buf.WriteString("\n```")
 
-		return buf.Bytes()
+		return buf.Bytes(), nil
 	})))
 }
 
@@ -7795,9 +7799,9 @@ func main() {
 			redraw = true // HACK
 		})
 
-		/*window.SetDropCallback(func(w *glfw.Window, names []string) {
+		window.SetDropCallback(func(w *glfw.Window, names []string) {
 			goon.DumpExpr(names)
-		})*/
+		})
 
 		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 		//gl.ClearColor(0.8, 0.3, 0.01, 1)
