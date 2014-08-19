@@ -120,6 +120,9 @@ var booVcs *exp12.Directory
 
 // Colors
 var (
+	//backgroundColor  = mgl64.Vec3{134 / 255.0, 132 / 255.0, 152 / 255.0}
+	backgroundColor  = mgl64.Vec3{226 / 255.0, 144 / 255.0, 153 / 255.0}
+
 	nearlyWhiteColor = mgl64.Vec3{0.975, 0.975, 0.975}
 	veryLightColor   = mgl64.Vec3{0.95, 0.95, 0.95}
 	lightColor       = mgl64.Vec3{0.85, 0.85, 0.85}
@@ -7805,7 +7808,8 @@ func main() {
 
 		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 		//gl.ClearColor(0.8, 0.3, 0.01, 1)
-		gl.ClearColor(0.85, 0.85, 0.85, 1)
+		//gl.ClearColor(0.85, 0.85, 0.85, 1)
+		gl.ClearColor(float32(backgroundColor[0]), float32(backgroundColor[1]), float32(backgroundColor[2]), 1)
 	}
 
 	// ---
