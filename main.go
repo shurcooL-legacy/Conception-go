@@ -6891,6 +6891,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			w.caretPosition.ReplaceSelectionWith("\t")
 		case glfw.KeyLeft:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
+				// Go to start of line.
 				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
 				w.caretPosition.Move(-2, inputEvent.ModifierKey&glfw.ModShift != 0)
 			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
@@ -6898,6 +6899,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyRight:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
+				// Go to end of line.
 				w.caretPosition.Move(+2, inputEvent.ModifierKey&glfw.ModShift != 0)
 			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
 				w.caretPosition.TryMoveH(+1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
@@ -6917,6 +6919,10 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyA:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				w.caretPosition.SelectAll()
+			} else if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModControl {
+				// Go to start of line.
+				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
+				w.caretPosition.Move(-2, inputEvent.ModifierKey&glfw.ModShift != 0)
 			}
 		case glfw.KeyX:
 			if !w.options.Private &&
@@ -6957,6 +6963,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 					}(string(fileUri[len("file://"):]))
 				}
+			} else if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModControl {
+				// Go to end of line.
+				w.caretPosition.Move(+2, inputEvent.ModifierKey&glfw.ModShift != 0)
 			}
 		/*case glfw.KeyR:
 		if inputEvent.ModifierKey == glfw.ModSuper {
