@@ -2259,6 +2259,13 @@ func (w *CanvasWidget) AddWidget(widget Widgeter) {
 	w.Layout()
 }
 
+// HACK: Offset all widgets by (1, 1) so their border is visible. Need to generalize this.
+func (w *CanvasWidget) offsetBy1Px() {
+	for _, widget := range w.Widgets {
+		*widget.Pos() = widget.Pos().Add(mgl64.Vec2{1, 1})
+	}
+}
+
 func (w *CanvasWidget) PollLogic() {
 	var timePassed float64 = UniversalClock.TimePassed
 
@@ -7826,7 +7833,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = false
+	const sublimeMode = true
 
 	if !sublimeMode && false {
 
@@ -9174,6 +9181,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	} else {
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
 	}
+	widget.(*CanvasWidget).offsetBy1Px()
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
