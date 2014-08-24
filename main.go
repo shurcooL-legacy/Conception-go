@@ -120,9 +120,6 @@ var booVcs *exp12.Directory
 
 // Colors
 var (
-	//backgroundColor  = mgl64.Vec3{134 / 255.0, 132 / 255.0, 152 / 255.0}
-	backgroundColor  = mgl64.Vec3{226 / 255.0, 144 / 255.0, 153 / 255.0}
-
 	nearlyWhiteColor = mgl64.Vec3{0.975, 0.975, 0.975}
 	veryLightColor   = mgl64.Vec3{0.95, 0.95, 0.95}
 	lightColor       = mgl64.Vec3{0.85, 0.85, 0.85}
@@ -2337,7 +2334,17 @@ func (w *CanvasWidget) LayoutNeeded() {
 func (w *CanvasWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]+w.offset[0]), float64(w.pos[1]+w.offset[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1], 0)
+
+	// Background.
+	{
+		backgroundTopColor := mgl64.Vec3{226 / 255.0, 144 / 255.0, 153 / 255.0}
+		backgroundBottomColor := mgl64.Vec3{96 / 255.0, 93 / 255.0, 160 / 255.0}
+
+		DrawBorderlessGradientBox(w.pos, w.size, backgroundTopColor, backgroundBottomColor)
+	}
+
+	gl.Translated(w.offset[0], w.offset[1], 0)
 
 	for _, widget := range w.Widgets {
 		widget.Render()
@@ -7809,7 +7816,7 @@ func main() {
 		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 		//gl.ClearColor(0.8, 0.3, 0.01, 1)
 		//gl.ClearColor(0.85, 0.85, 0.85, 1)
-		gl.ClearColor(float32(backgroundColor[0]), float32(backgroundColor[1]), float32(backgroundColor[2]), 1)
+		//gl.ClearColor(float32(backgroundColor[0]), float32(backgroundColor[1]), float32(backgroundColor[2]), 1)
 	}
 
 	// ---
@@ -7819,7 +7826,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
+	const sublimeMode = false
 
 	if !sublimeMode && false {
 
@@ -9163,11 +9170,9 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	}
 
 	if sublimeMode {
-		// TODO: Position of {1, 1} means 1 column and 1 row of pixels will not get user input, need to fix
-		widget = NewCanvasWidget(mgl64.Vec2{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: false})
+		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: false})
 	} else {
-		// TODO: Position of {1, 1} means 1 column and 1 row of pixels will not get user input, need to fix
-		widget = NewCanvasWidget(mgl64.Vec2{1, 1}, widgets, &CanvasWidgetOptions{Scrollable: true})
+		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
 	}
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
@@ -9227,7 +9232,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		widget.PollLogic()
 
 		if redraw && !*headlessFlag {
-			gl.Clear(gl.COLOR_BUFFER_BIT)
+			//gl.Clear(gl.COLOR_BUFFER_BIT)
 			gl.LoadIdentity()
 
 			widget.LayoutNeeded()
