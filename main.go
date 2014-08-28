@@ -1429,6 +1429,29 @@ func NewButtonTriggerWidget(pos mgl64.Vec2) *ButtonTriggerWidget {
 
 // ---
 
+type ButtonLabelWidget struct {
+	*ButtonWidget
+	label string
+}
+
+func NewButtonLabelWidget(pos mgl64.Vec2, label string, action func()) *ButtonLabelWidget {
+	w := &ButtonLabelWidget{ButtonWidget: NewButtonWidget(pos, action), label: label}
+
+	w.ButtonWidget.Widget.Size()[0] = float64(fontWidth*len(label) + 8)
+	w.ButtonWidget.Widget.Size()[1] = fontHeight
+
+	return w
+}
+
+func (w *ButtonLabelWidget) Render() {
+	w.ButtonWidget.Render()
+
+	gl.Color3d(0, 0, 0)
+	PrintLine(w.Pos().Add(mgl64.Vec2{4, 0}), w.label)
+}
+
+// ---
+
 type ButtonWidget struct {
 	Widget
 	action  func()
@@ -6160,8 +6183,8 @@ func NewFindPanel(pos mgl64.Vec2, findResults *FindResults, caretPosition *Caret
 		NewSpacerWidget(np, NewTextLabelWidgetString(np, "Find:")),
 		NewSpacerWidget(np, findBox),
 		NewSpacerWidget(np, NewStringerWidget(np, numResultsStringer)),
-		NewSpacerWidget(np, NewButtonWidget(np, nil)),
-		NewSpacerWidget(np, NewButtonWidget(np, nil)),
+		NewSpacerWidget(np, NewButtonLabelWidget(np, "Next", nil)),
+		NewSpacerWidget(np, NewButtonLabelWidget(np, "Previous", nil)),
 	}, nil)
 
 	return &FindPanel{
@@ -8039,6 +8062,8 @@ func main() {
 `), &TextBoxWidgetOptions{PopupTest: true, FindPanel: true})
 
 		widgets = append(widgets, editor)
+
+		widgets = append(widgets, NewButtonLabelWidget(mgl64.Vec2{640, 400}, "Previous", nil))
 
 	} else if sublimeMode {
 
