@@ -8392,7 +8392,7 @@ func main() {
 			caretPositionStringer := &DepStringerFunc{}
 			caretPositionStringer.UpdateFunc = func(this DepNode2I) {
 				caretPosition := this.GetSources()[0].(*CaretPosition)
-				caretPositionStringer.content = fmt.Sprint("Caret Position: ", caretPosition.Logical())
+				caretPositionStringer.content = fmt.Sprintf("Line: %v, Caret Position: %v", caretPosition.caretPosition.lineIndex, caretPosition.Logical())
 				if caretPosition.anySelection() {
 					start, end := caretPosition.SelectionRange()
 					caretPositionStringer.content += fmt.Sprintf(", %d characters selected", end-start)
