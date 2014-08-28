@@ -6219,13 +6219,15 @@ func (this *FindResults) Update() {
 	// TODO: Is this the best place to do this? Shouldn't Update() not have event side-effects?
 	// If find panel is visible, update the selection.
 	if this.Owner.isFindPanelVisible() {
-		this.Owner.RestoreView(this.Owner.findPanel.OriginalView)
+		this.Owner.caretPosition.RestoreState(this.Owner.findPanel.OriginalView.caretPosition) // Move cursor but not view, so it doesn't jump.
 		selStart, selEnd := this.Owner.caretPosition.SelectionRange()
 		_ = selEnd // TODO: Verify if this the right way to not skip first selection...
 		if start, end, ok := this.GetResult(selStart, selStart, +1); ok {
 			this.Owner.caretPosition.TrySet(start)
 			this.Owner.caretPosition.caretPosition.willMoveH(int32(end - start))
 			this.Owner.CenterOnCaretPositionIfOffscreen()
+		} else {
+			this.Owner.RestoreView(this.Owner.findPanel.OriginalView)
 		}
 	}
 }
@@ -7090,16 +7092,10 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 							if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 								switch glfw.Key(inputEvent.InputId) {
 								case glfw.KeyEnter:
-									// Remove popupTest from w.PopupsTest.
-									for i, widget := range w.PopupsTest {
-										if widget == popupTest {
-											w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
-											break
-										}
-									}
-
-									// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-									keyboardPointer.OriginMapping = originalMapping
+									// HACK: I should map it so Enter triggers the same action as Cmd+G handler, instead of faking it here...
+									inputEvent.InputId = uint16(glfw.KeyG)
+									inputEvent.ModifierKey |= glfw.ModSuper
+									w.ProcessEvent(inputEvent)
 								case glfw.KeyEscape:
 									// Remove popupTest from w.PopupsTest.
 									for i, widget := range w.PopupsTest {
@@ -7109,7 +7105,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 										}
 									}
 
-									w.RestoreView(w.findPanel.OriginalView)
+									//w.RestoreView(w.findPanel.OriginalView)
 
 									// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 									keyboardPointer.OriginMapping = originalMapping
@@ -7137,6 +7133,16 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					SetViewGroup(w.findPanel.FindBox.Content, w.caretPosition.GetSelectionContent())
 				}
 				w.findPanel.FindBox.caretPosition.SelectAll()
+			}
+		case glfw.KeyMinus:
+			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModControl {
+				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
+				if !(w.options.PopupTest && w.options.FindPanel) {
+					break
+				}
+
+				// HACK: Need to properly implement Cmd+-, instead of this temporary most-common-use hack.
+				w.RestoreView(w.findPanel.OriginalView)
 			}
 		case glfw.KeyG:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
