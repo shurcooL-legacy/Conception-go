@@ -7645,7 +7645,7 @@ type goPackageHardcoded struct {
 }
 
 func (*goPackageHardcoded) GetSelectedGoPackage() *GoPackage {
-	x := NewImportPathFound("gist.github.com/7176504.git", "/Users/Dmitri/Dropbox/Work/2013/GoLand/")
+	x := NewImportPathFound("github.com/gists/gist7176504", "/Users/Dmitri/Dropbox/Work/2013/GoLand/")
 	return GoPackageFromImportPathFound(x)
 }
 
@@ -8601,7 +8601,7 @@ func main() {
 			action := func(params interface{}) string {
 				if strings.TrimSpace(params.(string)) != "" {
 					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
-					cmd := exec.Command("goe", "--quiet", "fmt", "gist.github.com/4727543.git", "gist.github.com/5498057.git", "Print(GetForcedUseFromImport(ReadAllStdin()))")
+					cmd := exec.Command("goe", "--quiet", "fmt", "github.com/shurcooL/go/gists/gist4727543", "github.com/shurcooL/go/gists/gist5498057", "Print(GetForcedUseFromImport(ReadAllStdin()))")
 					//cmd := exec.Command("cat")
 					cmd.Stdin = strings.NewReader(strings.TrimSpace(src.Content.Content()))
 					out, err := cmd.CombinedOutput()
