@@ -8068,6 +8068,8 @@ func main() {
 
 		widgets = append(widgets, NewButtonLabelWidget(mgl64.Vec2{640, 400}, "Previous", nil))
 
+		widgets = append(widgets, NewFolderListingWidget(mgl64.Vec2{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
+
 	} else if sublimeMode {
 
 		var windowSize0, windowSize1 int
