@@ -46,7 +46,7 @@ import (
 	"github.com/mb0/diff"
 	intmath "github.com/pkg/math"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	glfw "github.com/shurcooL/glfw3" // Effectively, a fork of github.com/go-gl/glfw3 but with 3.1 PR merged. Requires github.com/glfw/glfw at tip. See https://github.com/shurcooL/reusable-commands/blob/master/go-gl_glfw3_install.sh for installation steps.
+	glfw "github.com/shurcooL/glfw3" // Effectively, a fork of github.com/go-gl/glfw3 but with 3.1 PR merged.
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
@@ -2230,6 +2230,12 @@ func (w *FlowLayoutWidget) SetWidgets(widgets []Widgeter) {
 	w.Layout() // TODO: Should this be automatic from above SetParent()?
 }
 
+func (w *FlowLayoutWidget) AddWidget(widget Widgeter) {
+	w.Widgets = append(w.Widgets, widget)
+	widget.SetParent(w)
+	w.Layout()
+}
+
 func (w *FlowLayoutWidget) Layout() {
 	w.size = np
 	var combinedOffset float64
@@ -3347,8 +3353,10 @@ func NewHttpServerTestWidget(pos mgl64.Vec2) *HttpServerTestWidget {
 	w.FlowLayoutWidget = NewFlowLayoutWidget(pos,
 		[]Widgeter{
 			NewTriButtonExternalStateWidget(np, func() bool { return w.started }, action),
-			NewTextLabelWidgetString(np, "http://"+TrimLastNewline(gist8065433.Something())+httpServerAddr),
 		}, nil)
+	if publicIps, err := gist8065433.GetPublicIps(); err == nil && len(publicIps) >= 1 {
+		w.FlowLayoutWidget.AddWidget(NewTextLabelWidgetString(np, "http://"+publicIps[0]+httpServerAddr))
+	}
 
 	return w
 }
@@ -7572,23 +7580,23 @@ func initHttpHandlers() {
 			reduceFunc := func(in interface{}) interface{} {
 				goPackage := in.(*GoPackage)
 				if rootPath := getRootPath(goPackage); rootPath != "" {
-					return Repo{rootPath, []*GoPackage{goPackage}}
+					return NewGoPackageRepo(rootPath, []*GoPackage{goPackage})
 				}
 				return nil
 			}
 			outChan := GoReduce(inChan, 64, reduceFunc)
 			for out := range outChan {
-				repo := out.(Repo)
-				goPackagesInRepo[repo.rootPath] = append(goPackagesInRepo[repo.rootPath], repo.goPackages[0])
+				repo := out.(GoPackageRepo)
+				goPackagesInRepo[repo.RootPath()] = append(goPackagesInRepo[repo.RootPath()], repo.GoPackages()[0])
 			}
 		}
 
 		goon.DumpExpr(len(goPackagesInRepo))
 
 		reduceFunc := func(in interface{}) interface{} {
-			repo := in.(Repo)
+			repo := in.(GoPackageRepo)
 
-			goPackage := repo.goPackages[0]
+			goPackage := repo.GoPackages()[0]
 			if goPackage.Dir.Repo != nil {
 				// HACK: Invalidate cache, always.
 				ExternallyUpdated(goPackage.Dir.Repo.VcsLocal.GetSources()[1].(DepNode2ManualI))
@@ -7602,7 +7610,7 @@ func initHttpHandlers() {
 		inChan := make(chan interface{})
 		go func() { // This needs to happen in the background because sending input will be blocked on reading output.
 			for rootPath, goPackages := range goPackagesInRepo {
-				inChan <- Repo{rootPath, goPackages}
+				inChan <- NewGoPackageRepo(rootPath, goPackages)
 			}
 			close(inChan)
 		}()
@@ -7612,12 +7620,12 @@ func initHttpHandlers() {
 		var buf = new(bytes.Buffer)
 
 		for out := range outChan {
-			repo := out.(Repo)
+			repo := out.(GoPackageRepo)
 
-			goPackage := repo.goPackages[0]
+			goPackage := repo.GoPackages()[0]
 
 			if goPackage.Dir.Repo.VcsLocal.Status != "" {
-				repoImportPathPattern := GetRepoImportPathPattern(repo.rootPath, goPackage.Bpkg.SrcRoot)
+				repoImportPathPattern := GetRepoImportPathPattern(repo.RootPath(), goPackage.Bpkg.SrcRoot)
 				fmt.Fprintf(summary, "- [%s](%s)\n", repoImportPathPattern, github_flavored_markdown.HeaderLink(repoImportPathPattern))
 				fmt.Fprint(buf, "### "+repoImportPathPattern+"\n\n")
 				fmt.Fprint(buf, "```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n\n")
@@ -7659,11 +7667,6 @@ func getRootPath(goPackage *GoPackage) (rootPath string) {
 	} else {
 		return goPackage.Dir.Repo.Vcs.RootPath()
 	}
-}
-
-type Repo struct {
-	rootPath   string
-	goPackages []*GoPackage
 }
 
 // ---
