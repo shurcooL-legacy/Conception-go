@@ -7270,6 +7270,21 @@ type Pointer struct {
 func (this *Pointer) Render() {
 	switch {
 	case this.VirtualCategory == POINTING && len(this.State.Axes) >= 2:
+		// Prevent pointer from being drawn when the OS mouse pointer is visible.
+		{
+			// HACK
+			var windowSize [2]int
+			if globalWindow != nil {
+				windowSize[0], windowSize[1] = globalWindow.GetSize()
+			}
+
+			// HACK: OS X specific.
+			const border = 3
+			if this.State.Axes[1] < 0 || this.State.Axes[0] < border || this.State.Axes[0] > float64(windowSize[0])-border || this.State.Axes[1] > float64(windowSize[1])-border {
+				break
+			}
+		}
+
 		gl.PushMatrix()
 		defer gl.PopMatrix()
 		gl.Translated(float64(float64(NearInt64(this.State.Axes[0]))+0.5), float64(float64(NearInt64(this.State.Axes[1]))+0.5), 0)
