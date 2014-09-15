@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/scanner"
 	"go/token"
 	"image"
@@ -33,11 +34,6 @@ import (
 	"code.google.com/p/go.net/websocket"
 	"code.google.com/p/go.tools/go/types"
 	goimports "code.google.com/p/go.tools/imports"
-	igo_ast "github.com/DAddYE/igo/ast"
-	"github.com/DAddYE/igo/from_go"
-	igo_parser "github.com/DAddYE/igo/parser"
-	"github.com/DAddYE/igo/to_go"
-	igo_token "github.com/DAddYE/igo/token"
 	"github.com/bradfitz/iter"
 	"github.com/davecheney/profile"
 	_ "github.com/ftrvxmtrx/tga"
@@ -658,32 +654,6 @@ func (w *Test2Widget) ProcessEvent(inputEvent InputEvent) {
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) && (inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 0) {
 		*w.field += inputEvent.Sliders[0]
 	}
-}
-
-// ---
-
-type parsedIgoFile struct {
-	fset    *igo_token.FileSet
-	fileAst *igo_ast.File
-
-	DepNode2
-}
-
-func (t *parsedIgoFile) Update() {
-	source := t.GetSources()[0].(MultilineContentI)
-
-	t.fset = nil
-	t.fileAst = nil
-
-	defer func() {
-		_ = recover()
-	}()
-
-	fset := igo_token.NewFileSet()
-	fileAst, _ := igo_parser.ParseFile(fset, "", source.Content(), igo_parser.ParseComments|igo_parser.AllErrors)
-
-	t.fset = fset
-	t.fileAst = fileAst
 }
 
 // ---
@@ -7893,8 +7863,6 @@ func main() {
 
 	if !sublimeMode && false {
 
-		// iGo Live Editor experiment
-
 		//source := NewTextFileWidget(mathgl.Vec2d{50, 160}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
 		source := NewTextBoxWidget(mgl64.Vec2{50, 160})
 		widgets = append(widgets, source)
@@ -7922,40 +7890,13 @@ func main() {
 			}()*/
 
 			var buf bytes.Buffer
-			from_go.Fprint(&buf, fset, fileAst)
+			printer.Fprint(&buf, fset, fileAst)
 
 			return buf.String()
 		}
 
 		w := NewLiveGoroutineExpeWidget(mgl64.Vec2{500, 160}, true, []DepNode2I{parsedFile}, params, action)
 		widgets = append(widgets, w)
-
-		parsedIgoFile := &parsedIgoFile{}
-		parsedIgoFile.AddSources(w.Widgets[2].(*TextBoxWidget).Content) // HACK: Should get Content in a better way
-
-		params2 := func() interface{} {
-			return []interface{}{
-				parsedIgoFile.fset,
-				parsedIgoFile.fileAst,
-			}
-		}
-
-		action2 := func(params interface{}) string {
-			fset := params.([]interface{})[0].(*igo_token.FileSet)
-			fileAst := params.([]interface{})[1].(*igo_ast.File)
-
-			if fset == nil || fileAst == nil {
-				return "<iGo parsing error>"
-			}
-
-			var buf bytes.Buffer
-			to_go.Fprint(&buf, fset, fileAst)
-
-			return buf.String()
-		}
-
-		w2 := NewLiveGoroutineExpeWidget(mgl64.Vec2{950, 160}, true, []DepNode2I{parsedIgoFile}, params2, action2)
-		widgets = append(widgets, w2)
 
 		{
 			mc1 := NewMultilineContent()
