@@ -7496,20 +7496,23 @@ func initHttpHandlers() {
 				b += "\n```\n"
 			}
 
-			b += "\n---\n\n"
-
 			goPackage.UpdateVcs()
 			if goPackage.Dir.Repo != nil {
 				MakeUpdated(goPackage.Dir.Repo.VcsLocal)
 				MakeUpdated(goPackage.Dir.Repo.VcsRemote)
 			}
 
+			if goPackage.Dir.Repo != nil {
+				// Branches.
+				b += "\n" + Underline("Branches") + "\n"
+				b += u6.Branches(goPackage.Dir.Repo)
+			}
+
+			b += "\n" + Underline("Status") + "\n"
 			b += "```\n" + status.PorcelainPresenter(goPackage) + "\n```\n"
 
-			b += "\n---\n\n"
-
 			if goPackage.Dir.Repo != nil {
-				b += "```\n"
+				b += "\n```\n"
 				if goPackage.Dir.Repo.VcsLocal.Status == "" {
 					b += "nothing to commit, working directory clean\n\n"
 				} else {
