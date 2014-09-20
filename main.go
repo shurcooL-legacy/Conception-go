@@ -7697,14 +7697,15 @@ func main() {
 				panic("Error: GLFW library and header versions do not match.")
 			}
 		}
-		if err := glfw.Init(); err != nil {
+		err := glfw.Init()
+		if err != nil {
 			log.Panicln("glfw.Init():", err)
 		}
+		fmt.Printf("glfw %s.\n", glfw.GetVersionString())
 		defer glfw.Terminate()
 
 		glfw.WindowHint(glfw.Samples, 8) // Anti-aliasing
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
-		var err error
 		window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
 		CheckError(err)
 		globalWindow = window
@@ -7718,8 +7719,7 @@ func main() {
 		{
 			var samples int32
 			gl.GetIntegerv(gl.SAMPLES, &samples)
-			fmt.Printf("glfw %d.%d.%d; %s %s %s; %s; %v samples.\n", glfw.VersionMajor, glfw.VersionMinor, glfw.VersionRevision,
-				gl.GoStr(gl.GetString(gl.VENDOR)), gl.GoStr(gl.GetString(gl.RENDERER)), gl.GoStr(gl.GetString(gl.VERSION)),
+			fmt.Printf("OpenGL %s %s %s; %s; %v samples.\n", gl.GoStr(gl.GetString(gl.VENDOR)), gl.GoStr(gl.GetString(gl.RENDERER)), gl.GoStr(gl.GetString(gl.VERSION)),
 				gl.GoStr(gl.GetString(gl.SHADING_LANGUAGE_VERSION)), samples)
 		}
 
