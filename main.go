@@ -7885,7 +7885,7 @@ func main() {
 		action := func(params interface{}) string {
 			fset := params.([]interface{})[0].(*token.FileSet)
 			fileAst := params.([]interface{})[1].(*ast.File)
-			err, _ := params.([]interface{})[2].(error)
+			parseErr, _ := params.([]interface{})[2].(error)
 
 			if fset == nil || fileAst == nil {
 				return "<Go parsing error>"
@@ -7896,10 +7896,13 @@ func main() {
 			}()*/
 
 			var buf bytes.Buffer
-			printer.Fprint(&buf, fset, fileAst)
-
+			err := (&printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 8}).Fprint(&buf, fset, fileAst)
 			if err != nil {
-				buf.WriteString("\n---\n" + err.Error())
+				panic(err)
+			}
+
+			if parseErr != nil {
+				buf.WriteString("\n---\n" + parseErr.Error())
 			}
 
 			return buf.String()
