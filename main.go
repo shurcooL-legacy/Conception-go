@@ -7686,6 +7686,8 @@ func main() {
 	var inputEventQueue2 = make(chan InputEvent, 32)
 	var window *glfw.Window
 
+	const sublimeMode = 1
+
 	if !*headlessFlag {
 		runtime.LockOSThread()
 
@@ -7706,7 +7708,12 @@ func main() {
 
 		glfw.WindowHint(glfw.Samples, 8) // Anti-aliasing
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
-		window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
+		switch sublimeMode {
+		default:
+			window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
+		case 5:
+			window, err = glfw.CreateWindow(980, 880, "", nil, nil)
+		}
 		CheckError(err)
 		globalWindow = window
 
@@ -7863,9 +7870,9 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	const sublimeMode = true
-
-	if !sublimeMode && false {
+	switch sublimeMode {
+	case 5:
+	case 4:
 
 		//source := NewTextFileWidget(mathgl.Vec2d{50, 160}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
 		source := NewTextBoxWidget(mgl64.Vec2{50, 160})
@@ -8006,7 +8013,7 @@ func main() {
 			widgets = append(widgets, dumpButton)
 		}
 
-	} else if !sublimeMode {
+	case 3:
 
 		editor := NewTextBoxWidgetExternalContent(mgl64.Vec2{0, 200}, NewMultilineContentString(`package main
 
@@ -8039,7 +8046,11 @@ func main() {
 
 		widgets = append(widgets, NewFolderListingWidget(mgl64.Vec2{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
 
-	} else if sublimeMode {
+	case 2:
+		widgets = append(widgets, NewGpcFileWidget(mgl64.Vec2{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
+		widgets = append(widgets, NewKatWidget(mgl64.Vec2{370, 20}))
+
+	case 1:
 
 		var windowSize0, windowSize1 int
 		if window != nil {
@@ -8413,7 +8424,7 @@ func main() {
 			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{950 + 4, 0}, mgl64.Vec2{580, float64(windowSize1 - 2)}, tools))
 		}
 
-	} else if false { // Deleted test widget instances
+	case -999: // Deleted test widget instances
 		{
 			src := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
 			//src := NewTextFileWidget(mathgl.Vec2d{}, "./GoLand/src/simple.go")
@@ -8452,7 +8463,7 @@ func main() {
 		}
 
 		// TEST: Render the Go code tokens with color highlighting
-		{
+		if false {
 			source := widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget
 
 			w := &CustomWidget{
@@ -8513,7 +8524,7 @@ func main() {
 		}
 
 		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
-		{
+		if false {
 			//w, _ := NewTest3Widget(np, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
 			w, _ := NewTest4Widget(np, &goPackageHardcoded{}, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
 			widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
@@ -8535,6 +8546,7 @@ func main() {
 		widgets = append(widgets, NewTextLabelWidgetExternalContent(mgl64.Vec2{90, 95}, widgets[len(widgets)-2].(*TextFileWidget).TextBoxWidget.Content))    // HACK: Manual test
 
 		widgets = append(widgets, NewTest2Widget(mgl64.Vec2{240, 5}, &widgets[7].(*TextBoxWidget).pos[0]))
+		widgets = append(widgets, NewTest1Widget(mgl64.Vec2{10, 50}))
 
 		type Inner struct {
 			Field1 string
@@ -8568,7 +8580,7 @@ func main() {
 		widgets = append(widgets, NewGoonWidget(mgl64.Vec2{380, 10}, &x))
 		y := NewWidget(mgl64.Vec2{1, 2}, mgl64.Vec2{3})
 		widgets = append(widgets, NewGoonWidget(mgl64.Vec2{600, 10}, &y))
-	} else if true {
+	case 0:
 		widgets = append(widgets, &spinner)
 
 		katWidget := NewKatWidget(mgl64.Vec2{370, 15})
@@ -9140,11 +9152,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			boxes := NewFlowLayoutWidget(mgl64.Vec2{1130, 220}, Widgeters{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, boxes)
 		}
-
-	} else if false {
-		widgets = append(widgets, NewGpcFileWidget(mgl64.Vec2{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
-		widgets = append(widgets, NewTest1Widget(mgl64.Vec2{10, 50}))
-		widgets = append(widgets, NewKatWidget(mgl64.Vec2{370, 20}))
 	}
 
 	fpsWidget := NewFpsWidget(mgl64.Vec2{10, 120})
@@ -9190,9 +9197,10 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		widgets = append(widgets, NewCollapsibleWidget(np, NewFlowLayoutWidget(np, w, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}), "Debug"))
 	}
 
-	if sublimeMode {
+	switch sublimeMode {
+	case 1:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: false})
-	} else {
+	default:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
 	}
 	widget.(*CanvasWidget).offsetBy1Px()
