@@ -202,6 +202,7 @@ type OpenGlStream struct {
 
 	BorderColor     *mgl64.Vec3 // nil means no border color.
 	BackgroundColor *mgl64.Vec3 // nil means no background color.
+	ShowInvisibles  bool
 }
 
 func NewOpenGlStream(pos mgl64.Vec2) *OpenGlStream {
@@ -264,8 +265,12 @@ func (o *OpenGlStream) PrintLine(s string) {
 		o.PrintSegment(segment)
 		o.advanceBy(uint32(len(segment)))
 		if index+1 < len(segments) {
-			o.PrintSegment(strings.Repeat(" ", 4-int(o.advance%4))) // Tab
-			o.advanceBy(4 - (o.advance % 4))
+			tabSpaces := 4 - (o.advance % 4)
+			o.PrintSegment(strings.Repeat(" ", int(tabSpaces))) // Tab.
+			if o.ShowInvisibles {
+				DrawBorderlessBox(o.pos.Add(mgl64.Vec2{1, fontHeight/2 - 1}), mgl64.Vec2{fontWidth*float64(tabSpaces) - 2, 2}, selectedTextDarkColor)
+			}
+			o.advanceBy(tabSpaces)
 		}
 	}
 }
@@ -5408,6 +5413,7 @@ type TextStyle struct {
 	TextColor       *mgl64.Vec3
 	BorderColor     **mgl64.Vec3
 	BackgroundColor **mgl64.Vec3
+	ShowInvisibles  *bool
 }
 
 func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
@@ -5426,6 +5432,9 @@ func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
 	if textStyle.BackgroundColor != nil {
 		backgroundColor := *textStyle.BackgroundColor
 		glt.BackgroundColor = backgroundColor
+	}
+	if textStyle.ShowInvisibles != nil {
+		glt.ShowInvisibles = *textStyle.ShowInvisibles
 	}
 }
 
@@ -5524,6 +5533,7 @@ func (this *selectionHighlighterIterator) Current() *TextStyle {
 
 	borderColor := &selectedTextDarkColor
 	color := &selectedTextColor
+	showInvisibles := true
 	if !this.hasTypingFocus {
 		borderColor = &selectedTextColor
 		color = &selectedTextInactiveColor
@@ -5531,10 +5541,12 @@ func (this *selectionHighlighterIterator) Current() *TextStyle {
 	if this.offset < this.min || this.offset >= this.max {
 		borderColor = nil
 		color = nil
+		showInvisibles = false
 	}
 	return &TextStyle{
 		BorderColor:     &borderColor,
 		BackgroundColor: &color,
+		ShowInvisibles:  &showInvisibles,
 	}
 }
 
@@ -7686,7 +7698,7 @@ func main() {
 	var inputEventQueue2 = make(chan InputEvent, 32)
 	var window *glfw.Window
 
-	const sublimeMode = 1
+	const sublimeMode = 5
 
 	if !*headlessFlag {
 		runtime.LockOSThread()
