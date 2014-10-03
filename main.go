@@ -3775,7 +3775,7 @@ func (w *FilterableSelecterWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	}
 }
 func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -3788,19 +3788,22 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
 	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
-	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.Pointer.State.Button(0) {
 		globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if w.entries.Len() > 0 {
+			var newSelected uint64
 			if localPosition[1] < 0 {
-				w.selected = 0
+				newSelected = 0
 			} else if uint64(localPosition[1]/fontHeight) > uint64(w.entries.Len()-1) {
-				w.selected = uint64(w.entries.Len() - 1)
+				newSelected = uint64(w.entries.Len() - 1)
 			} else {
-				w.selected = uint64(localPosition[1] / fontHeight)
+				newSelected = uint64(localPosition[1] / fontHeight)
 			}
-			w.selectionChangedTest()
+			if w.selected != newSelected {
+				w.selected = newSelected
+				w.selectionChangedTest()
+			}
 		}
 	}
 
