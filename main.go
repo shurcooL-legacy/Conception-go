@@ -2918,6 +2918,106 @@ func (w *ChannelExpeWidget) NotifyChange() {
 
 // ---
 
+type FooWidget2 struct {
+	*FlowLayoutWidget
+}
+
+func NewFooWidget2(pos mgl64.Vec2) Widgeter {
+	listWidget := NewTextBoxWidget(np)
+	listWidgetScrollPane := NewScrollPaneWidget(np, mgl64.Vec2{180, 80}, listWidget)
+	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
+
+	actions := &CustomWidget{
+		Widget: NewWidget(np, np),
+		ProcessEventFunc: func(inputEvent InputEvent) {
+			if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+				switch glfw.Key(inputEvent.InputId) {
+				case glfw.KeyEnter:
+					fmt.Println(searchField.Content.Content())
+					SetViewGroup(searchField.Content, "")
+				}
+			}
+		},
+	}
+	searchField.ExtensionsTest = append(searchField.ExtensionsTest, actions)
+
+	widgets := []Widgeter{listWidgetScrollPane, searchField}
+
+	w := &FooWidget2{FlowLayoutWidget: NewFlowLayoutWidget(pos, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})}
+
+	return w
+}
+
+type FooWidget struct {
+	Widget
+	text string
+}
+
+func NewFooWidget(pos mgl64.Vec2) Widgeter {
+	w := &FooWidget{Widget: NewWidget(pos, mgl64.Vec2{180, 30})}
+	return w
+}
+
+func (w *FooWidget) Render() {
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
+
+	if hasTypingFocus {
+		DrawYBox(w.pos, w.size)
+	} else {
+		DrawNBox(w.pos, w.size)
+	}
+
+	glt := NewOpenGlStream(w.pos)
+	gl.Color3d(0, 0, 0)
+	glt.PrintText(w.text)
+
+	if hasTypingFocus {
+		expandedCaretPosition, caretLine := len(w.text), 0
+
+		// Draw caret
+		gl.PushMatrix()
+		gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+		gl.Color3d(0, 0, 0)
+		gl.Recti(int32(expandedCaretPosition*fontWidth-1), int32(caretLine*fontHeight), int32(expandedCaretPosition*fontWidth+1), int32(caretLine*fontHeight)+fontHeight)
+		gl.PopMatrix()
+	}
+}
+
+func (w *FooWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
+			keyboardPointer.OriginMapping = []Widgeter{w}
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyBackspace:
+			if len(w.text) > 0 {
+				w.text = w.text[:len(w.text)-1]
+			}
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[CHARACTER_EVENT] && inputEvent.InputId < 128 {
+		w.text += string(inputEvent.InputId)
+	}
+}
+
+func (w *FooWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+
+// ---
+
 type commandNode struct {
 	w        *LiveCmdExpeWidget
 	template CmdFactory
@@ -3578,6 +3678,29 @@ func (w *SearchableListWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	} else {
 		return nil
 	}
+}
+
+// ---
+
+func NewSearchableListWidgetAction(pos, size mgl64.Vec2, entries SliceStringer) *SearchableListWidget {
+	w := NewSearchableListWidgetTest(pos, size, entries)
+
+	actions := &CustomWidget{
+		Widget: NewWidget(np, np),
+		ProcessEventFunc: func(inputEvent InputEvent) {
+			if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+				switch glfw.Key(inputEvent.InputId) {
+				case glfw.KeyEnter:
+					fmt.Println(w.listWidget.GetSelected())
+				case glfw.KeyEscape:
+					fmt.Println("Escape.")
+				}
+			}
+		},
+	}
+	w.ExtensionsTest = append(w.ExtensionsTest, actions)
+
+	return w
 }
 
 // ---
@@ -7887,6 +8010,25 @@ func main() {
 
 	switch sublimeMode {
 	case 5:
+		{
+			//entries := NewSliceStringerS("one", "two", "three")
+			entries := &goPackagesSliceStringer{goPackages}
+
+			w := NewSearchableListWidgetAction(mgl64.Vec2{200, 0}, mgl64.Vec2{600, 600}, entries)
+			widgets = append(widgets, w)
+
+			var foo DepNode2Func
+			foo.UpdateFunc = func(DepNode2I) { fmt.Println("Changed!") }
+			foo.AddSources(w.OnSelectionChanged())
+			keepUpdatedTEST = append(keepUpdatedTEST, &foo)
+
+			// ---
+
+			{
+				w := NewFooWidget2(mgl64.Vec2{10, 300})
+				widgets = append(widgets, w)
+			}
+		}
 	case 4:
 
 		//source := NewTextFileWidget(mathgl.Vec2d{50, 160}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/gist.github.com/7176504.git/main.go")
@@ -9222,7 +9364,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	}
 
 	switch sublimeMode {
-	case 1:
+	case 1, 5:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: false})
 	default:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
