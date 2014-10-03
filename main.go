@@ -9196,6 +9196,15 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		}
 		{
 			contentFunc := func() (out string) {
+				for _, widget := range mousePointer.OriginMapping {
+					out += fmt.Sprintf("%T\n", widget)
+				}
+				return TrimLastNewline(out)
+			}
+			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Mouse Origin Mapping"))
+		}
+		{
+			contentFunc := func() (out string) {
 				for _, widget := range keyboardPointer.OriginMapping {
 					out += fmt.Sprintf("%T\n", widget)
 				}
