@@ -3570,13 +3570,13 @@ type FpsWidget struct {
 }
 
 func NewFpsWidget(pos mgl64.Vec2) *FpsWidget {
-	return &FpsWidget{Widget: NewWidget(pos, np)}
+	return &FpsWidget{Widget: NewWidget(pos, mgl64.Vec2{30, 40})}
 }
 
 func (w *FpsWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+	gl.Translated(float64(w.pos[0]), float64(w.pos[1]+w.size[1]), 0)
 	gl.Begin(gl.LINES)
 	gl.Color3d(1, 0, 0)
 	gl.Vertex2d(float64(0), float64(-1000.0/60))
@@ -8046,8 +8046,8 @@ func main() {
 
 			// ---
 
-			{
-				w := NewFooWidget2(mgl64.Vec2{10, 300})
+			if false {
+				w := NewFooWidget2(mgl64.Vec2{200, 640})
 				widgets = append(widgets, w)
 			}
 		}
@@ -9334,17 +9334,9 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	}
 
 	fpsWidget := NewFpsWidget(mgl64.Vec2{10, 120})
-	widgets = append(widgets, fpsWidget)
-	// NumGoroutines
-	{
-		contentFunc := func() string { return fmt.Sprint(runtime.NumGoroutine()) }
-		mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
-		widgets = append(widgets, NewTextLabelWidgetExternalContent(mgl64.Vec2{10, 40}, mc))
-	}
 
 	// Http Server
 	initHttpHandlers()
-	widgets = append(widgets, NewHttpServerTestWidget(mgl64.Vec2{10, 130}))
 
 	// lifeFormWidget test.
 	//widgets = append(widgets, NewLifeFormWidget(mathgl.Vec2d{400, 400}))
@@ -9382,6 +9374,19 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		w = append(w, NewGoonWidget(np, &mousePointer))
 		w = append(w, NewGoonWidget(np, &keyboardPointer))
 		w = append(w, NewGoonWidget(np, &widgets))
+
+		w = append(w, fpsWidget)
+
+		// Number of Goroutines.
+		{
+			contentFunc := func() string { return fmt.Sprint("Goroutines:", runtime.NumGoroutine()) }
+			mc := NewMultilineContentFunc(contentFunc, []DepNodeI{&UniversalClock})
+			w = append(w, NewTextLabelWidgetExternalContent(mgl64.Vec2{10, 40}, mc))
+		}
+
+		// Http Server
+		w = append(w, NewHttpServerTestWidget(mgl64.Vec2{10, 130}))
+
 		widgets = append(widgets, NewCollapsibleWidget(np, NewFlowLayoutWidget(np, w, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}), "Debug"))
 	}
 
