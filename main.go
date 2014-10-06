@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	text_scanner "text/scanner"
 	"time"
 
 	"code.google.com/p/go.net/websocket"
@@ -2924,7 +2925,7 @@ type FooWidget2 struct {
 
 func NewFooWidget2(pos mgl64.Vec2) Widgeter {
 	listWidget := NewTextBoxWidget(np)
-	listWidgetScrollPane := NewScrollPaneWidget(np, mgl64.Vec2{180, 80}, listWidget)
+	listWidgetScrollPane := NewScrollPaneWidget(np, mgl64.Vec2{fontWidth * 80, fontHeight * 12}, listWidget)
 	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
 
 	actions := &CustomWidget{
@@ -2933,7 +2934,26 @@ func NewFooWidget2(pos mgl64.Vec2) Widgeter {
 			if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 				switch glfw.Key(inputEvent.InputId) {
 				case glfw.KeyEnter:
-					fmt.Println(searchField.Content.Content())
+					type tokenText struct {
+						t rune
+						s string
+					}
+
+					var s text_scanner.Scanner
+					s.Init(strings.NewReader(searchField.Content.Content()))
+					s.Mode = text_scanner.ScanStrings
+
+					var tokens []tokenText
+					for tok := s.Scan(); tok != text_scanner.EOF; tok = s.Scan() {
+						tokens = append(tokens, tokenText{t: tok, s: s.TokenText()})
+					}
+
+					var out string
+					for _, tt := range tokens {
+						out += fmt.Sprintf("%v:%v ", text_scanner.TokenString(tt.t), tt.s)
+					}
+
+					SetViewGroup(listWidget.Content, listWidget.Content.Content()+out+"\n")
 					SetViewGroup(searchField.Content, "")
 				}
 			}
@@ -8018,7 +8038,9 @@ func main() {
 			widgets = append(widgets, w)
 
 			var foo DepNode2Func
-			foo.UpdateFunc = func(DepNode2I) { fmt.Println("Changed!") }
+			foo.UpdateFunc = func(DepNode2I) {
+				fmt.Println("Changed to", w.OnSelectionChanged().GetSelected(), "at", time.Since(startedProcess).Seconds())
+			}
 			foo.AddSources(w.OnSelectionChanged())
 			keepUpdatedTEST = append(keepUpdatedTEST, &foo)
 
