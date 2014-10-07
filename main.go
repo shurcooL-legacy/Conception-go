@@ -2772,10 +2772,31 @@ func (w *ScrollPaneWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 }
 
 func (w *ScrollPaneWidget) ProcessEvent(inputEvent InputEvent) {
+	var moved bool
+
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2 {
 		w.child.Pos()[0] += inputEvent.Sliders[1] * 10
 		w.child.Pos()[1] += inputEvent.Sliders[0] * 10
+		moved = true
+	}
 
+	// TODO: This should move cursor so it's on screen?
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyUp:
+			if inputEvent.ModifierKey == glfw.ModControl|glfw.ModAlt {
+				w.child.Pos()[1] += fontHeight
+				moved = true
+			}
+		case glfw.KeyDown:
+			if inputEvent.ModifierKey == glfw.ModControl|glfw.ModAlt {
+				w.child.Pos()[1] -= fontHeight
+				moved = true
+			}
+		}
+	}
+
+	if moved {
 		// HACK: Snap to nearest point. This prevents smaller scroll increments from being possible.
 		w.child.Pos()[0] = float64(NearInt64(w.child.Pos()[0]))
 		w.child.Pos()[1] = float64(NearInt64(w.child.Pos()[1]))
@@ -3622,8 +3643,9 @@ type SearchableListWidget struct {
 	*CompositeWidget
 
 	// Internal access shortcuts (also inside CompositeWidget).
-	searchField Widgeter
-	listWidget  *FilterableSelecterWidget
+	searchField          Widgeter
+	listWidget           *FilterableSelecterWidget
+	listWidgetScrollPane *ScrollPaneWidget
 
 	ExtensionsTest []Widgeter
 }
@@ -3634,7 +3656,7 @@ func NewSearchableListWidget(pos, size mgl64.Vec2, entries SliceStringer) *Searc
 	listWidget := NewFilterableSelecterWidget(np, entries, searchField.Content)
 	listWidgetScrollPane := NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, size, listWidget)
 
-	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget}
+	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget, listWidgetScrollPane: listWidgetScrollPane}
 
 	return w
 }
@@ -3661,7 +3683,7 @@ func NewSearchableListWidgetTest(pos, size mgl64.Vec2, entries SliceStringer) *S
 	listWidget := NewFilterableSelecterWidget(np, &entriesPlusOne{entries, searchField}, searchField.Content)
 	listWidgetScrollPane := NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, size, listWidget)
 
-	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget}
+	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget, listWidgetScrollPane: listWidgetScrollPane}
 
 	return w
 }
@@ -3674,7 +3696,7 @@ func (w *SearchableListWidget) OnSelectionChanged() Selecter {
 func (w *SearchableListWidget) SetKeyboardFocus() {
 	// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 	// HACK: Temporarily set both widgets as mapping here
-	keyboardPointer.OriginMapping = append([]Widgeter{w}, w.searchField, w.listWidget)
+	keyboardPointer.OriginMapping = append([]Widgeter{w}, w.searchField, w.listWidget, w.listWidgetScrollPane)
 }
 
 func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
@@ -6995,7 +7017,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		if !keyboardPointer.OriginMapping.ContainsWidget(w) {
-			keyboardPointer.OriginMapping = []Widgeter{w}
+			// HACK: Not general at all
+			if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane && scrollPane.child == w {
+				keyboardPointer.OriginMapping = []Widgeter{w, scrollPane}
+			} else {
+				keyboardPointer.OriginMapping = []Widgeter{w}
+			}
 		}
 	}
 
@@ -7160,7 +7187,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 				popupTest := NewSearchableListWidgetTest(mgl64.Vec2{200, 0}, mgl64.Vec2{600, 600}, globalGoSymbols)
 				// HACK: Not general at all
-				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane {
+				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane && scrollPane.child == w {
 					popupTest.SetParent(scrollPane)
 				} else {
 					popupTest.SetParent(w)
