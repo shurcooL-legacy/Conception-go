@@ -3727,7 +3727,7 @@ func (w *SearchableListWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 // ---
 
 func NewSearchableListWidgetAction(pos, size mgl64.Vec2, entries SliceStringer) *SearchableListWidget {
-	w := NewSearchableListWidgetTest(pos, size, entries)
+	w := NewSearchableListWidget(pos, size, entries)
 
 	actions := &CustomWidget{
 		Widget: NewWidget(np, np),
@@ -3787,6 +3787,24 @@ func (this *FilterableSliceStringer) Update() {
 	}
 }
 
+// TODO: Is this the right/best place?
+func (this *FilterableSliceStringer) Print(filteredIndex uint64, pos mgl64.Vec2) {
+	entry := this.Get(filteredIndex).String()
+	filter := this.GetSources()[1].(MultilineContentI)
+
+	index := strings.Index(strings.ToLower(entry), strings.ToLower(filter.Content()))
+
+	glt := NewOpenGlStream(pos)
+	gl.Color3dv((*float64)(&darkColor[0]))
+	glt.PrintText(entry[:index])
+	gl.Color3d(0, 0, 0)
+	glt.FontOptions = Bold
+	glt.PrintText(entry[index : index+len(filter.Content())])
+	gl.Color3dv((*float64)(&darkColor[0]))
+	glt.FontOptions = Regular
+	glt.PrintText(entry[index+len(filter.Content()):])
+}
+
 // ---
 
 type SliceStringer interface {
@@ -3811,16 +3829,16 @@ type FilterableSelecterWidget struct {
 	DepNode2Manual     // SelectionChanged
 	layoutDepNode2     DepNode2Func
 
-	entries SliceStringer
+	entries *FilterableSliceStringer
 }
 
 func NewFilterableSelecterWidget(pos mgl64.Vec2, entries SliceStringer, filter MultilineContentI) *FilterableSelecterWidget {
-	entries = NewFilterableSliceStringer(entries, filter)
+	filterableEntries := NewFilterableSliceStringer(entries, filter)
 
-	w := &FilterableSelecterWidget{Widget: NewWidget(pos, np), entries: entries}
+	w := &FilterableSelecterWidget{Widget: NewWidget(pos, np), entries: filterableEntries}
 
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
-	w.layoutDepNode2.AddSources(entries) // TODO: What about removing w when it's "deleted"?
+	w.layoutDepNode2.AddSources(filterableEntries) // TODO: What about removing w when it's "deleted"?
 
 	return w
 }
@@ -3917,7 +3935,6 @@ func (w *FilterableSelecterWidget) Render() {
 	}
 
 	for ; beginLineIndex < endLineIndex; beginLineIndex++ {
-		entry := w.entries.Get(uint64(beginLineIndex)).String()
 		if w.selected == uint64(beginLineIndex) {
 			if hasTypingFocus {
 				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.21, 0.45, 0.84})
@@ -3930,7 +3947,7 @@ func (w *FilterableSelecterWidget) Render() {
 			gl.Color3d(0, 0, 0)
 		}
 
-		PrintText(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), entry)
+		w.entries.Print(uint64(beginLineIndex), w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}))
 	}
 }
 
