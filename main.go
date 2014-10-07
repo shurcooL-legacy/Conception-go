@@ -14,6 +14,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"image"
+	_ "image/png"
 	"io"
 	"io/ioutil"
 	"log"
@@ -37,7 +38,6 @@ import (
 	goimports "code.google.com/p/go.tools/imports"
 	"github.com/bradfitz/iter"
 	"github.com/davecheney/profile"
-	_ "github.com/ftrvxmtrx/tga"
 	"github.com/go-gl/glow/gl/2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/mb0/diff"
@@ -186,8 +186,8 @@ func PrintSegment(pos mgl64.Vec2, s string) {
 	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
-	gl.Translated(float64(pos[0])-3.75*fontWidth/8.0, float64(pos[1])-1*fontHeight/16.0, 0)
-	gl.ListBase(oFontBase)
+	gl.Translated(float64(pos[0]), float64(pos[1]), 0)
+	gl.ListBase(oFontBase + 0*96)
 	gl.CallLists(int32(len(s)), gl.UNSIGNED_BYTE, gl.Ptr(&[]byte(s)[0]))
 	gl.PopMatrix()
 
@@ -196,11 +196,21 @@ func PrintSegment(pos mgl64.Vec2, s string) {
 
 // ---
 
+type FontOptions uint8
+
+const (
+	Regular FontOptions = iota
+	Bold
+	Italic
+	BoldItalic
+)
+
 type OpenGlStream struct {
 	pos        mgl64.Vec2
 	lineStartX float64
 	advance    uint32
 
+	FontOptions     FontOptions
 	BorderColor     *mgl64.Vec3 // nil means no border color.
 	BackgroundColor *mgl64.Vec3 // nil means no background color.
 	ShowInvisibles  bool
@@ -312,8 +322,8 @@ func (o *OpenGlStream) PrintSegment(s string) {
 	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
-	gl.Translated(float64(o.pos[0])-3.75*fontWidth/8.0, float64(o.pos[1])-1*fontHeight/16.0, 0)
-	gl.ListBase(oFontBase)
+	gl.Translated(float64(o.pos[0]), float64(o.pos[1]), 0)
+	gl.ListBase(oFontBase + uint32(o.FontOptions)*96)
 	gl.CallLists(int32(len(s)), gl.UNSIGNED_BYTE, gl.Ptr(&[]byte(s)[0]))
 	gl.PopMatrix()
 
@@ -322,47 +332,39 @@ func (o *OpenGlStream) PrintSegment(s string) {
 
 // ---
 
-const fontWidth, fontHeight = 7, 14
+const fontWidth, fontHeight = 6, 12
 
 func InitFont() {
-	LoadTexture("./Font.tga")
+	LoadTexture("./Font.png")
 
-	oFontBase = gl.GenLists(256)
-	oFontBackground = gl.GenLists(1)
+	oFontBase = gl.GenLists(32 + 96*4)
+	for i := 0; i < 96*4; i++ {
+		const shiftX, shiftY = float64(1.0 / 16), float64(1.0 / 6 / 4)
 
-	for iLoop1 := 0; iLoop1 < 256; iLoop1++ {
-		fCharX := float64(iLoop1%16) / 16.0
-		fCharY := float64(iLoop1/16) / 16.0
+		indexX, indexY := i%16, i/16
 
-		gl.NewList(oFontBase+uint32(iLoop1), gl.COMPILE)
-		const offset = float64(0.04 / 16)
-		const shiftX, shiftY = float64(0.0 / 16), float64(0.0 / 16)
-		//#if DECISION_RENDER_TEXT_VCENTERED_MID
-		/*VerticalOffset := gl.Double(0.02 / 16)
-		if ('a' <= iLoop1 && iLoop1 <= 'z') || '_' == iLoop1 {
-			VerticalOffset = gl.Double(-0.036 / 16)
-		}*/
-		VerticalOffset := float64(0.0)
+		gl.NewList(oFontBase+uint32(i+32), gl.COMPILE)
 		gl.Begin(gl.QUADS)
-		gl.TexCoord2d(fCharX-shiftX+offset, 1-(1-fCharY-0.0625+shiftY+offset+VerticalOffset))
-		gl.Vertex2i(0, fontHeight)
-		gl.TexCoord2d(fCharX+0.0625-shiftX-offset, 1-(1-fCharY-0.0625+shiftY+offset+VerticalOffset))
-		gl.Vertex2i(fontWidth*2, fontHeight)
-		gl.TexCoord2d(fCharX+0.0625-shiftX-offset, 1-(1-fCharY+shiftY-offset+VerticalOffset))
-		gl.Vertex2i(fontWidth*2, 0)
-		gl.TexCoord2d(fCharX-shiftX+offset, 1-(1-fCharY+shiftY-offset+VerticalOffset))
+		gl.TexCoord2d(float64(indexX)*shiftX, float64(indexY)*shiftY)
 		gl.Vertex2i(0, 0)
+		gl.TexCoord2d(float64(indexX+1)*shiftX, float64(indexY)*shiftY)
+		gl.Vertex2i(fontWidth, 0)
+		gl.TexCoord2d(float64(indexX+1)*shiftX, float64(indexY+1)*shiftY)
+		gl.Vertex2i(fontWidth, fontHeight)
+		gl.TexCoord2d(float64(indexX)*shiftX, float64(indexY+1)*shiftY)
+		gl.Vertex2i(0, fontHeight)
 		gl.End()
 		gl.Translated(fontWidth, 0.0, 0.0)
 		gl.EndList()
 	}
 
+	oFontBackground = gl.GenLists(1)
 	gl.NewList(oFontBackground, gl.COMPILE)
 	gl.Begin(gl.QUADS)
+	gl.Vertex2i(0, 0)
 	gl.Vertex2i(0, fontHeight)
 	gl.Vertex2i(fontWidth, fontHeight)
 	gl.Vertex2i(fontWidth, 0)
-	gl.Vertex2i(0, 0)
 	gl.End()
 	gl.Translated(fontWidth, 0.0, 0.0)
 	gl.EndList()
@@ -371,7 +373,7 @@ func InitFont() {
 }
 
 func DeinitFont() {
-	gl.DeleteLists(oFontBase, 256)
+	gl.DeleteLists(oFontBase, 32+96*4)
 	gl.DeleteLists(oFontBackground, 1)
 }
 
@@ -393,7 +395,7 @@ func LoadTexture(path string) {
 	}
 
 	bounds := img.Bounds()
-	//fmt.Printf("loaded %vx%v texture.\n", bounds.Dx(), bounds.Dy())
+	//fmt.Printf("Loaded %vx%v texture.\n", bounds.Dx(), bounds.Dy())
 
 	var pixPointer *uint8
 	switch img := img.(type) {
@@ -5578,6 +5580,7 @@ func (w *StringerWidget) Render() {
 // ---
 
 type TextStyle struct {
+	FontOptions     *FontOptions
 	TextColor       *mgl64.Vec3
 	BorderColor     **mgl64.Vec3
 	BackgroundColor **mgl64.Vec3
@@ -5589,6 +5592,9 @@ func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
 		return
 	}
 
+	if textStyle.FontOptions != nil {
+		glt.FontOptions = *textStyle.FontOptions
+	}
 	if textStyle.TextColor != nil {
 		textColor := *textStyle.TextColor
 		gl.Color3dv((*float64)(&textColor[0]))
@@ -5733,6 +5739,7 @@ func (this *selectionHighlighterIterator) Advance(span uint32) *TextStyle {
 type highlightSegment struct {
 	offset uint32
 	color  mgl64.Vec3
+	bold   bool
 }
 
 type highlightedGoContent struct {
@@ -5769,7 +5776,7 @@ func (this *highlightedGoContent) Update() {
 
 		switch {
 		case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.004, 0, 0.714}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.004, 0, 0.714}, bold: true})
 		case tok.IsLiteral() && tok != token.IDENT:
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}})
 		case lit == "false" || lit == "true":
@@ -5801,8 +5808,13 @@ func (this *highlightedGoContent) LenSegments() int {
 }
 func (this *highlightedGoContent) SegmentToTextStyle(index uint32) *TextStyle {
 	color := this.Segment(index).color
+	var fontOptions FontOptions
+	if this.Segment(index).bold {
+		fontOptions = Bold
+	}
 	return &TextStyle{
-		TextColor: &color,
+		FontOptions: &fontOptions,
+		TextColor:   &color,
 	}
 }
 
@@ -7871,7 +7883,7 @@ func main() {
 	var inputEventQueue2 = make(chan InputEvent, 32)
 	var window *glfw.Window
 
-	const sublimeMode = 5
+	const sublimeMode = 1
 
 	if !*headlessFlag {
 		runtime.LockOSThread()
