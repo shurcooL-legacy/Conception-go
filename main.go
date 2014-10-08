@@ -413,7 +413,7 @@ func LoadTexture(path string) {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.GENERATE_MIPMAP, gl.TRUE)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, -0.75)
+	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, -0.5)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(bounds.Dx()), int32(bounds.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(pixPointer))
 	CheckGLError()
 }
@@ -5137,7 +5137,7 @@ func NewMultilineContentFile(path string) *MultilineContentFile {
 }
 
 func (this *MultilineContentFile) SetSelf(content string) {
-	err := ioutil.WriteFile(this.path, []byte(content), 0666)
+	err := ioutil.WriteFile(this.path, []byte(content), 0644)
 	CheckError(err)
 }
 
@@ -5186,7 +5186,7 @@ func (this *FileView) Close() error {
 }
 
 func (this *FileView) SetSelf(content string) {
-	err := ioutil.WriteFile(this.path, []byte(content), 0666)
+	err := ioutil.WriteFile(this.path, []byte(content), 0644)
 	CheckError(err)
 	this.lastContentQUICKHACK = content
 	ExternallyUpdated(&this.DepNode2Manual) // File content changed.
@@ -7214,7 +7214,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					break
 				}
 
-				popupTest := NewSearchableListWidgetTest(mgl64.Vec2{200, 0}, mgl64.Vec2{600, 600}, globalGoSymbols)
+				popupTest := NewSearchableListWidget(mgl64.Vec2{200, 0}, mgl64.Vec2{600, 600}, globalGoSymbols)
 				// HACK: Not general at all
 				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane && scrollPane.child == w {
 					popupTest.SetParent(scrollPane)
