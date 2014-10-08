@@ -122,6 +122,7 @@ var (
 	lightColor       = mgl64.Vec3{0.85, 0.85, 0.85}
 	grayColor        = mgl64.Vec3{0.75, 0.75, 0.75}
 	darkColor        = mgl64.Vec3{0.35, 0.35, 0.35}
+	veryDarkColor    = mgl64.Vec3{0.1, 0.1, 0.1}
 	nearlyBlackColor = mgl64.Vec3{0.025, 0.025, 0.025}
 
 	highlightColor = mgl64.Vec3{0.898, 0.765, 0.396}
@@ -3788,21 +3789,32 @@ func (this *FilterableSliceStringer) Update() {
 }
 
 // TODO: Is this the right/best place?
-func (this *FilterableSliceStringer) Print(filteredIndex uint64, pos mgl64.Vec2) {
+func (this *FilterableSliceStringer) Print(filteredIndex uint64, pos mgl64.Vec2, selected bool) {
 	entry := this.Get(filteredIndex).String()
 	filter := this.GetSources()[1].(MultilineContentI)
 
 	index := strings.Index(strings.ToLower(entry), strings.ToLower(filter.Content()))
 
 	glt := NewOpenGlStream(pos)
-	gl.Color3dv((*float64)(&darkColor[0]))
-	glt.PrintText(entry[:index])
-	gl.Color3d(0, 0, 0)
-	glt.FontOptions = Bold
-	glt.PrintText(entry[index : index+len(filter.Content())])
-	gl.Color3dv((*float64)(&darkColor[0]))
-	glt.FontOptions = Regular
-	glt.PrintText(entry[index+len(filter.Content()):])
+	if !selected {
+		gl.Color3dv((*float64)(&veryDarkColor[0]))
+		glt.PrintText(entry[:index])
+		gl.Color3d(0, 0, 0)
+		glt.FontOptions = Bold
+		glt.PrintText(entry[index : index+len(filter.Content())])
+		gl.Color3dv((*float64)(&veryDarkColor[0]))
+		glt.FontOptions = Regular
+		glt.PrintText(entry[index+len(filter.Content()):])
+	} else {
+		gl.Color3dv((*float64)(&veryLightColor[0]))
+		glt.PrintText(entry[:index])
+		gl.Color3d(1, 1, 1)
+		glt.FontOptions = Bold
+		glt.PrintText(entry[index : index+len(filter.Content())])
+		gl.Color3dv((*float64)(&veryLightColor[0]))
+		glt.FontOptions = Regular
+		glt.PrintText(entry[index+len(filter.Content()):])
+	}
 }
 
 // ---
@@ -3938,16 +3950,16 @@ func (w *FilterableSelecterWidget) Render() {
 		if w.selected == uint64(beginLineIndex) {
 			if hasTypingFocus {
 				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.21, 0.45, 0.84})
-				gl.Color3d(1, 1, 1)
+
+				w.entries.Print(uint64(beginLineIndex), w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), true)
 			} else {
 				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.83, 0.83, 0.83})
-				gl.Color3d(0, 0, 0)
+
+				w.entries.Print(uint64(beginLineIndex), w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), false)
 			}
 		} else {
-			gl.Color3d(0, 0, 0)
+			w.entries.Print(uint64(beginLineIndex), w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), false)
 		}
-
-		w.entries.Print(uint64(beginLineIndex), w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}))
 	}
 }
 
