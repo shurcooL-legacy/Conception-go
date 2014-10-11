@@ -5110,7 +5110,9 @@ func NewMultilineContentFile(path string) *MultilineContentFile {
 
 func (this *MultilineContentFile) SetSelf(content string) {
 	err := ioutil.WriteFile(this.path, []byte(content), 0644)
-	CheckError(err)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func (this *MultilineContentFile) NotifyChange() {
@@ -5159,7 +5161,9 @@ func (this *FileView) Close() error {
 
 func (this *FileView) SetSelf(content string) {
 	err := ioutil.WriteFile(this.path, []byte(content), 0644)
-	CheckError(err)
+	if err != nil {
+		log.Println(err)
+	}
 	this.lastContentQUICKHACK = content
 	ExternallyUpdated(&this.DepNode2Manual) // File content changed.
 }
