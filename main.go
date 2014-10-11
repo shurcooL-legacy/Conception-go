@@ -4767,6 +4767,15 @@ func (cp *caretPositionInternal) SetPositionFromPhysical(pos mgl64.Vec2) {
 	ExternallyUpdated(&cp.DepNode2Manual)
 }
 
+// TrySetPositionAtLineIndex places caret at beginning of lineIndex line. It accepts out of range line indicies.
+func (cp *caretPositionInternal) TrySetPositionAtLineIndex(lineIndex int) {
+	cp.lineIndex = lineIndex
+	cp.positionWithinLine = 0
+	cp.targetExpandedX = 0
+
+	ExternallyUpdated(&cp.DepNode2Manual)
+}
+
 func (cp *caretPositionInternal) TrySet(position uint32) {
 	if position > uint32(cp.w.LenContent()) {
 		position = uint32(cp.w.LenContent())
@@ -4982,6 +4991,12 @@ func (cp *CaretPosition) ReplaceSelectionWith(s string) {
 func (cp *CaretPosition) GetSelectionContent() (selectionContent string) {
 	selStart, selEnd := cp.SelectionRange2()
 	return cp.w.Content()[selStart.Logical():selEnd.Logical()]
+}
+
+// TrySetPositionAtLineIndex places caret at beginning of lineIndex line. It accepts out of range line indicies.
+func (cp *CaretPosition) TrySetPositionAtLineIndex(lineIndex int) {
+	cp.caretPosition.TrySetPositionAtLineIndex(lineIndex)
+	cp.selectionPosition.MoveTo(cp.caretPosition)
 }
 
 // TODO: Change api to ask for an caretPositionInternal instance?
@@ -7343,7 +7358,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				w.RestoreView(w.findPanel.OriginalView)
 			}
 		case glfw.KeyG:
-			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
+			switch {
+			case inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper:
 				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
 				if !(w.options.PopupTest && w.options.FindPanel) {
 					break
@@ -7360,6 +7376,75 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					w.caretPosition.caretPosition.willMoveH(int32(end - start))
 					w.CenterOnCaretPositionIfOffscreen()
 				}
+			// Ctrl+G opens a Go To Line box.
+			case inputEvent.ModifierKey == glfw.ModControl:
+				// TODO: Move this compoment out of TextBoxWidget; make it dynamically attachable or something.
+				if !w.options.PopupTest {
+					break
+				}
+
+				popupTest := NewTextBoxWidget(mgl64.Vec2{200, 0})
+				// HACK: Not general at all
+				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane && scrollPane.child == w {
+					popupTest.SetParent(scrollPane)
+				} else {
+					popupTest.SetParent(w)
+				}
+
+				// HACK: Duplicated code, need to refactor
+				{
+					scrollToLine := DepNode2Func{}
+					scrollToLine.UpdateFunc = func(this DepNode2I) {
+						if lineIndex, err := strconv.Atoi(this.GetSources()[0].(MultilineContentI).Content()); err == nil {
+							w.caretPosition.TrySetPositionAtLineIndex(lineIndex)
+							w.CenterOnCaretPosition()
+						}
+					}
+					scrollToLine.AddSources(popupTest.Content)
+					keepUpdatedTEST = append(keepUpdatedTEST, &scrollToLine)
+				}
+
+				originalMapping := keyboardPointer.OriginMapping // HACK
+				originalView := w.SaveView()
+				closeOnEscape := &CustomWidget{
+					Widget: NewWidget(np, np),
+					ProcessEventFunc: func(inputEvent InputEvent) {
+						if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+							switch glfw.Key(inputEvent.InputId) {
+							case glfw.KeyEnter:
+								// Remove popupTest from w.PopupsTest.
+								for i, widget := range w.PopupsTest {
+									if widget == popupTest {
+										w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
+										break
+									}
+								}
+
+								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+								keyboardPointer.OriginMapping = originalMapping
+							case glfw.KeyEscape:
+								// Remove popupTest from w.PopupsTest.
+								for i, widget := range w.PopupsTest {
+									if widget == popupTest {
+										w.PopupsTest = append(w.PopupsTest[:i], w.PopupsTest[i+1:]...)
+										break
+									}
+								}
+
+								w.RestoreView(originalView)
+
+								// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+								keyboardPointer.OriginMapping = originalMapping
+							}
+						}
+					},
+				}
+				popupTest.ExtensionsTest = append(popupTest.ExtensionsTest, closeOnEscape)
+
+				w.PopupsTest = append(w.PopupsTest, popupTest)
+
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				keyboardPointer.OriginMapping = []Widgeter{popupTest}
 			}
 		case glfw.KeyEscape:
 			// Close the last popup, if any.
