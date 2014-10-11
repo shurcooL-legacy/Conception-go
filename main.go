@@ -1197,6 +1197,7 @@ func (this *goSymbolsB) Update() {
 	}
 }
 
+// TODO: Make this faster by only parsing the current file AST. No need to type check for Cmd+R list of declarations.
 func NewTest5BWidget(pos mgl64.Vec2, typeCheckedPackage *typeCheckedPackage) (*SearchableListWidget, *goSymbolsB) {
 	goSymbols := &goSymbolsB{}
 	goSymbols.AddSources(typeCheckedPackage)
