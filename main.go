@@ -157,46 +157,6 @@ func CheckGLError() {
 
 // ---
 
-func PrintText(pos mgl64.Vec2, s string) {
-	lines := GetLines(s)
-	for lineIndex, line := range lines {
-		PrintLine(pos.Add(mgl64.Vec2{0, float64(fontHeight * lineIndex)}), line)
-	}
-}
-
-// Input shouldn't have newlines
-func PrintLine(pos mgl64.Vec2, s string) {
-	segments := strings.Split(s, "\t")
-	var advance uint32
-	for _, segment := range segments {
-		PrintSegment(mgl64.Vec2{pos[0] + float64(fontWidth*advance), pos[1]}, segment)
-		advance += uint32(len(segment))
-		advance += 4 - (advance % 4)
-	}
-}
-
-// Shouldn't have tabs nor newlines
-func PrintSegment(pos mgl64.Vec2, s string) {
-	if s == "" {
-		return
-	}
-
-	gl.Enable(gl.BLEND)
-	defer gl.Disable(gl.BLEND)
-	gl.Enable(gl.TEXTURE_2D)
-	defer gl.Disable(gl.TEXTURE_2D)
-
-	gl.PushMatrix()
-	gl.Translated(float64(pos[0]), float64(pos[1]), 0)
-	gl.ListBase(oFontBase + 0*96)
-	gl.CallLists(int32(len(s)), gl.UNSIGNED_BYTE, gl.Ptr(&[]byte(s)[0]))
-	gl.PopMatrix()
-
-	//CheckGLError()
-}
-
-// ---
-
 type FontOptions uint8
 
 const (
@@ -1427,7 +1387,7 @@ func (w *ButtonLabelWidget) Render() {
 	w.ButtonWidget.Render()
 
 	gl.Color3d(0, 0, 0)
-	PrintLine(w.Pos().Add(mgl64.Vec2{4, 0}), w.label)
+	NewOpenGlStream(w.Pos().Add(mgl64.Vec2{4, 0})).PrintLine(w.label)
 }
 
 // ---
@@ -1705,7 +1665,7 @@ func (w *WindowWidget) Render() {
 
 	// Title
 	gl.Color3dv((*float64)(&nearlyBlackColor[0]))
-	PrintSegment(w.pos.Add(mgl64.Vec2{60}), w.Name)
+	NewOpenGlStream(w.pos.Add(mgl64.Vec2{60})).PrintLine(w.Name)
 
 	gl.PushMatrix()
 	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
@@ -2889,7 +2849,7 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	gl.Rectd(0, 0, float64(w.size[0]), float64(w.size[1]))
 
 	gl.Color3d(0, 0, 0)
-	PrintText(mgl64.Vec2{0, 0}, s)
+	NewOpenGlStream(mgl64.Vec2{0, 0}).PrintText(s)
 }
 
 // ---
@@ -4272,9 +4232,9 @@ func (w *FolderListingPureWidget) Render() {
 		}
 
 		if v.IsDir() {
-			PrintText(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), v.Name()+PathSeparator)
+			NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)})).PrintLine(v.Name() + PathSeparator)
 		} else {
-			PrintText(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), v.Name())
+			NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)})).PrintLine(v.Name())
 		}
 	}
 }
@@ -5530,10 +5490,7 @@ func (w *TextLabelWidget) Render() {
 	DrawLGBox(w.pos, w.size)
 
 	gl.Color3d(0, 0, 0)
-	for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
-		contentLine := w.Content.Line(lineIndex)
-		PrintLine(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, w.Content.Content()[contentLine.Start:contentLine.Start+contentLine.Length])
-	}
+	NewOpenGlStream(w.pos).PrintText(w.Content.Content())
 
 	isHit := len(w.HoverPointers()) > 0
 	// Tooltip
@@ -5603,7 +5560,7 @@ func (w *StringerWidget) Render() {
 
 	gl.Color3d(0, 0, 0)
 	// TODO: Multiline support?
-	PrintLine(w.pos, w.content.String())
+	NewOpenGlStream(w.pos).PrintText(w.content.String())
 }
 
 // ---
@@ -6971,7 +6928,7 @@ func (w *TextBoxWidget) Render() {
 		} else {
 			for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
 				contentLine := w.Content.Line(lineIndex)
-				PrintLine(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}, strings.Repeat("*", int(contentLine.Length)))
+				NewOpenGlStream(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}).PrintLine(strings.Repeat("*", int(contentLine.Length)))
 			}
 		}
 	}
