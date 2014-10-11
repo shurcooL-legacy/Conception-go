@@ -101,6 +101,7 @@ var _ = http.ListenAndServe
 var _ = Underline
 var _ = PrintPackageFullSummary
 
+var modeFlag = flag.Int("mode", 5, "Mode.")
 var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
 var keepRunning = true
@@ -7856,8 +7857,6 @@ func main() {
 	var inputEventQueue2 = make(chan InputEvent, 32)
 	var window *glfw.Window
 
-	const sublimeMode = 1
-
 	if !*headlessFlag {
 		runtime.LockOSThread()
 
@@ -7878,7 +7877,7 @@ func main() {
 
 		glfw.WindowHint(glfw.Samples, 8) // Anti-aliasing
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
-		switch sublimeMode {
+		switch *modeFlag {
 		default:
 			window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
 		case 5:
@@ -8040,7 +8039,7 @@ func main() {
 
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
-	switch sublimeMode {
+	switch *modeFlag {
 	case 5:
 		{
 			//entries := NewSliceStringerS("one", "two", "three")
@@ -9404,7 +9403,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		widgets = append(widgets, NewCollapsibleWidget(np, NewFlowLayoutWidget(np, w, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}), "Debug"))
 	}
 
-	switch sublimeMode {
+	switch *modeFlag {
 	case 1, 5:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: false})
 	default:
