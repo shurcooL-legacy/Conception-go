@@ -115,6 +115,8 @@ var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 
 var booVcs *exp12.Directory
 
+var lodBias float64 = -66.67
+
 // Colors
 var (
 	nearlyWhiteColor = mgl64.Vec3{0.975, 0.975, 0.975}
@@ -276,6 +278,8 @@ func (o *OpenGlStream) PrintSegment(s string) {
 		gl.PopMatrix()
 		gl.PopAttrib()
 	}
+
+	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, float32(lodBias*0.01))
 
 	gl.Enable(gl.BLEND)
 	defer gl.Disable(gl.BLEND)
@@ -9382,6 +9386,8 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		w = append(w, NewGoonWidget(np, &mousePointer))
 		w = append(w, NewGoonWidget(np, &keyboardPointer))
 		w = append(w, NewGoonWidget(np, &widgets))
+
+		w = append(w, NewGoonWidget(np, &lodBias))
 
 		w = append(w, fpsWidget)
 
