@@ -35,6 +35,7 @@ import (
 
 	"code.google.com/p/go.net/websocket"
 	"code.google.com/p/go.tools/go/types"
+	goimports "code.google.com/p/go.tools/imports"
 	"github.com/bradfitz/iter"
 	"github.com/davecheney/profile"
 	"github.com/go-gl/glow/gl/2.1/gl"
@@ -85,7 +86,6 @@ import (
 	"github.com/shurcooL/markdownfmt/markdown"
 	"gopkg.in/pipe.v2"
 	"honnef.co/go/importer"
-	"sourcegraph.com/sqs/goreturns/returns"
 )
 
 var _ = UnderscoreSepToCamelCase
@@ -7207,10 +7207,14 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				if uri, ok := w.Content.GetUriForProtocol("file://"); ok {
 					switch {
 					case strings.HasSuffix(string(uri), ".go"):
-						// Run `goreturns` on Go source code.
-						if out, err := returns.Process("", []byte(w.Content.Content()), nil); err == nil {
+						// Run `goimports` on Go source code.
+						if out, err := goimports.Process("", []byte(w.Content.Content()), nil); err == nil {
 							SetViewGroup(w.Content, string(out))
 						}
+						// Run `goreturns` on Go source code.
+						/*if out, err := returns.Process("", "", []byte(w.Content.Content()), &returns.Options{Fragment: true}); err == nil {
+							SetViewGroup(w.Content, string(out))
+						}*/
 					case strings.HasSuffix(string(uri), ".md") || strings.HasSuffix(string(uri), ".markdown"):
 						// Run `markdownfmt` on Markdown.
 						if out, err := markdown.Process("", []byte(w.Content.Content()), nil); err == nil {
