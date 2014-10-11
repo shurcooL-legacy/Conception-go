@@ -77,8 +77,8 @@ import (
 	. "github.com/shurcooL/go/gists/gist7802150"
 	"github.com/shurcooL/go/gists/gist8065433"
 	"github.com/shurcooL/go/github_flavored_markdown"
+	"github.com/shurcooL/go/markdown_http"
 	"github.com/shurcooL/go/pipe_util"
-	"github.com/shurcooL/go/u/u1"
 	"github.com/shurcooL/go/u/u5"
 	"github.com/shurcooL/go/u/u6"
 	"github.com/shurcooL/go/vcs"
@@ -7619,31 +7619,6 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 
 // ---
 
-type MarkdownHandlerFunc func(req *http.Request) (markdown []byte, err error)
-
-func (this MarkdownHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	markdown, err := this(req)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	if _, plain := req.URL.Query()["plain"]; plain {
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write(markdown)
-	} else if _, github := req.URL.Query()["github"]; github {
-		w.Header().Set("Content-Type", "text/html")
-		started := time.Now()
-		u1.WriteGitHubFlavoredMarkdownViaGitHub(w, markdown)
-		fmt.Println("rendered GFM via GitHub, took", time.Since(started))
-	} else {
-		w.Header().Set("Content-Type", "text/html")
-		started := time.Now()
-		u1.WriteGitHubFlavoredMarkdownViaLocal(w, markdown)
-		fmt.Println("rendered GFM locally, took", time.Since(started))
-	}
-}
-
 func initHttpHandlers() {
 	http.HandleFunc("/close", func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintln(w, "Closing.")
@@ -7655,7 +7630,7 @@ func initHttpHandlers() {
 		fmt.Fprintf(w, "%#v\n", widgets)
 	})*/
 	http.Handle("/favicon.ico", http.NotFoundHandler())
-	http.Handle("/status/", http.StripPrefix("/status", MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
+	http.Handle("/status/", http.StripPrefix("/status", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 
 		// HACK: Handle .go files specially, just assume they're in "./GoLand"
 		/*if strings.HasSuffix(req.URL.Path, ".go") {
@@ -7735,7 +7710,7 @@ func initHttpHandlers() {
 
 		return []byte(b), nil
 	})))
-	http.Handle("/status", MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
+	http.Handle("/status", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		started := time.Now()
 
 		_, short := req.URL.Query()["short"]
@@ -7819,7 +7794,7 @@ func initHttpHandlers() {
 
 		return append(summary.Bytes(), buf.Bytes()...), nil
 	}))
-	http.Handle("/inline/", http.StripPrefix("/inline", MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
+	http.Handle("/inline/", http.StripPrefix("/inline", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		importPath := req.URL.Path[1:]
 
 		// TODO: Cache this via DepNode2I
