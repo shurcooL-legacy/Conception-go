@@ -7981,6 +7981,18 @@ func main() {
 		fmt.Printf("glfw %s.\n", glfw.GetVersionString())
 		defer glfw.Terminate()
 
+		// Set the working directory to the root of the package, so that its assets can be accessed.
+		{
+			conceptionGo := GoPackageFromImportPath("github.com/shurcooL/Conception-go")
+			if conceptionGo == nil {
+				log.Fatalln("Unable to find github.com/shurcooL/Conception-go package in your GOPATH, it's needed to load assets.")
+			}
+			err := os.Chdir(conceptionGo.Bpkg.Dir)
+			if err != nil {
+				log.Panicln("os.Chdir:", err)
+			}
+		}
+
 		glfw.WindowHint(glfw.Samples, 8) // Anti-aliasing
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
 		switch *modeFlag {
