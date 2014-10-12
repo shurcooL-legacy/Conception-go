@@ -147,8 +147,8 @@ var np = mgl64.Vec2{} // np stands for "No Position" and it's basically the (0, 
 // TODO: Remove these
 var globalWindow *glfw.Window
 var keepUpdatedTEST = []DepNode2I{}
-var globalTypeCheckedPackage *typeCheckedPackage
-var globalGoSymbols *goSymbolsB
+var globalParsedFile *parsedFile
+var globalGoSymbols SliceStringer
 var con2RunBinPath = filepath.Join(os.TempDir(), "Conception-go", "Con2RunBin")
 
 func CheckGLError() {
@@ -641,6 +641,9 @@ type parsedFile struct {
 }
 
 func (t *parsedFile) Update() {
+	started := time.Now()
+	defer func() { fmt.Println("parsedFile.Update:", time.Since(started).Seconds()*1000, "ms") }()
+
 	source := t.GetSources()[0].(MultilineContentI)
 	fset := token.NewFileSet()
 	fileAst, err := parser.ParseFile(fset, "", source.Content(), parser.ParseComments|parser.AllErrors)
@@ -724,6 +727,9 @@ type typeCheckedPackage struct {
 }
 
 func (t *typeCheckedPackage) Update() {
+	started := time.Now()
+	defer func() { fmt.Println("typeCheckedPackage.Update:", time.Since(started).Seconds()*1000, "ms") }()
+
 	goPackageSelecter := t.GetSources()[0].(GoPackageSelecter)
 
 	if goPackageSelecter.GetSelectedGoPackage() == nil {
@@ -1197,13 +1203,29 @@ func (this *goSymbolsB) Update() {
 	}
 }
 
-// TODO: Make this faster by only parsing the current file AST. No need to type check for Cmd+R list of declarations.
-func NewTest5BWidget(pos mgl64.Vec2, typeCheckedPackage *typeCheckedPackage) (*SearchableListWidget, *goSymbolsB) {
-	goSymbols := &goSymbolsB{}
-	goSymbols.AddSources(typeCheckedPackage)
+type goSymbolsC struct {
+	goSymbols
+}
 
-	w := NewSearchableListWidget(np, mgl64.Vec2{200, 200}, goSymbols)
-	return w, goSymbols
+func (this *goSymbolsC) Update() {
+	fileAst := this.GetSources()[0].(*parsedFile).fileAst
+
+	if fileAst == nil {
+		this.entries = nil
+		return
+	}
+
+	// Mimic doc.Package functionality, but stack it on top of ast.File rather than a duplicated ast.Package
+	// https://code.google.com/p/go/source/browse/src/pkg/go/doc/reader.go?name=release#456
+	this.entries = nil
+	for _, decl := range fileAst.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			funcDeclSignature := &ast.FuncDecl{Recv: d.Recv, Name: d.Name, Type: d.Type}
+			nodeStringer := NodeStringer{Node: d, str: SprintAstBare(funcDeclSignature)}
+			this.entries = append(this.entries, nodeStringer)
+		}
+	}
 }
 
 // =====
@@ -7220,27 +7242,25 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					popupTest.SetParent(w)
 				}
 
-				// HACK: Duplicated code, need to refactor
 				{
 					scrollToSymbolB := DepNode2Func{}
 					scrollToSymbolB.UpdateFunc = func(this DepNode2I) {
-						if entry := this.GetSources()[0].(Selecter).GetSelected(); entry != nil {
-							// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
-							//println("selected:", entry.String())
-
-							if declNode, ok := entry.(*NodeStringer); ok {
-
-								if file := globalTypeCheckedPackage.fset.File(declNode.Pos()); file != nil {
-									// TODO: Change folderListing selection if it's in a different file
-
-									// TODO: There's a race condition here, to do the thing below I need to have finished changing the file, but
-									//       that currently reloads ASTs, etc. causing crashes sometimes depending on order of file ASTs being processed.
-
-									w.caretPosition.TrySet(uint32(file.Offset(declNode.Pos())))
-									w.CenterOnCaretPosition()
-								}
-							}
+						entry := this.GetSources()[0].(Selecter).GetSelected()
+						if entry == nil {
+							return
 						}
+
+						// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
+
+						declNode := entry.(*NodeStringer)
+
+						file := globalParsedFile.fset.File(declNode.Pos())
+						if file == nil {
+							return
+						}
+
+						w.caretPosition.TrySet(uint32(file.Offset(declNode.Pos())))
+						w.CenterOnCaretPosition()
 					}
 					scrollToSymbolB.AddSources(popupTest.OnSelectionChanged())
 					keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
@@ -8578,7 +8598,6 @@ func main() {
 			// ---
 
 			nextTool3, typeCheckedPackage := NewTest4Widget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor)
-			globalTypeCheckedPackage = typeCheckedPackage // HACK
 			nextTool3Collapsible := NewCollapsibleWidget(np, nextTool3, "typeCheckedPackage verbose")
 
 			typeUnderCaretWidget := NewTypeUnderCaretWidget(np, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editor, typeCheckedPackage)
@@ -8619,43 +8638,18 @@ func main() {
 
 			// ---
 
-			var nextTool5B *SearchableListWidget
-			nextTool5B, globalGoSymbols = NewTest5BWidget(np, typeCheckedPackage)
-			nextTool5BCollapsible := NewCollapsibleWidget(np, nextTool5B, "Go To Symbol")
+			// Parse current file and extract symbols for Cmd+R go to symbol functionality.
+			{
+				parsedFile := &parsedFile{}
+				parsedFile.AddSources(editorContent)
 
-			scrollToSymbolB := DepNode2Func{}
-			scrollToSymbolB.UpdateFunc = func(this DepNode2I) {
-				if entry := this.GetSources()[0].(Selecter).GetSelected(); entry != nil {
-					// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
-					//println("selected:", entry.String())
+				globalParsedFile = parsedFile
 
-					if declNode := entry.(*NodeStringer); true {
+				goSymbols := &goSymbolsC{}
+				goSymbols.AddSources(parsedFile)
 
-						if file := typeCheckedPackage.fset.File(declNode.Pos()); file != nil {
-							// TODO: Change folderListing selection if it's in a different file
-							// TEST, HACK: Externally change folderListing selection
-							goFileListing := folderListing.flow.Widgets[0].(*FolderListingPureWidget)
-							for index, entry := range goFileListing.entries {
-								if strings.HasSuffix(file.Name(), entry.Name()) {
-									if goFileListing.selected != uint64(index)+1 {
-										goFileListing.selected = uint64(index) + 1
-										goFileListing.selectionChangedTest()
-									}
-									break
-								}
-							}
-
-							// TODO: There's a race condition here, to do the thing below I need to have finished changing the file, but
-							//       that currently reloads ASTs, etc. causing crashes sometimes depending on order of file ASTs being processed.
-
-							editor.caretPosition.TrySet(uint32(file.Offset(declNode.Pos())))
-							editor.CenterOnCaretPosition()
-						}
-					}
-				}
+				globalGoSymbols = goSymbols
 			}
-			scrollToSymbolB.AddSources(nextTool5B.OnSelectionChanged())
-			keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
 
 			// ---
 
@@ -8696,7 +8690,7 @@ func main() {
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool9Collapsible, nextTool2Collapsible, nextTool2bCollapsible, nextTool2cCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool10Collapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool5BCollapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool9Collapsible, nextTool2Collapsible, nextTool2bCollapsible, nextTool2cCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool10Collapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{950 + 4, 0}, mgl64.Vec2{580, float64(windowSize1 - 2)}, tools))
 		}
 
