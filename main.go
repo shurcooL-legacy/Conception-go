@@ -3776,6 +3776,26 @@ func (this *FilterableSliceStringer) Update() {
 	}
 }
 
+// TODO: Need to output best fuzzy match rating, and sort by that.
+// FuzzyMatch returns true if pattern fuzzy matches s. E.g., "fzy" pattern matches "fuzzy".
+func FuzzyMatch(s, pattern string) bool {
+	srs := []rune(s)
+	for _, c := range pattern {
+		var matchedC bool
+		for i, sr := range srs {
+			if c == sr {
+				matchedC = true
+				srs = srs[i+1:]
+				break
+			}
+		}
+		if !matchedC {
+			return false
+		}
+	}
+	return true
+}
+
 // TODO: Is this the right/best place?
 func (this *FilterableSliceStringer) Print(filteredIndex uint64, pos mgl64.Vec2, selected bool) {
 	entry := this.Get(filteredIndex).String()
