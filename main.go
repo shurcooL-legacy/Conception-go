@@ -128,11 +128,14 @@ var (
 	veryDarkColor    = mgl64.Vec3{0.1, 0.1, 0.1}
 	nearlyBlackColor = mgl64.Vec3{0.025, 0.025, 0.025}
 
-	highlightColor = mgl64.Vec3{0.898, 0.765, 0.396}
+	highlightColor = mgl64.Vec3{0.898, 0.765, 0.396} // Yellowish on-hover border color.
 
 	selectedTextColor         = mgl64.Vec3{195 / 255.0, 212 / 255.0, 242 / 255.0}
 	selectedTextDarkColor     = selectedTextColor.Mul(0.75)
 	selectedTextInactiveColor = mgl64.Vec3{225 / 255.0, 235 / 255.0, 250 / 255.0}
+
+	selectedEntryColor = mgl64.Vec3{0.21, 0.45, 0.84}
+	selectedEntryInactiveColor = lightColor
 
 	lightRedColor    = mgl64.Vec3{1, 0.867, 0.867}
 	lightGreenColor  = mgl64.Vec3{0.867, 1, 0.867}
@@ -3957,11 +3960,11 @@ func (w *FilterableSelecterWidget) Render() {
 	for ; beginLineIndex < endLineIndex; beginLineIndex++ {
 		if w.selected == uint64(beginLineIndex) {
 			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.21, 0.45, 0.84})
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryColor)
 
 				w.entries.Print(uint64(beginLineIndex), w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), true)
 			} else {
-				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.83, 0.83, 0.83})
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryInactiveColor)
 
 				w.entries.Print(uint64(beginLineIndex), w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), false)
 			}
@@ -4269,10 +4272,10 @@ func (w *FolderListingPureWidget) Render() {
 	for i, v := range w.entries {
 		if w.selected == uint64(i+1) {
 			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.21, 0.45, 0.84})
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryColor)
 				gl.Color3d(1, 1, 1)
 			} else {
-				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.83, 0.83, 0.83})
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryInactiveColor)
 				gl.Color3d(0, 0, 0)
 			}
 		} else {
@@ -7970,6 +7973,14 @@ func (*goPackageHardcoded) GetSelectedGoPackage() *GoPackage {
 // ---
 
 var startedProcess = time.Now()
+
+func init() {
+	if _, err := exec.LookPath("go"); err != nil {
+		fmt.Fprintln(os.Stderr, "`go` command is required.")
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
 
 func main() {
 	//defer profile.Start(profile.CPUProfile).Stop()
