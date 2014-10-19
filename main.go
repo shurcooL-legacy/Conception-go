@@ -9047,8 +9047,7 @@ func main() {
 			var canvas, c, container;
 
 			var mouseX, mouseY;
-			// is this running in a touch capable environment?
-			var touchable = "ontouchstart" in window;
+			var touchable = "ontouchstart" in window; // is this running in a touch capable environment?
 			var touches = []; // array of touch vectors
 
 			function orientationchange() {
@@ -9110,6 +9109,13 @@ func main() {
 				c.fillText(fps, 0, 10);
 			}
 
+			function handleMouseMove(event) {
+				mouseX = event.clientX;
+				mouseY = event.clientY;
+
+				touches = [ event ];
+			}
+
 			function touchHandler(e) {
 				e.preventDefault();
 				touches = e.touches;
@@ -9137,7 +9143,9 @@ func main() {
 					//setInterval(loop, 1000 / 35);
 					loop();
 				} else {
-					document.write("Not touchable.");
+					//document.write("Not touchable.");
+					canvas.addEventListener("mousemove", handleMouseMove);
+					loop();
 				}
 			}
 
