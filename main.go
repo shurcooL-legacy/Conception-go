@@ -101,7 +101,7 @@ var _ = http.ListenAndServe
 var _ = Underline
 var _ = PrintPackageFullSummary
 
-var modeFlag = flag.Int("mode", 5, "Mode.")
+var modeFlag = flag.Int("mode", 1, "Mode.")
 var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
 var keepRunning = true
