@@ -134,7 +134,7 @@ var (
 	selectedTextDarkColor     = selectedTextColor.Mul(0.75)
 	selectedTextInactiveColor = mgl64.Vec3{225 / 255.0, 235 / 255.0, 250 / 255.0}
 
-	selectedEntryColor = mgl64.Vec3{0.21, 0.45, 0.84}
+	selectedEntryColor         = mgl64.Vec3{0.21, 0.45, 0.84}
 	selectedEntryInactiveColor = lightColor
 
 	lightRedColor    = mgl64.Vec3{1, 0.867, 0.867}
@@ -2588,6 +2588,70 @@ func (w *CollapsibleWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 
 // ---
 
+type BackgroundWidget struct {
+	Widget
+	child  Widgeter
+	border int
+}
+
+func NewBackgroundWidget(pos mgl64.Vec2, child Widgeter) *BackgroundWidget {
+	w := &BackgroundWidget{Widget: NewWidget(pos, np), child: child, border: 2}
+	w.child.SetParent(w)
+	w.Layout() // TODO: Should this be automatic from above SetParent()?
+	return w
+}
+
+func (w *BackgroundWidget) PollLogic() {
+	w.child.PollLogic()
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.PollLogic()
+}
+
+func (w *BackgroundWidget) Close() error {
+	// TODO: Errors.
+	_ = w.child.Close()
+	return nil
+}
+
+func (w *BackgroundWidget) Layout() {
+	w.Widget.size = w.child.Size().Add(mgl64.Vec2{float64(w.border * 2), float64(w.border * 2)})
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *BackgroundWidget) LayoutNeeded() {
+	w.child.LayoutNeeded()
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.LayoutNeeded()
+}
+
+func (w *BackgroundWidget) Render() {
+	DrawBox(w.pos, w.size, lightColor, lightColor)
+
+	gl.PushMatrix()
+	defer gl.PopMatrix()
+	gl.Translated(float64(w.pos[0]+float64(w.border)), float64(w.pos[1]+float64(w.border)), 0)
+
+	w.child.Render()
+}
+
+func (w *BackgroundWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	hits := w.child.Hit(LocalPosition)
+
+	return hits
+}
+
+func (w *BackgroundWidget) ParentToLocal(ParentPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
+	return w.Widget.ParentToLocal(ParentPosition).Sub(mgl64.Vec2{float64(w.border), float64(w.border)})
+}
+
+// ---
+
 type OptionalHighlighter struct {
 	highlighter Highlighter
 	stateFunc   func() bool
@@ -2819,6 +2883,12 @@ func (w *SpacerWidget) PollLogic() {
 
 	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
 	w.Widget.PollLogic()
+}
+
+func (w *SpacerWidget) Close() error {
+	// TODO: Errors.
+	_ = w.child.Close()
+	return nil
 }
 
 func (w *SpacerWidget) Layout() {
@@ -5558,6 +5628,7 @@ func (w *TextLabelWidget) Layout() {
 
 func (w *TextLabelWidget) Render() {
 	DrawLGBox(w.pos, w.size)
+	//DrawBorderlessBox(w.pos, w.size, lightColor)
 
 	gl.Color3d(0, 0, 0)
 	NewOpenGlStream(w.pos).PrintText(w.Content.Content())
@@ -6406,13 +6477,13 @@ func NewFindPanel(pos mgl64.Vec2, findResults *FindResults, caretPosition *Caret
 	}
 	numResultsStringer.AddSources(findResults, caretPosition)
 
-	findPanelWidget := NewFlowLayoutWidget(pos, []Widgeter{
+	findPanelWidget := NewBackgroundWidget(pos, NewFlowLayoutWidget(np, []Widgeter{
 		NewSpacerWidget(np, NewTextLabelWidgetString(np, "Find:")),
 		NewSpacerWidget(np, findBox),
 		NewSpacerWidget(np, NewStringerWidget(np, numResultsStringer)),
 		NewSpacerWidget(np, NewButtonLabelWidget(np, "Next", nil)),
 		NewSpacerWidget(np, NewButtonLabelWidget(np, "Previous", nil)),
-	}, nil)
+	}, nil))
 
 	return &FindPanel{
 		FindBox:  findBox,
@@ -7427,7 +7498,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					break
 				}
 
-				popupTest := NewTextBoxWidget(mgl64.Vec2{200, 0})
+				textBox := NewTextBoxWidget(np)
+				popupTest := NewBackgroundWidget(mgl64.Vec2{200, 0}, NewFlowLayoutWidget(np, []Widgeter{
+					NewSpacerWidget(np, NewTextLabelWidgetString(np, "Go To Line:")),
+					NewSpacerWidget(np, textBox),
+				}, nil))
+
 				// HACK: Not general at all
 				if scrollPane, insideScrollPane := w.Parent().(*ScrollPaneWidget); insideScrollPane && scrollPane.child == w {
 					popupTest.SetParent(scrollPane)
@@ -7444,7 +7520,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 							w.CenterOnCaretPosition()
 						}
 					}
-					scrollToLine.AddSources(popupTest.Content)
+					scrollToLine.AddSources(textBox.Content)
 					keepUpdatedTEST = append(keepUpdatedTEST, &scrollToLine)
 				}
 
@@ -7483,12 +7559,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 						}
 					},
 				}
-				popupTest.ExtensionsTest = append(popupTest.ExtensionsTest, closeOnEscape)
+				textBox.ExtensionsTest = append(textBox.ExtensionsTest, closeOnEscape)
 
 				w.PopupsTest = append(w.PopupsTest, popupTest)
 
 				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-				keyboardPointer.OriginMapping = []Widgeter{popupTest}
+				keyboardPointer.OriginMapping = []Widgeter{textBox}
 			}
 		case glfw.KeyEscape:
 			// Close the last popup, if any.
