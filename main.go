@@ -52,10 +52,8 @@ import (
 	. "github.com/shurcooL/go/gists/gist4727543"
 	. "github.com/shurcooL/go/gists/gist5258650"
 	. "github.com/shurcooL/go/gists/gist5259939"
-	. "github.com/shurcooL/go/gists/gist5286084"
 	. "github.com/shurcooL/go/gists/gist5423254"
 	. "github.com/shurcooL/go/gists/gist5504644"
-	. "github.com/shurcooL/go/gists/gist5571468"
 	. "github.com/shurcooL/go/gists/gist5639599"
 	. "github.com/shurcooL/go/gists/gist5645828"
 	. "github.com/shurcooL/go/gists/gist5892738"
@@ -588,7 +586,7 @@ func (w *Test1Widget) Render() {
 		}
 	}*/
 
-	//PrintText(w.pos, TryReadFile("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/PrintPackageSummary.go"))
+	//PrintText(w.pos, tryReadFile("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/PrintPackageSummary.go"))
 
 	//pkg := GetThisGoPackage()
 	//PrintText(w.pos, pkg.ImportPath+" - "+pkg.Name)
@@ -2971,7 +2969,9 @@ func NewChannelExpeWidget(pos mgl64.Vec2) *ChannelExpeWidget {
 			w.cmd.Stdout = w.ch
 			w.cmd.Stderr = w.ch
 			err := w.cmd.Start()
-			CheckError(err)
+			if err != nil {
+				panic(err)
+			}
 			go w.cmd.Wait() // It looks like I need to wait for the process, else it doesn't terminate properly
 		} else {
 			//w.cmd.Process.Kill()
@@ -3523,7 +3523,9 @@ func NewHttpServerTestWidget(pos mgl64.Vec2) *HttpServerTestWidget {
 		if !w.started {
 			go func() {
 				err := ListenAndServeStoppable(httpServerAddr, nil, w.stopServerChan)
-				CheckError(err)
+				if err != nil {
+					panic(err)
+				}
 			}()
 		} else {
 			w.stopServerChan <- struct{}{}
@@ -3594,7 +3596,7 @@ func (this *FileOpener) Update() {
 	if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); strings.HasSuffix(path, ".go") {
 		this.openedFile = NewFileView(path)
 
-		this.openedFile.AddAndSetViewGroup(this.editor, TryReadFile(path))
+		this.openedFile.AddAndSetViewGroup(this.editor, tryReadFile(path))
 
 		if goPackage := this.GetSources()[1].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
 			MakeUpdatedLock.Unlock() // HACK: Needed because UpdateVcs() calls MakeUpdated().
@@ -5237,9 +5239,11 @@ type MultilineContentFile struct {
 func NewMultilineContentFile(path string) *MultilineContentFile {
 	this := &MultilineContentFile{MultilineContent: NewMultilineContent(), path: path}
 	absPath, err := filepath.Abs(path)
-	CheckError(err)
+	if err != nil {
+		panic(err)
+	}
 	this.InitViewGroup(this, FileUri("file://"+absPath))
-	this.AddAndSetViewGroup(this.MultilineContent, TryReadFile(this.path))
+	this.AddAndSetViewGroup(this.MultilineContent, tryReadFile(this.path))
 	UniversalClock.AddChangeListener(this)
 	return this
 }
@@ -5253,7 +5257,7 @@ func (this *MultilineContentFile) SetSelf(content string) {
 
 func (this *MultilineContentFile) NotifyChange() {
 	// Check if the file has been changed externally, and if so, override this widget
-	NewContent := TryReadFile(this.path)
+	NewContent := tryReadFile(this.path)
 	if NewContent != this.Content() {
 		SetViewGroupOther(this, NewContent)
 	}
@@ -5279,9 +5283,11 @@ func NewFileView(path string) *FileView {
 	this := &FileView{path: path}
 
 	absPath, err := filepath.Abs(path)
-	CheckError(err)
+	if err != nil {
+		panic(err)
+	}
 
-	this.lastContentQUICKHACK = TryReadFile(this.path)
+	this.lastContentQUICKHACK = tryReadFile(this.path)
 
 	this.InitViewGroup(this, FileUri("file://"+absPath))
 	UniversalClock.AddChangeListener(this) // TODO: Closing, etc.
@@ -5307,7 +5313,7 @@ func (this *FileView) SetSelf(content string) {
 // TODO: Change detection, closing, etc.
 func (this *FileView) NotifyChange() {
 	// Check if the file has been changed externally, and if so, override this widget
-	NewContent := TryReadFile(this.path)
+	NewContent := tryReadFile(this.path)
 	if NewContent != this.lastContentQUICKHACK {
 		this.lastContentQUICKHACK = NewContent
 		SetViewGroupOther(this, NewContent)
@@ -7286,7 +7292,9 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 						// HACK: OS X specific
 						cmd := exec.Command("open", filePath)
 						err := cmd.Start()
-						CheckError(err)
+						if err != nil {
+							panic(err)
+						}
 						go cmd.Wait() // It looks like I need to wait for the process, else it doesn't terminate properly
 
 					}(string(fileUri[len("file://"):]))
@@ -8108,7 +8116,9 @@ func main() {
 		case 5:
 			window, err = glfw.CreateWindow(980, 880, "", nil, nil)
 		}
-		CheckError(err)
+		if err != nil {
+			panic(err)
+		}
 		globalWindow = window
 
 		window.SetInputMode(glfw.Cursor, glfw.CursorHidden)
@@ -8126,9 +8136,13 @@ func main() {
 
 		{
 			m, err := glfw.GetPrimaryMonitor()
-			CheckError(err)
+			if err != nil {
+				panic(err)
+			}
 			vm, err := m.GetVideoMode()
-			CheckError(err)
+			if err != nil {
+				panic(err)
+			}
 
 			width, height, _ := window.GetSize()
 			window.SetPosition((vm.Width-width)/2, (vm.Height-height)/2)
@@ -8412,7 +8426,9 @@ func main() {
 `
 			fset := token.NewFileSet()
 			fileAst, err := parser.ParseFile(fset, "", src, 0 /*parser.ParseComments|parser.AllErrors*/)
-			CheckError(err)
+			if err != nil {
+				panic(err)
+			}
 
 			widgets = append(widgets, NewGoonWidget(mgl64.Vec2{600, 296 + 40}, &fileAst))
 			widgets = append(widgets, NewGoonWidget(mgl64.Vec2{600, 296 + 60}, &parsedFile))
@@ -9011,7 +9027,9 @@ func main() {
 					//cmd := exec.Command("cat")
 					cmd.Stdin = strings.NewReader(strings.TrimSpace(src.Content.Content()))
 					out, err := cmd.CombinedOutput()
-					CheckError(err)
+					if err != nil {
+						panic(err)
+					}
 					return string(out)
 				} else {
 					return ""
@@ -9703,4 +9721,14 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	os.Remove(con2RunBinPath) // TODO: Generalize this
 
 	fmt.Println("Graceful exit.")
+}
+
+// =====
+
+func tryReadFile(filename string) string {
+	b, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
