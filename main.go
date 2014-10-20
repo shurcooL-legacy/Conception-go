@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -37,7 +36,6 @@ import (
 	"code.google.com/p/go.tools/go/types"
 	goimports "code.google.com/p/go.tools/imports"
 	"github.com/bradfitz/iter"
-	"github.com/davecheney/profile"
 	"github.com/go-gl/glow/gl/2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/mb0/diff"
@@ -85,19 +83,6 @@ import (
 	"gopkg.in/pipe.v2"
 	"honnef.co/go/importer"
 )
-
-var _ = UnderscoreSepToCamelCase
-var _ = goon.Dump
-var _ = GetDocPackageAll
-var _ = GetThisGoSourceDir
-var _ = SprintAstBare
-var _ = errors.New
-var _ = GetExprAsString
-var _ = UnsafeReflectValue
-var _ = profile.Start
-var _ = http.ListenAndServe
-var _ = Underline
-var _ = PrintPackageFullSummary
 
 var modeFlag = flag.Int("mode", 1, "Mode.")
 var headlessFlag = flag.Bool("headless", false, "Headless mode.")
@@ -4887,6 +4872,12 @@ func (cp *caretPositionInternal) SetPositionFromPhysical(pos mgl64.Vec2) {
 
 // TrySetPositionAtLineIndex places caret at beginning of lineIndex line. It accepts out of range line indicies.
 func (cp *caretPositionInternal) TrySetPositionAtLineIndex(lineIndex int) {
+	if lineIndex < 0 {
+		lineIndex = 0
+	} else if lineIndex > cp.w.LenLines()-1 {
+		lineIndex = cp.w.LenLines() - 1
+	}
+
 	cp.lineIndex = lineIndex
 	cp.positionWithinLine = 0
 	cp.targetExpandedX = 0
@@ -7523,8 +7514,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				{
 					scrollToLine := DepNode2Func{}
 					scrollToLine.UpdateFunc = func(this DepNode2I) {
-						if lineIndex, err := strconv.Atoi(this.GetSources()[0].(MultilineContentI).Content()); err == nil {
-							w.caretPosition.TrySetPositionAtLineIndex(lineIndex)
+						if lineNumber, err := strconv.Atoi(this.GetSources()[0].(MultilineContentI).Content()); err == nil {
+							w.caretPosition.TrySetPositionAtLineIndex(lineNumber - 1)
 							w.CenterOnCaretPosition()
 						}
 					}
@@ -8813,7 +8804,7 @@ func main() {
 			caretPositionStringer := &DepStringerFunc{}
 			caretPositionStringer.UpdateFunc = func(this DepNode2I) {
 				caretPosition := this.GetSources()[0].(*CaretPosition)
-				caretPositionStringer.content = fmt.Sprintf("Line: %v, Caret Position: %v", caretPosition.caretPosition.lineIndex, caretPosition.Logical())
+				caretPositionStringer.content = fmt.Sprintf("Line: %v, Caret Position: %v", caretPosition.caretPosition.lineIndex+1, caretPosition.Logical())
 				if caretPosition.anySelection() {
 					start, end := caretPosition.SelectionRange()
 					caretPositionStringer.content += fmt.Sprintf(", %d characters selected", end-start)
@@ -9119,7 +9110,7 @@ func main() {
 		http.HandleFunc("/websocket2", func(w http.ResponseWriter, req *http.Request) {
 			io.WriteString(w, `<html>
 	<head>
-		<meta name="viewport" content="width=device-width, maximum-scale=1, minimum-scale=1, target-densitydpi=device-dpi, user-scalable=no">
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 		<style>
 			body {
 				margin: 0px;
@@ -9158,7 +9149,7 @@ func main() {
 			var lastUpdate = new Date, fps = "fps: ", framesDrawn = 0;
 
 			function loop() {
-				window.webkitRequestAnimationFrame(loop);
+				window.requestAnimationFrame(loop);
 
 				try {
 					//sock.send(JSON.stringify(touches.length) + "\n");		// HACK: Should make sure that sock.onopen has happened before calling send...
@@ -9214,7 +9205,7 @@ func main() {
 				e.preventDefault();
 				touches = e.touches;
 				//loop();
-				//window.webkitRequestAnimationFrame(loop);
+				//window.requestAnimationFrame(loop);
 			}
 
 			function init() {
