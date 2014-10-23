@@ -8514,32 +8514,42 @@ func main() {
 			template.UpdateFunc = func(this DepNode2I) {
 				template.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "No git diff available."))
 
-				if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); path != "" && strings.HasSuffix(path, ".go") {
-					dir, file := filepath.Split(path)
-					if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
-						template.Template = NewPipeTemplate(pipe.Line(
-							// TODO: Reuse u6.GoPackageWorkingDiff.
-							pipe.Exec("git", "diff", "--no-ext-diff", "--", file),
-							pipe.TaskFunc(func(s *pipe.State) error {
-								r := bufio.NewReader(s.Stdin)
-								for _ = range iter.N(4) {
-									r.ReadBytes('\n')
-								}
-								var b bytes.Buffer
-								b.ReadFrom(r)
-								if b.Len() == 0 {
-									return nil
-								}
-								b.Truncate(b.Len() - 1)
-								b.WriteTo(s.Stdout)
-								return nil
-							}),
-						))
-						template.Template.Dir = dir
-					}
+				goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage()
+				if goPackage == nil {
+					return
 				}
+
+				path := this.GetSources()[1].(*FolderListingWidget).GetSelectedPath()
+				if path == "" || !strings.HasSuffix(path, ".go") {
+					return
+				}
+
+				dir, file := filepath.Split(path)
+				if goPackage.Dir.Repo == nil || goPackage.Dir.Repo.Vcs.Type() != vcs.Git {
+					return
+				}
+
+				template.Template = NewPipeTemplate(pipe.Line(
+					// TODO: Reuse u6.GoPackageWorkingDiff.
+					pipe.Exec("git", "diff", "--no-ext-diff", "--", file),
+					pipe.TaskFunc(func(s *pipe.State) error {
+						r := bufio.NewReader(s.Stdin)
+						for _ = range iter.N(4) {
+							r.ReadBytes('\n')
+						}
+						var b bytes.Buffer
+						b.ReadFrom(r)
+						if b.Len() == 0 {
+							return nil
+						}
+						b.Truncate(b.Len() - 1)
+						b.WriteTo(s.Stdout)
+						return nil
+					}),
+				))
+				template.Template.Dir = dir
 			}
-			template.AddSources(folderListing)
+			template.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, folderListing)
 
 			gitDiff := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
 			diffHighlighter := &diffHighlighter{}
@@ -8558,17 +8568,28 @@ func main() {
 				template.UpdateFunc = func(this DepNode2I) {
 					template.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "No luck."))
 
-					if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); path != "" && strings.HasSuffix(path, ".go") {
-						dir, file := filepath.Split(path)
-						if isGitRepo, _ := vcs.IsFolderGitRepo(dir); isGitRepo { // TODO: Centralize this somewhere (GoPackage with DepNode2I?)
-							template.Template = NewPipeTemplate(pipe.Line(
-								pipe.Exec("git", "show", "HEAD:./"+file),
-							))
-							template.Template.Dir = dir
-						}
+					goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage()
+					if goPackage == nil {
+						return
 					}
+
+					path := this.GetSources()[1].(*FolderListingWidget).GetSelectedPath()
+					if path == "" || !strings.HasSuffix(path, ".go") {
+						return
+					}
+
+					dir, file := filepath.Split(path)
+					if goPackage.Dir.Repo == nil || goPackage.Dir.Repo.Vcs.Type() != vcs.Git {
+						return
+					}
+
+					template.Template = NewPipeTemplate(pipe.Line(
+						pipe.Exec("git", "show", "HEAD:./"+file),
+					))
+					template.Template.Dir = dir
+
 				}
-				template.AddSources(folderListing)
+				template.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, folderListing)
 
 				gitHead := NewLivePipeExpeWidget(np, []DepNode2I{folderListing}, template)
 				nextTool10Collapsible = NewCollapsibleWidget(np, gitHead, "git show HEAD")
