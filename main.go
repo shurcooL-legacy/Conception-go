@@ -34,6 +34,7 @@ import (
 
 	"code.google.com/p/go.net/websocket"
 	"code.google.com/p/go.tools/go/types"
+	"code.google.com/p/go.tools/godoc/vfs"
 	goimports "code.google.com/p/go.tools/imports"
 	"github.com/bradfitz/iter"
 	"github.com/go-gl/glow/gl/2.1/gl"
@@ -72,7 +73,7 @@ import (
 	. "github.com/shurcooL/go/gists/gist7728088"
 	. "github.com/shurcooL/go/gists/gist7802150"
 	"github.com/shurcooL/go/gists/gist8065433"
-	"github.com/shurcooL/go/github_flavored_markdown"
+	"github.com/shurcooL/go/gopherjs_http"
 	"github.com/shurcooL/go/markdown_http"
 	"github.com/shurcooL/go/pipe_util"
 	"github.com/shurcooL/go/u/u5"
@@ -1019,6 +1020,25 @@ func NewSliceStringerS(entries ...string) *SliceStringerS {
 	return s
 }
 
+func NewSliceStringerAllGoPackages(path string) *SliceStringerS {
+	f, err := os.Open(path)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	var importers u5.Importers
+	if err := json.NewDecoder(f).Decode(&importers); err != nil {
+		panic(err)
+	}
+
+	s := &SliceStringerS{}
+	for _, entry := range importers.Results {
+		s.entries = append(s.entries, json.Number(entry.Path))
+	}
+	return s
+}
+
 func (this *SliceStringerS) Get(index uint64) fmt.Stringer {
 	return this.entries[index]
 }
@@ -1030,7 +1050,7 @@ func (this *SliceStringerS) Len() uint64 {
 var oracleModes = NewSliceStringerS("callees", "callers", "callgraph", "callstack", "describe", "freevars", "implements", "peers", "referrers")
 
 func NewTest6OracleWidget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) Widgeter {
-	mode := NewFilterableSelecterWidget(np, oracleModes, NewMultilineContent())
+	mode := NewSelecterWidget(np, oracleModes)
 
 	params := func() interface{} {
 		fileUri, _ := source.Content.GetUriForProtocol("file://")
@@ -3912,6 +3932,14 @@ type FilterableSelecterWidget struct {
 	entries *FilterableSliceStringer
 }
 
+// NewSelecterWidget creates a simple selecter widget.
+func NewSelecterWidget(pos mgl64.Vec2, entries SliceStringer) *FilterableSelecterWidget {
+	return NewFilterableSelecterWidget(pos, entries, NewMultilineContent())
+}
+
+// NewFilterableSelecterWidget creates a selecter widget with a filter.
+//
+// It only displays results that match the filter, if non-empty.
 func NewFilterableSelecterWidget(pos mgl64.Vec2, entries SliceStringer, filter MultilineContentI) *FilterableSelecterWidget {
 	filterableEntries := NewFilterableSliceStringer(entries, filter)
 
@@ -4142,6 +4170,7 @@ func (w *GoPackageListingPureWidget) NotifyChange() {
 
 // ---
 
+// TODO: Remove once VfsListingWidget is complete.
 type FolderListingWidget struct {
 	*CompositeWidget
 	flow *FlowLayoutWidget // HACK: Shortcut to CompositeWidget.Widgets[0]
@@ -4362,6 +4391,279 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		// HACK: Temporarily set both this and parent as mapping here
 		p := w.Parent().Parent().(*FolderListingWidget)
+		keyboardPointer.OriginMapping = []Widgeter{w, p}
+	}
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
+
+	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
+		globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
+		if len(w.entries) > 0 {
+			if localPosition[1] < 0 {
+				w.selected = 1
+			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(len(w.entries)) {
+				w.selected = uint64(len(w.entries))
+			} else {
+				w.selected = uint64((localPosition[1] / fontHeight) + 1)
+			}
+			w.selectionChangedTest()
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyUp:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries) > 0 {
+					w.selected = 1
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected > 1 {
+					w.selected--
+					w.selectionChangedTest()
+				}
+			}
+		case glfw.KeyDown:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries) > 0 {
+					w.selected = uint64(len(w.entries))
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected < uint64(len(w.entries)) {
+					w.selected++
+					w.selectionChangedTest()
+				}
+			}
+		}
+	}
+}
+
+// ---
+
+type VfsListingWidget struct {
+	vfs vfs.FileSystem
+	*CompositeWidget
+	flow *FlowLayoutWidget // HACK: Shortcut to CompositeWidget.Widgets[0]
+
+	DepNode2Manual // SelectionChanged
+}
+
+func NewVfsListingWidget(pos mgl64.Vec2, vfs vfs.FileSystem, path string) *VfsListingWidget {
+	w := &VfsListingWidget{vfs: vfs, CompositeWidget: NewCompositeWidget(pos, []Widgeter{NewFlowLayoutWidget(np, []Widgeter{newVfsListingPureWidget(path)}, nil)})}
+	w.flow = w.Widgets[0].(*FlowLayoutWidget)
+	w.flow.SetParent(w) // HACK?
+	return w
+}
+
+// TODO: Use a custom path type instead of a string?
+func (w *VfsListingWidget) GetSelectedPath() (path string) {
+	for _, widget := range w.flow.Widgets {
+		if pure := widget.(*VfsListingPureWidget); pure.selected != 0 {
+			path = filepath.Join(pure.path, pure.entries[pure.selected-1].Name())
+			if pure.entries[pure.selected-1].IsDir() {
+				path += string(filepath.Separator)
+			}
+		}
+	}
+	return path
+}
+
+func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyLeft:
+			c := keyboardPointer.OriginMapping[0] // HACK
+			index := WidgeterIndex(w.flow.Widgets, c)
+
+			if index > 0 {
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				// HACK: Temporarily set both this and parent as mapping here
+				c = w.flow.Widgets[index-1]
+				keyboardPointer.OriginMapping = []Widgeter{c, w}
+				if cp, ok := c.(*VfsListingPureWidget); ok {
+					cp.selectionChangedTest()
+				}
+			}
+		case glfw.KeyRight:
+			c := keyboardPointer.OriginMapping[0] // HACK
+			index := WidgeterIndex(w.flow.Widgets, c)
+
+			if index != -1 && index+1 < len(w.flow.Widgets) {
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				// HACK: Temporarily set both this and parent as mapping here
+				c = w.flow.Widgets[index+1]
+				keyboardPointer.OriginMapping = []Widgeter{c, w}
+				if cp, ok := c.(*VfsListingPureWidget); ok && cp.selected == 0 && len(cp.entries) > 0 {
+					cp.selected = 1
+					cp.selectionChangedTest()
+				}
+			}
+		}
+	}
+}
+
+// ---
+
+type VfsListingPureWidget struct {
+	Widget
+	path               string
+	entries            []os.FileInfo
+	longestEntryLength int
+	selected           uint64 // 0 is unselected, else index+1 is selected
+}
+
+func newVfsListingPureWidget(path string) *VfsListingPureWidget {
+	w := &VfsListingPureWidget{Widget: NewWidget(np, np), path: path}
+	w.NotifyChange() // TODO: Give it a proper source
+	return w
+}
+
+func newVfsListingPureWidgetWithSelection(path string) *VfsListingPureWidget {
+	w := newVfsListingPureWidget(path)
+	if len(w.entries) >= 1 {
+		w.selected = 1
+	}
+	return w
+}
+
+func (w *VfsListingPureWidget) NotifyChange() {
+	// TODO: Support for preserving selection
+
+	entries, err := ioutil.ReadDir(w.path)
+	if err == nil {
+		w.entries = make([]os.FileInfo, 0, len(entries))
+		w.longestEntryLength = 0
+		for _, v := range entries {
+			if !strings.HasPrefix(v.Name(), ".") {
+				// HACK: Temporarily override this to list .go files only
+				//if !strings.HasPrefix(v.Name(), ".") && strings.HasSuffix(v.Name(), ".go") && !v.IsDir() {
+				w.entries = w.entries[:len(w.entries)+1]
+				w.entries[len(w.entries)-1] = v
+
+				entryLength := len(v.Name())
+				if v.IsDir() {
+					entryLength++
+				}
+				if entryLength > w.longestEntryLength {
+					w.longestEntryLength = entryLength
+				}
+			}
+		}
+	}
+
+	w.Layout()
+
+	w.NotifyAllListeners()
+}
+
+func (w *VfsListingPureWidget) selectionChangedTest() {
+	if w.selected != 0 && w.entries[w.selected-1].IsDir() {
+		path := filepath.Join(w.path, w.entries[w.selected-1].Name())
+		var newFolder Widgeter
+
+		/*if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
+			dpkg := GetDocPackage(bpkg, err)
+
+			out := Underline(`import "`+dpkg.ImportPath+`"`) + "\n"
+			for _, v := range dpkg.Vars {
+				out += SprintAstBare(v.Decl) + "\n"
+			}
+			out += "\n"
+			for _, f := range dpkg.Funcs {
+				out += SprintAstBare(f.Decl) + "\n"
+			}
+			out += "\n"
+			for _, c := range dpkg.Consts {
+				out += SprintAstBare(c.Decl) + "\n"
+			}
+			out += "\n"
+			for _, t := range dpkg.Types {
+				out += fmt.Sprint(t.Name) + "\n"
+				//PrintlnAstBare(t.Decl)
+			}
+
+			newFolder = NewTextLabelWidgetString(np, out)
+		} else if isGitRepo, status := IsFolderGitRepo(path); isGitRepo {
+			newFolder = NewTextLabelWidgetString(np, status)
+		} else */{
+			newFolder = newVfsListingPureWidget(path)
+		}
+
+		p := w.Parent().(*FlowLayoutWidget)
+		index := WidgeterIndex(p.Widgets, w)
+		p.SetWidgets(append(p.Widgets[:index+1], newFolder))
+	} else {
+		p := w.Parent().(*FlowLayoutWidget)
+		index := WidgeterIndex(p.Widgets, w)
+		p.SetWidgets(p.Widgets[:index+1])
+	}
+
+	ExternallyUpdated(w.Parent().Parent().(DepNode2ManualI))
+}
+
+func (w *VfsListingPureWidget) Layout() {
+	if w.longestEntryLength < 3 {
+		w.size[0] = float64(fontWidth * 3)
+	} else {
+		w.size[0] = float64(fontWidth * w.longestEntryLength)
+	}
+	if len(w.entries) == 0 {
+		w.size[1] = float64(fontHeight * 1)
+	} else {
+		w.size[1] = float64(fontHeight * len(w.entries))
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *VfsListingPureWidget) Render() {
+	DrawNBox(w.pos, w.size)
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
+
+	for i, v := range w.entries {
+		if w.selected == uint64(i+1) {
+			if hasTypingFocus {
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryColor)
+				gl.Color3d(1, 1, 1)
+			} else {
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryInactiveColor)
+				gl.Color3d(0, 0, 0)
+			}
+		} else {
+			gl.Color3d(0, 0, 0)
+		}
+
+		if v.IsDir() {
+			NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)})).PrintLine(v.Name() + PathSeparator)
+		} else {
+			NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)})).PrintLine(v.Name())
+		}
+	}
+}
+
+func (w *VfsListingPureWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *VfsListingPureWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		// HACK: Temporarily set both this and parent as mapping here
+		p := w.Parent().Parent().(*VfsListingWidget)
 		keyboardPointer.OriginMapping = []Widgeter{w, p}
 	}
 
@@ -7923,7 +8225,7 @@ func initHttpHandlers() {
 
 		return []byte(b), nil
 	})))
-	http.Handle("/status", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
+	http.Handle("/status", markdown_http.MarkdownOptionsHandlerFunc(func(req *http.Request) ([]byte, *markdown_http.Options, error) {
 		started := time.Now()
 
 		_, short := req.URL.Query()["short"]
@@ -7980,8 +8282,7 @@ func initHttpHandlers() {
 		}()
 		outChan := GoReduce(inChan, 8, reduceFunc)
 
-		var summary = bytes.NewBufferString("# GOPATH diff Summary\n\n")
-		var buf = new(bytes.Buffer)
+		var buf = bytes.NewBufferString("# GOPATH Workspace diff\n\n")
 
 		for out := range outChan {
 			repo := out.(GoPackageRepo)
@@ -7990,23 +8291,27 @@ func initHttpHandlers() {
 
 			if goPackage.Dir.Repo.VcsLocal.Status != "" {
 				repoImportPathPattern := GetRepoImportPathPattern(repo.RootPath(), goPackage.Bpkg.SrcRoot)
-				fmt.Fprintf(summary, "- [%s](%s)\n", repoImportPathPattern, github_flavored_markdown.HeaderLink(repoImportPathPattern))
-				fmt.Fprint(buf, "### "+repoImportPathPattern+"\n\n")
+				fmt.Fprint(buf, "## "+repoImportPathPattern+"\n\n")
 				fmt.Fprint(buf, "```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n\n")
 				if !short {
 					fmt.Fprint(buf, "```diff\n"+u6.GoPackageWorkingDiff(goPackage)+"```\n\n")
 				}
 			}
 		}
-		fmt.Fprint(summary, "\n")
 		if buf.Len() == 0 {
 			fmt.Fprint(buf, "### working directory clean (across GOPATH workspaces)")
 		}
 
 		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
 
-		return append(summary.Bytes(), buf.Bytes()...), nil
+		return buf.Bytes(), &markdown_http.Options{TableOfContents: true}, nil
 	}))
+
+	// TODO: Needed for TableOfContents, find a better way.
+	// HACK: Relative path into github.com/shurcooL/play, need a better way.
+	http.Handle("/table-of-contents.go.js", gopherjs_http.GoFiles("../play/74/script.go"))
+	http.HandleFunc("/table-of-contents.css", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "../play/74/style.css") })
+
 	http.Handle("/inline/", http.StripPrefix("/inline", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		importPath := req.URL.Path[1:]
 
@@ -8102,9 +8407,9 @@ func main() {
 		glfw.WindowHint(glfw.Samples, 8) // Anti-aliasing
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
 		switch *modeFlag {
-		default:
+		case 1:
 			window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
-		case 5:
+		default:
 			window, err = glfw.CreateWindow(980, 880, "", nil, nil)
 		}
 		if err != nil {
@@ -8270,10 +8575,29 @@ func main() {
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
 	switch *modeFlag {
+	case 6:
+		{
+			{
+				entries := NewSliceStringerS("one", "two", "three")
+				w := NewSelecterWidget(mgl64.Vec2{500, 200}, entries)
+				widgets = append(widgets, w)
+			}
+
+			{
+				w := NewFolderListingWidget(mgl64.Vec2{200, 200}, "./")
+				widgets = append(widgets, w)
+			}
+
+			{
+				w := NewVfsListingWidget(mgl64.Vec2{200, 400}, vfs.OS("./"), "../")
+				widgets = append(widgets, w)
+			}
+		}
 	case 5:
 		{
 			//entries := NewSliceStringerS("one", "two", "three")
-			entries := &goPackagesSliceStringer{goPackages}
+			//entries := &goPackagesSliceStringer{goPackages}
+			entries := NewSliceStringerAllGoPackages("./all-Go-packages.json")
 
 			w := NewSearchableListWidgetAction(mgl64.Vec2{200, 0}, mgl64.Vec2{600, 600}, entries)
 			widgets = append(widgets, w)
@@ -9660,6 +9984,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 
 	// ---
 
+	firstFrame := true
 	for keepRunning {
 		frameStartTime := time.Now()
 
@@ -9726,6 +10051,11 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		} else {
 			time.Sleep(5 * time.Millisecond)
 			runtime.Gosched()
+		}
+
+		if firstFrame {
+			fmt.Printf("First frame in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
+			firstFrame = false
 		}
 	}
 
