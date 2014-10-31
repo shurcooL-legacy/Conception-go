@@ -20,6 +20,7 @@ import (
 	"math"
 	"net/http"
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -79,8 +80,11 @@ import (
 	"github.com/shurcooL/go/u/u5"
 	"github.com/shurcooL/go/u/u6"
 	"github.com/shurcooL/go/vcs"
+	"github.com/shurcooL/go/vfs_util"
 	"github.com/shurcooL/gostatus/status"
 	"github.com/shurcooL/markdownfmt/markdown"
+	sg_vcs "github.com/sourcegraph/go-vcs/vcs"
+	"github.com/sourcegraph/vcsstore/vcsclient"
 	"gopkg.in/pipe.v2"
 	"honnef.co/go/importer"
 )
@@ -4454,7 +4458,7 @@ type VfsListingWidget struct {
 }
 
 func NewVfsListingWidget(pos mgl64.Vec2, vfs vfs.FileSystem, path string) *VfsListingWidget {
-	w := &VfsListingWidget{vfs: vfs, CompositeWidget: NewCompositeWidget(pos, []Widgeter{NewFlowLayoutWidget(np, []Widgeter{newVfsListingPureWidget(path)}, nil)})}
+	w := &VfsListingWidget{vfs: vfs, CompositeWidget: NewCompositeWidget(pos, []Widgeter{NewFlowLayoutWidget(np, []Widgeter{newVfsListingPureWidget(vfs, path)}, nil)})}
 	w.flow = w.Widgets[0].(*FlowLayoutWidget)
 	w.flow.SetParent(w) // HACK?
 	return w
@@ -4511,20 +4515,21 @@ func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
 
 type VfsListingPureWidget struct {
 	Widget
+	vfs                vfs.FileSystem
 	path               string
 	entries            []os.FileInfo
 	longestEntryLength int
 	selected           uint64 // 0 is unselected, else index+1 is selected
 }
 
-func newVfsListingPureWidget(path string) *VfsListingPureWidget {
-	w := &VfsListingPureWidget{Widget: NewWidget(np, np), path: path}
+func newVfsListingPureWidget(vfs vfs.FileSystem, path string) *VfsListingPureWidget {
+	w := &VfsListingPureWidget{vfs: vfs, Widget: NewWidget(np, np), path: path}
 	w.NotifyChange() // TODO: Give it a proper source
 	return w
 }
 
-func newVfsListingPureWidgetWithSelection(path string) *VfsListingPureWidget {
-	w := newVfsListingPureWidget(path)
+func newVfsListingPureWidgetWithSelection(vfs vfs.FileSystem, path string) *VfsListingPureWidget {
+	w := newVfsListingPureWidget(vfs, path)
 	if len(w.entries) >= 1 {
 		w.selected = 1
 	}
@@ -4534,7 +4539,7 @@ func newVfsListingPureWidgetWithSelection(path string) *VfsListingPureWidget {
 func (w *VfsListingPureWidget) NotifyChange() {
 	// TODO: Support for preserving selection
 
-	entries, err := ioutil.ReadDir(w.path)
+	entries, err := w.vfs.ReadDir(w.path)
 	if err == nil {
 		w.entries = make([]os.FileInfo, 0, len(entries))
 		w.longestEntryLength = 0
@@ -4563,7 +4568,7 @@ func (w *VfsListingPureWidget) NotifyChange() {
 
 func (w *VfsListingPureWidget) selectionChangedTest() {
 	if w.selected != 0 && w.entries[w.selected-1].IsDir() {
-		path := filepath.Join(w.path, w.entries[w.selected-1].Name())
+		path := filepath.Join(w.path, w.entries[w.selected-1].Name()) // TODO: Use path.
 		var newFolder Widgeter
 
 		/*if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
@@ -4591,7 +4596,7 @@ func (w *VfsListingPureWidget) selectionChangedTest() {
 		} else if isGitRepo, status := IsFolderGitRepo(path); isGitRepo {
 			newFolder = NewTextLabelWidgetString(np, status)
 		} else */{
-			newFolder = newVfsListingPureWidget(path)
+			newFolder = newVfsListingPureWidget(w.vfs, path)
 		}
 
 		p := w.Parent().(*FlowLayoutWidget)
@@ -8589,7 +8594,33 @@ func main() {
 			}
 
 			{
-				w := NewVfsListingWidget(mgl64.Vec2{200, 400}, vfs.OS("./"), "../")
+				var fs vfs.FileSystem
+				switch 1 {
+				case 0:
+					fs = vfs.OS("../")
+				case 1:
+					cloneUrl, err := url.Parse("https://github.com/shurcooL/Hover")
+					if err != nil {
+						panic(err)
+					}
+
+					sg := vcsclient.New(&url.URL{Scheme: "http", Host: "vcsstore.sourcegraph.com"}, nil)
+
+					r, err := sg.Repository("git", cloneUrl)
+					if err != nil {
+						panic(err)
+					}
+
+					// 92118397d269b8d3bb480c1cf4e4171060782937 -> a25cf127d9d679f86063f20bbae8552748220273
+					fs, err = r.FileSystem(sg_vcs.CommitID("92118397d269b8d3bb480c1cf4e4171060782937"))
+					if err != nil {
+						panic(err)
+					}
+				}
+
+				fs = vfs_util.NewDebugFS(fs)
+
+				w := NewVfsListingWidget(mgl64.Vec2{200, 400}, fs, "/")
 				widgets = append(widgets, w)
 			}
 		}
