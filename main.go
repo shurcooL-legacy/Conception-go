@@ -4449,6 +4449,272 @@ func (w *FolderListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
+type VfsListing0Widget struct {
+	vfs vfs.FileSystem
+	*CompositeWidget
+	flow *FlowLayoutWidget // HACK: Shortcut to CompositeWidget.Widgets[0]
+
+	DepNode2Manual // SelectionChanged
+}
+
+func NewVfsListing0Widget(pos mgl64.Vec2, vfs vfs.FileSystem, path string) *VfsListing0Widget {
+	w := &VfsListing0Widget{vfs: vfs, CompositeWidget: NewCompositeWidget(pos, []Widgeter{NewFlowLayoutWidget(np, []Widgeter{newVfsListing0PureWidget(vfs, path)}, nil)})}
+	w.flow = w.Widgets[0].(*FlowLayoutWidget)
+	w.flow.SetParent(w) // HACK?
+	return w
+}
+
+// TODO: Use a custom path type instead of a string?
+func (w *VfsListing0Widget) GetSelectedPath() (path string) {
+	for _, widget := range w.flow.Widgets {
+		if pure := widget.(*VfsListing0PureWidget); pure.selected != 0 {
+			path = filepath.Join(pure.path, pure.entries[pure.selected-1].Name())
+			if pure.entries[pure.selected-1].IsDir() {
+				path += string(filepath.Separator)
+			}
+		}
+	}
+	return path
+}
+
+func (w *VfsListing0Widget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyLeft:
+			c := keyboardPointer.OriginMapping[0] // HACK
+			index := WidgeterIndex(w.flow.Widgets, c)
+
+			if index > 0 {
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				// HACK: Temporarily set both this and parent as mapping here
+				c = w.flow.Widgets[index-1]
+				keyboardPointer.OriginMapping = []Widgeter{c, w}
+				if cp, ok := c.(*VfsListing0PureWidget); ok {
+					cp.selectionChangedTest()
+				}
+			}
+		case glfw.KeyRight:
+			c := keyboardPointer.OriginMapping[0] // HACK
+			index := WidgeterIndex(w.flow.Widgets, c)
+
+			if index != -1 && index+1 < len(w.flow.Widgets) {
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				// HACK: Temporarily set both this and parent as mapping here
+				c = w.flow.Widgets[index+1]
+				keyboardPointer.OriginMapping = []Widgeter{c, w}
+				if cp, ok := c.(*VfsListing0PureWidget); ok && cp.selected == 0 && len(cp.entries) > 0 {
+					cp.selected = 1
+					cp.selectionChangedTest()
+				}
+			}
+		}
+	}
+}
+
+// ---
+
+type VfsListing0PureWidget struct {
+	Widget
+	vfs                vfs.FileSystem
+	path               string
+	entries            []os.FileInfo
+	longestEntryLength int
+	selected           uint64 // 0 is unselected, else index+1 is selected
+}
+
+func newVfsListing0PureWidget(vfs vfs.FileSystem, path string) *VfsListing0PureWidget {
+	w := &VfsListing0PureWidget{vfs: vfs, Widget: NewWidget(np, np), path: path}
+	w.NotifyChange() // TODO: Give it a proper source
+	return w
+}
+
+func (w *VfsListing0PureWidget) NotifyChange() {
+	// TODO: Support for preserving selection
+
+	entries, err := w.vfs.ReadDir(w.path)
+	if err == nil {
+		w.entries = make([]os.FileInfo, 0, len(entries))
+		w.longestEntryLength = 0
+		for _, v := range entries {
+			if !strings.HasPrefix(v.Name(), ".") {
+				// HACK: Temporarily override this to list .go files only
+				//if !strings.HasPrefix(v.Name(), ".") && strings.HasSuffix(v.Name(), ".go") && !v.IsDir() {
+				w.entries = w.entries[:len(w.entries)+1]
+				w.entries[len(w.entries)-1] = v
+
+				entryLength := len(v.Name())
+				if v.IsDir() {
+					entryLength++
+				}
+				if entryLength > w.longestEntryLength {
+					w.longestEntryLength = entryLength
+				}
+			}
+		}
+	}
+
+	w.Layout()
+
+	w.NotifyAllListeners()
+}
+
+func (w *VfsListing0PureWidget) selectionChangedTest() {
+	if w.selected != 0 && w.entries[w.selected-1].IsDir() {
+		path := filepath.Join(w.path, w.entries[w.selected-1].Name()) // TODO: Use path.
+		var newFolder Widgeter
+
+		/*if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
+			dpkg := GetDocPackage(bpkg, err)
+
+			out := Underline(`import "`+dpkg.ImportPath+`"`) + "\n"
+			for _, v := range dpkg.Vars {
+				out += SprintAstBare(v.Decl) + "\n"
+			}
+			out += "\n"
+			for _, f := range dpkg.Funcs {
+				out += SprintAstBare(f.Decl) + "\n"
+			}
+			out += "\n"
+			for _, c := range dpkg.Consts {
+				out += SprintAstBare(c.Decl) + "\n"
+			}
+			out += "\n"
+			for _, t := range dpkg.Types {
+				out += fmt.Sprint(t.Name) + "\n"
+				//PrintlnAstBare(t.Decl)
+			}
+
+			newFolder = NewTextLabelWidgetString(np, out)
+		} else if isGitRepo, status := IsFolderGitRepo(path); isGitRepo {
+			newFolder = NewTextLabelWidgetString(np, status)
+		} else */{
+			newFolder = newVfsListing0PureWidget(w.vfs, path)
+		}
+
+		p := w.Parent().(*FlowLayoutWidget)
+		index := WidgeterIndex(p.Widgets, w)
+		p.SetWidgets(append(p.Widgets[:index+1], newFolder))
+	} else {
+		p := w.Parent().(*FlowLayoutWidget)
+		index := WidgeterIndex(p.Widgets, w)
+		p.SetWidgets(p.Widgets[:index+1])
+	}
+
+	ExternallyUpdated(w.Parent().Parent().(DepNode2ManualI))
+}
+
+func (w *VfsListing0PureWidget) Layout() {
+	if w.longestEntryLength < 3 {
+		w.size[0] = float64(fontWidth * 3)
+	} else {
+		w.size[0] = float64(fontWidth * w.longestEntryLength)
+	}
+	if len(w.entries) == 0 {
+		w.size[1] = float64(fontHeight * 1)
+	} else {
+		w.size[1] = float64(fontHeight * len(w.entries))
+	}
+
+	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
+	w.Widget.Layout()
+}
+
+func (w *VfsListing0PureWidget) Render() {
+	DrawNBox(w.pos, w.size)
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
+
+	for i, v := range w.entries {
+		if w.selected == uint64(i+1) {
+			if hasTypingFocus {
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryColor)
+				gl.Color3d(1, 1, 1)
+			} else {
+				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryInactiveColor)
+				gl.Color3d(0, 0, 0)
+			}
+		} else {
+			gl.Color3d(0, 0, 0)
+		}
+
+		if v.IsDir() {
+			NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)})).PrintLine(v.Name() + PathSeparator)
+		} else {
+			NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)})).PrintLine(v.Name())
+		}
+	}
+}
+
+func (w *VfsListing0PureWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *VfsListing0PureWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		// HACK: Temporarily set both this and parent as mapping here
+		p := w.Parent().Parent().(*VfsListing0Widget)
+		keyboardPointer.OriginMapping = []Widgeter{w, p}
+	}
+
+	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
+	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
+
+	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
+		globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
+		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
+		if len(w.entries) > 0 {
+			if localPosition[1] < 0 {
+				w.selected = 1
+			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(len(w.entries)) {
+				w.selected = uint64(len(w.entries))
+			} else {
+				w.selected = uint64((localPosition[1] / fontHeight) + 1)
+			}
+			w.selectionChangedTest()
+		}
+	}
+
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		switch glfw.Key(inputEvent.InputId) {
+		case glfw.KeyUp:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries) > 0 {
+					w.selected = 1
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected > 1 {
+					w.selected--
+					w.selectionChangedTest()
+				}
+			}
+		case glfw.KeyDown:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				if len(w.entries) > 0 {
+					w.selected = uint64(len(w.entries))
+					w.selectionChangedTest()
+				}
+			} else if inputEvent.ModifierKey == 0 {
+				if w.selected < uint64(len(w.entries)) {
+					w.selected++
+					w.selectionChangedTest()
+				}
+			}
+		}
+	}
+}
+
+// ---
+
 type VfsListingWidget struct {
 	vfs vfs.FileSystem
 	*CompositeWidget
@@ -4513,6 +4779,18 @@ func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
+type FileInfoStringer struct {
+	os.FileInfo
+}
+
+func (fi FileInfoStringer) String() string {
+	if fi.IsDir() {
+		return fi.Name() + PathSeparator
+	} else {
+		return fi.Name()
+	}
+}
+
 type VfsListingPureWidget struct {
 	Widget
 	vfs                vfs.FileSystem
@@ -4522,17 +4800,23 @@ type VfsListingPureWidget struct {
 	selected           uint64 // 0 is unselected, else index+1 is selected
 }
 
-func newVfsListingPureWidget(vfs vfs.FileSystem, path string) *VfsListingPureWidget {
+func newVfsListingPureWidget(vfs vfs.FileSystem, path string) Widgeter {
+	// TEST
+	{
+		entries, err := vfs.ReadDir(path)
+		if err != nil {
+			panic(err)
+		}
+
+		ss := &SliceStringerS{}
+		for _, v := range entries {
+			ss.entries = append(ss.entries, FileInfoStringer{FileInfo: v})
+		}
+		return NewSelecterWidget(np, ss)
+	}
+
 	w := &VfsListingPureWidget{vfs: vfs, Widget: NewWidget(np, np), path: path}
 	w.NotifyChange() // TODO: Give it a proper source
-	return w
-}
-
-func newVfsListingPureWidgetWithSelection(vfs vfs.FileSystem, path string) *VfsListingPureWidget {
-	w := newVfsListingPureWidget(vfs, path)
-	if len(w.entries) >= 1 {
-		w.selected = 1
-	}
 	return w
 }
 
@@ -4568,7 +4852,7 @@ func (w *VfsListingPureWidget) NotifyChange() {
 
 func (w *VfsListingPureWidget) selectionChangedTest() {
 	if w.selected != 0 && w.entries[w.selected-1].IsDir() {
-		path := filepath.Join(w.path, w.entries[w.selected-1].Name()) // TODO: Use path.
+		path := filepath.Join(w.path, w.entries[w.selected-1].Name()) // TODO: Use "path" package for vfs, not "filepath".
 		var newFolder Widgeter
 
 		/*if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
@@ -8620,7 +8904,10 @@ func main() {
 
 				fs = vfs_util.NewDebugFS(fs)
 
-				w := NewVfsListingWidget(mgl64.Vec2{200, 400}, fs, "/")
+				w0 := NewVfsListing0Widget(mgl64.Vec2{200, 400}, fs, "/")
+				widgets = append(widgets, w0)
+
+				w := NewVfsListingWidget(mgl64.Vec2{500, 400}, fs, "/")
 				widgets = append(widgets, w)
 			}
 		}
