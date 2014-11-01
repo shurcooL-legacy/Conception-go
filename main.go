@@ -1054,7 +1054,7 @@ func (this *SliceStringerS) Len() uint64 {
 var oracleModes = NewSliceStringerS("callees", "callers", "callgraph", "callstack", "describe", "freevars", "implements", "peers", "referrers")
 
 func NewTest6OracleWidget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source *TextBoxWidget) Widgeter {
-	mode := NewSelecterWidget(np, oracleModes)
+	mode := NewSelecterWidget(np, oracleModes, nil)
 
 	params := func() interface{} {
 		fileUri, _ := source.Content.GetUriForProtocol("file://")
@@ -3728,7 +3728,7 @@ type SearchableListWidget struct {
 func NewSearchableListWidget(pos, size mgl64.Vec2, entries SliceStringer) *SearchableListWidget {
 	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
 	//listWidget := NewListWidget(mathgl.Vec2d{0, fontHeight + 2}, entries)
-	listWidget := NewFilterableSelecterWidget(np, entries, searchField.Content)
+	listWidget := NewFilterableSelecterWidget(np, entries, searchField.Content, nil)
 	listWidgetScrollPane := NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, size, listWidget)
 
 	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget, listWidgetScrollPane: listWidgetScrollPane}
@@ -3755,7 +3755,7 @@ func (this *entriesPlusOne) Len() uint64 {
 
 func NewSearchableListWidgetTest(pos, size mgl64.Vec2, entries SliceStringer) *SearchableListWidget {
 	searchField := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
-	listWidget := NewFilterableSelecterWidget(np, &entriesPlusOne{entries, searchField}, searchField.Content)
+	listWidget := NewFilterableSelecterWidget(np, &entriesPlusOne{entries, searchField}, searchField.Content, nil)
 	listWidgetScrollPane := NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, size, listWidget)
 
 	w := &SearchableListWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{searchField, listWidgetScrollPane}), searchField: searchField, listWidget: listWidget, listWidgetScrollPane: listWidgetScrollPane}
@@ -3928,26 +3928,51 @@ type Selecter interface {
 type FilterableSelecterWidget struct {
 	Widget
 	longestEntryLength int
-	selected           uint64 // index of selected entry [0, len)
+	selected           map[uint64]struct{} // index of selected entries [0, len)
 	manuallyPicked     fmt.Stringer
 	DepNode2Manual     // SelectionChanged
 	layoutDepNode2     DepNode2Func
+	options            SelecterWidgetOptions
 
 	entries *FilterableSliceStringer
 }
 
+type SelecterWidgetType uint8
+
+const (
+	SingleSelection SelecterWidgetType = iota
+	OptionalSelection
+)
+
+type SelecterWidgetOptions struct {
+	SelecterWidgetType
+}
+
 // NewSelecterWidget creates a simple selecter widget.
-func NewSelecterWidget(pos mgl64.Vec2, entries SliceStringer) *FilterableSelecterWidget {
-	return NewFilterableSelecterWidget(pos, entries, NewMultilineContent())
+func NewSelecterWidget(pos mgl64.Vec2, entries SliceStringer, options *SelecterWidgetOptions) *FilterableSelecterWidget {
+	return NewFilterableSelecterWidget(pos, entries, NewMultilineContent(), options)
 }
 
 // NewFilterableSelecterWidget creates a selecter widget with a filter.
 //
 // It only displays results that match the filter, if non-empty.
-func NewFilterableSelecterWidget(pos mgl64.Vec2, entries SliceStringer, filter MultilineContentI) *FilterableSelecterWidget {
+func NewFilterableSelecterWidget(pos mgl64.Vec2, entries SliceStringer, filter MultilineContentI, options *SelecterWidgetOptions) *FilterableSelecterWidget {
+	if options == nil {
+		options = &SelecterWidgetOptions{}
+	}
+
 	filterableEntries := NewFilterableSliceStringer(entries, filter)
 
-	w := &FilterableSelecterWidget{Widget: NewWidget(pos, np), entries: filterableEntries}
+	w := &FilterableSelecterWidget{
+		Widget:   NewWidget(pos, np),
+		selected: make(map[uint64]struct{}),
+		entries:  filterableEntries,
+		options:  *options,
+	}
+
+	if w.options.SelecterWidgetType == SingleSelection {
+		w.selected[0] = struct{}{} // Default selection.
+	}
 
 	w.layoutDepNode2.UpdateFunc = func(DepNode2I) { w.NotifyChange() }
 	w.layoutDepNode2.AddSources(filterableEntries) // TODO: What about removing w when it's "deleted"?
@@ -3956,10 +3981,12 @@ func NewFilterableSelecterWidget(pos mgl64.Vec2, entries SliceStringer, filter M
 }
 
 func (this *FilterableSelecterWidget) GetSelected() fmt.Stringer {
-	if this.entries.Len() == 0 {
-		return nil
+	for s := range this.selected {
+		if s < this.entries.Len() {
+			return this.entries.Get(s)
+		}
 	}
-	return this.entries.Get(this.selected)
+	return nil
 }
 
 func (w *FilterableSelecterWidget) NotifyChange() {
@@ -3975,19 +4002,21 @@ func (w *FilterableSelecterWidget) NotifyChange() {
 
 		// Preserve selection
 		if w.entries.Get(index) == w.manuallyPicked {
-			w.selected = index
+			w.selected = map[uint64]struct{}{index: struct{}{}}
 			selectionPreserved = true
 		}
 	}
 
-	if !selectionPreserved {
-		w.selected = 0
-		if w.entries.Len() > 0 {
-			// HACK, TODO: This should happen not when the selection is unpreserved, but when it is unchanged
-			// (i.e. it may be unpreserved, but still equal, then no need to report a change)
-			w.selectionChangedTest() // TEST, HACK: This sets manuallyPicked because it's meant for user-driven actions, etc. Need to do this in a better way.
+	if len(w.selected) > 0 {
+		if !selectionPreserved {
+			w.selected = map[uint64]struct{}{0: struct{}{}}
+			if w.entries.Len() > 0 {
+				// HACK, TODO: This should happen not when the selection is unpreserved, but when it is unchanged
+				// (i.e. it may be unpreserved, but still equal, then no need to report a change)
+				w.selectionChangedTest() // TEST, HACK: This sets manuallyPicked because it's meant for user-driven actions, etc. Need to do this in a better way.
+			}
+			w.manuallyPicked = nil
 		}
-		w.manuallyPicked = nil
 	}
 
 	w.Layout()
@@ -3997,12 +4026,18 @@ func (w *FilterableSelecterWidget) NotifyChange() {
 
 // Pre-condition: w.entries.Len() > 0
 func (w *FilterableSelecterWidget) selectionChangedTest() {
-	// TEST
-	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
-		scrollPane.ScrollToArea(mgl64.Vec2{0, float64(w.selected * fontHeight)}, mgl64.Vec2{float64(w.longestEntryLength * fontWidth), fontHeight})
+	var firstSelected uint64
+	for s := range w.selected {
+		firstSelected = s
+		break
 	}
 
-	w.manuallyPicked = w.entries.Get(w.selected)
+	// TEST
+	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
+		scrollPane.ScrollToArea(mgl64.Vec2{0, float64(firstSelected * fontHeight)}, mgl64.Vec2{float64(w.longestEntryLength * fontWidth), fontHeight})
+	}
+
+	w.manuallyPicked = w.entries.Get(firstSelected)
 
 	ExternallyUpdated(w)
 }
@@ -4047,7 +4082,7 @@ func (w *FilterableSelecterWidget) Render() {
 	}
 
 	for ; beginLineIndex < endLineIndex; beginLineIndex++ {
-		if w.selected == uint64(beginLineIndex) {
+		if _, ok := w.selected[uint64(beginLineIndex)]; ok {
 			if hasTypingFocus {
 				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(beginLineIndex * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryColor)
 
@@ -4096,36 +4131,42 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 			} else {
 				newSelected = uint64(localPosition[1] / fontHeight)
 			}
-			if w.selected != newSelected {
-				w.selected = newSelected
+			if _, ok := w.selected[newSelected]; !ok {
+				w.selected = map[uint64]struct{}{newSelected: struct{}{}}
 				w.selectionChangedTest()
 			}
 		}
 	}
 
 	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+		var firstSelected uint64
+		for s := range w.selected {
+			firstSelected = s
+			break
+		}
+
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if w.entries.Len() > 0 && w.selected > 0 {
-					w.selected = 0
+				if w.entries.Len() > 0 && firstSelected > 0 {
+					w.selected = map[uint64]struct{}{0: struct{}{}}
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
-				if w.entries.Len() > 0 && w.selected > 0 {
-					w.selected--
+				if w.entries.Len() > 0 && firstSelected > 0 {
+					w.selected = map[uint64]struct{}{firstSelected - 1: struct{}{}}
 					w.selectionChangedTest()
 				}
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if w.entries.Len() > 0 && w.selected < uint64(w.entries.Len()-1) {
-					w.selected = uint64(w.entries.Len() - 1)
+				if w.entries.Len() > 0 && firstSelected < uint64(w.entries.Len()-1) {
+					w.selected = map[uint64]struct{}{uint64(w.entries.Len() - 1): struct{}{}}
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
-				if w.entries.Len() > 0 && w.selected < uint64(w.entries.Len()-1) {
-					w.selected++
+				if w.entries.Len() > 0 && firstSelected < uint64(w.entries.Len()-1) {
+					w.selected = map[uint64]struct{}{firstSelected + 1: struct{}{}}
 					w.selectionChangedTest()
 				}
 			}
@@ -4800,25 +4841,25 @@ type VfsListingPureWidget struct {
 	selected           uint64 // 0 is unselected, else index+1 is selected
 }
 
+// TEST
 func newVfsListingPureWidget(vfs vfs.FileSystem, path string) Widgeter {
-	// TEST
-	{
-		entries, err := vfs.ReadDir(path)
-		if err != nil {
-			panic(err)
-		}
-
-		ss := &SliceStringerS{}
-		for _, v := range entries {
-			ss.entries = append(ss.entries, FileInfoStringer{FileInfo: v})
-		}
-		return NewSelecterWidget(np, ss)
+	entries, err := vfs.ReadDir(path)
+	if err != nil {
+		panic(err)
 	}
 
+	ss := &SliceStringerS{}
+	for _, v := range entries {
+		ss.entries = append(ss.entries, FileInfoStringer{FileInfo: v})
+	}
+	return NewSelecterWidget(np, ss, &SelecterWidgetOptions{SelecterWidgetType: OptionalSelection})
+}
+
+/*func newVfsListing0PureWidget(vfs vfs.FileSystem, path string) *VfsListingPureWidget {
 	w := &VfsListingPureWidget{vfs: vfs, Widget: NewWidget(np, np), path: path}
 	w.NotifyChange() // TODO: Give it a proper source
 	return w
-}
+}*/
 
 func (w *VfsListingPureWidget) NotifyChange() {
 	// TODO: Support for preserving selection
@@ -8868,7 +8909,7 @@ func main() {
 		{
 			{
 				entries := NewSliceStringerS("one", "two", "three")
-				w := NewSelecterWidget(mgl64.Vec2{500, 200}, entries)
+				w := NewSelecterWidget(mgl64.Vec2{500, 200}, entries, nil)
 				widgets = append(widgets, w)
 			}
 
