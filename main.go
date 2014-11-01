@@ -45,6 +45,7 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 	glfw "github.com/shurcooL/glfw3" // Effectively, a fork of github.com/go-gl/glfw3 but with 3.1 PR merged.
 	"github.com/shurcooL/go-goon"
+	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
 	"github.com/shurcooL/go/exp/13"
@@ -64,7 +65,6 @@ import (
 	. "github.com/shurcooL/go/gists/gist6418462"
 	. "github.com/shurcooL/go/gists/gist6445065"
 	. "github.com/shurcooL/go/gists/gist6545684"
-	. "github.com/shurcooL/go/gists/gist6724654"
 	. "github.com/shurcooL/go/gists/gist7390843"
 	. "github.com/shurcooL/go/gists/gist7480523"
 	. "github.com/shurcooL/go/gists/gist7519227"
@@ -5020,7 +5020,7 @@ func NewGoonWidget(pos mgl64.Vec2, a interface{}) Widgeter {
 		panic("NewGoonWidget: Need to pass address of value.")
 	}
 	//goonWidget := newGoonWidget(mathgl.Vec2d{fontHeight + 2}, title[1:], reflect.ValueOf(a))
-	goonWidget := setupInternals3(mgl64.Vec2{fontHeight + 2}, title[1:], UnsafeReflectValue(reflect.ValueOf(a)).Elem())
+	goonWidget := setupInternals3(mgl64.Vec2{fontHeight + 2}, title[1:], bypass.UnsafeReflectValue(reflect.ValueOf(a)).Elem())
 	return NewCompositeWidget(pos, []Widgeter{goonWidget})
 }
 
@@ -5046,7 +5046,7 @@ func newGoonWidget(pos mgl64.Vec2, title string, a reflect.Value) *GoonWidget {
 
 	return &GoonWidget{CompositeWidget: NewCompositeWidget(pos, []Widgeter{b, t}), a: a}*/
 
-	a = UnsafeReflectValue(a)
+	a = bypass.UnsafeReflectValue(a)
 
 	w := &GoonWidget{CompositeWidget: NewCompositeWidget(pos, nil), title: title, a: a}
 	w.setupInternals()
@@ -5144,7 +5144,7 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 		}
 	case reflect.Map:
 		for _, key := range v.MapKeys() {
-			addrValue := UnsafeReflectValue(v.MapIndex(key))
+			addrValue := bypass.UnsafeReflectValue(v.MapIndex(key))
 			widgets = append(widgets, setupInternals3(tab, key.String(), addrValue))
 		}
 	case reflect.Array, reflect.Slice:
@@ -5162,7 +5162,7 @@ func (w *GoonWidget) setupInternals2(a reflect.Value) (f *FlowLayoutWidget) {
 
 func setupInternals3(pos mgl64.Vec2, titleString string, a reflect.Value) Widgeter {
 	/*if !a.CanInterface() {
-		a = UnsafeReflectValue(a)
+		a = bypass.UnsafeReflectValue(a)
 	}*/
 
 	var w Widgeter
