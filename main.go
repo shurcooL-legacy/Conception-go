@@ -3990,7 +3990,7 @@ func (this *FilterableSelecterWidget) GetSelected() fmt.Stringer {
 }
 
 func (w *FilterableSelecterWidget) NotifyChange() {
-	selectionPreserved := false
+	var selectionPreserved = false
 
 	w.longestEntryLength = 0
 	for index := uint64(0); index < w.entries.Len(); index++ {
@@ -4007,16 +4007,14 @@ func (w *FilterableSelecterWidget) NotifyChange() {
 		}
 	}
 
-	if len(w.selected) > 0 {
-		if !selectionPreserved {
-			w.selected = map[uint64]struct{}{0: struct{}{}}
-			if w.entries.Len() > 0 {
-				// HACK, TODO: This should happen not when the selection is unpreserved, but when it is unchanged
-				// (i.e. it may be unpreserved, but still equal, then no need to report a change)
-				w.selectionChangedTest() // TEST, HACK: This sets manuallyPicked because it's meant for user-driven actions, etc. Need to do this in a better way.
-			}
-			w.manuallyPicked = nil
+	if len(w.selected) > 0 && !selectionPreserved {
+		w.selected = map[uint64]struct{}{0: struct{}{}}
+		if w.entries.Len() > 0 {
+			// HACK, TODO: This should happen not when the selection is unpreserved, but when it is unchanged
+			// (i.e. it may be unpreserved, but still equal, then no need to report a change)
+			w.selectionChangedTest() // TEST, HACK: This sets manuallyPicked because it's meant for user-driven actions, etc. Need to do this in a better way.
 		}
+		w.manuallyPicked = nil
 	}
 
 	w.Layout()
