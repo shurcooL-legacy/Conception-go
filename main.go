@@ -4772,9 +4772,10 @@ func NewVfsListingWidget(pos mgl64.Vec2, vfs vfs.FileSystem, path string) *VfsLi
 // TODO: Use a custom path type instead of a string?
 func (w *VfsListingWidget) GetSelectedPath() (path string) {
 	for _, widget := range w.flow.Widgets {
-		if pure := widget.(*VfsListingPureWidget); pure.selected != 0 {
-			path = filepath.Join(pure.path, pure.entries[pure.selected-1].Name())
-			if pure.entries[pure.selected-1].IsDir() {
+		if pure := widget.(*VfsListingPureWidget); pure.GetSelected() != nil {
+			fis := pure.GetSelected().(FileInfoStringer)
+			path = filepath.Join(pure.path, fis.Name())
+			if fis.IsDir() {
 				path += string(filepath.Separator)
 			}
 		}
@@ -4783,7 +4784,7 @@ func (w *VfsListingWidget) GetSelectedPath() (path string) {
 }
 
 func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+	/*if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyLeft:
 			c := keyboardPointer.OriginMapping[0] // HACK
@@ -4813,7 +4814,7 @@ func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 			}
 		}
-	}
+	}*/
 }
 
 // ---
@@ -4831,12 +4832,11 @@ func (fi FileInfoStringer) String() string {
 }
 
 type VfsListingPureWidget struct {
-	Widget
+	*FilterableSelecterWidget
 	vfs                vfs.FileSystem
 	path               string
-	entries            []os.FileInfo
-	longestEntryLength int
-	selected           uint64 // 0 is unselected, else index+1 is selected
+
+	selectionChangedTestDepNode2 DepNode2Func
 }
 
 // TEST
@@ -4848,9 +4848,22 @@ func newVfsListingPureWidget(vfs vfs.FileSystem, path string) Widgeter {
 
 	ss := &SliceStringerS{}
 	for _, v := range entries {
+		if strings.HasPrefix(v.Name(), ".") {
+			continue
+		}
 		ss.entries = append(ss.entries, FileInfoStringer{FileInfo: v})
 	}
-	return NewSelecterWidget(np, ss, &SelecterWidgetOptions{SelecterWidgetType: OptionalSelection})
+
+	w := &VfsListingPureWidget{
+		FilterableSelecterWidget: NewSelecterWidget(np, ss, &SelecterWidgetOptions{SelecterWidgetType: OptionalSelection}),
+		vfs: vfs,
+		path:path,
+	}
+
+	w.selectionChangedTestDepNode2.UpdateFunc = func(DepNode2I) { w.selectionChangedTest() }
+	w.selectionChangedTestDepNode2.AddSources(w.FilterableSelecterWidget) // TODO: What about removing w when it's "deleted"?
+
+	return w
 }
 
 /*func newVfsListing0PureWidget(vfs vfs.FileSystem, path string) *VfsListingPureWidget {
@@ -4859,39 +4872,9 @@ func newVfsListingPureWidget(vfs vfs.FileSystem, path string) Widgeter {
 	return w
 }*/
 
-func (w *VfsListingPureWidget) NotifyChange() {
-	// TODO: Support for preserving selection
-
-	entries, err := w.vfs.ReadDir(w.path)
-	if err == nil {
-		w.entries = make([]os.FileInfo, 0, len(entries))
-		w.longestEntryLength = 0
-		for _, v := range entries {
-			if !strings.HasPrefix(v.Name(), ".") {
-				// HACK: Temporarily override this to list .go files only
-				//if !strings.HasPrefix(v.Name(), ".") && strings.HasSuffix(v.Name(), ".go") && !v.IsDir() {
-				w.entries = w.entries[:len(w.entries)+1]
-				w.entries[len(w.entries)-1] = v
-
-				entryLength := len(v.Name())
-				if v.IsDir() {
-					entryLength++
-				}
-				if entryLength > w.longestEntryLength {
-					w.longestEntryLength = entryLength
-				}
-			}
-		}
-	}
-
-	w.Layout()
-
-	w.NotifyAllListeners()
-}
-
 func (w *VfsListingPureWidget) selectionChangedTest() {
-	if w.selected != 0 && w.entries[w.selected-1].IsDir() {
-		path := filepath.Join(w.path, w.entries[w.selected-1].Name()) // TODO: Use "path" package for vfs, not "filepath".
+	if w.GetSelected() != nil && w.GetSelected().(FileInfoStringer).IsDir() {
+		path := filepath.Join(w.path, w.GetSelected().(FileInfoStringer).Name()) // TODO: Use "path" package for vfs, not "filepath".
 		var newFolder Widgeter
 
 		/*if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
@@ -4931,117 +4914,12 @@ func (w *VfsListingPureWidget) selectionChangedTest() {
 		p.SetWidgets(p.Widgets[:index+1])
 	}
 
-	ExternallyUpdated(w.Parent().Parent().(DepNode2ManualI))
+	//ExternallyUpdated(w.Parent().Parent().(DepNode2ManualI))
 }
 
-func (w *VfsListingPureWidget) Layout() {
-	if w.longestEntryLength < 3 {
-		w.size[0] = float64(fontWidth * 3)
-	} else {
-		w.size[0] = float64(fontWidth * w.longestEntryLength)
-	}
-	if len(w.entries) == 0 {
-		w.size[1] = float64(fontHeight * 1)
-	} else {
-		w.size[1] = float64(fontHeight * len(w.entries))
-	}
-
-	// TODO: Standardize this mess... have graph-level func that don't get overriden, and class-specific funcs to be overridden
-	w.Widget.Layout()
-}
-
-func (w *VfsListingPureWidget) Render() {
-	DrawNBox(w.pos, w.size)
-
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
-
-	for i, v := range w.entries {
-		if w.selected == uint64(i+1) {
-			if hasTypingFocus {
-				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryColor)
-				gl.Color3d(1, 1, 1)
-			} else {
-				DrawBorderlessBox(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)}), mgl64.Vec2{w.size[0], fontHeight}, selectedEntryInactiveColor)
-				gl.Color3d(0, 0, 0)
-			}
-		} else {
-			gl.Color3d(0, 0, 0)
-		}
-
-		if v.IsDir() {
-			NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)})).PrintLine(v.Name() + PathSeparator)
-		} else {
-			NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(i * fontHeight)})).PrintLine(v.Name())
-		}
-	}
-}
-
-func (w *VfsListingPureWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
-	if len(w.Widget.Hit(ParentPosition)) > 0 {
-		return []Widgeter{w}
-	} else {
-		return nil
-	}
-}
-func (w *VfsListingPureWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
-		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
-
-		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-		// HACK: Temporarily set both this and parent as mapping here
-		p := w.Parent().Parent().(*VfsListingWidget)
-		keyboardPointer.OriginMapping = []Widgeter{w, p}
-	}
-
-	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
-	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
-
-	// Check if button 0 was released (can't do pressed atm because first on-focus event gets ignored, and it promotes on-move switching, etc.)
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == POINTING && (inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false) {
-		globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
-		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
-		if len(w.entries) > 0 {
-			if localPosition[1] < 0 {
-				w.selected = 1
-			} else if uint64((localPosition[1]/fontHeight)+1) > uint64(len(w.entries)) {
-				w.selected = uint64(len(w.entries))
-			} else {
-				w.selected = uint64((localPosition[1] / fontHeight) + 1)
-			}
-			w.selectionChangedTest()
-		}
-	}
-
-	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
-		switch glfw.Key(inputEvent.InputId) {
-		case glfw.KeyUp:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				if len(w.entries) > 0 {
-					w.selected = 1
-					w.selectionChangedTest()
-				}
-			} else if inputEvent.ModifierKey == 0 {
-				if w.selected > 1 {
-					w.selected--
-					w.selectionChangedTest()
-				}
-			}
-		case glfw.KeyDown:
-			if inputEvent.ModifierKey == glfw.ModSuper {
-				if len(w.entries) > 0 {
-					w.selected = uint64(len(w.entries))
-					w.selectionChangedTest()
-				}
-			} else if inputEvent.ModifierKey == 0 {
-				if w.selected < uint64(len(w.entries)) {
-					w.selected++
-					w.selectionChangedTest()
-				}
-			}
-		}
-	}
+func (w *VfsListingPureWidget) LayoutNeeded() {
+	w.FilterableSelecterWidget.LayoutNeeded()
+	MakeUpdated(&w.selectionChangedTestDepNode2)
 }
 
 // ---
@@ -8918,7 +8796,7 @@ func main() {
 
 			{
 				var fs vfs.FileSystem
-				switch 1 {
+				switch 0 {
 				case 0:
 					fs = vfs.OS("../")
 				case 1:
