@@ -9134,7 +9134,7 @@ func main() {
 		goPackageListing.listWidget.SelectionChangedPost = func() {
 			if goPackage := goPackageListing.OnSelectionChanged().GetSelected().(*GoPackage); goPackage != nil {
 				path := goPackage.Bpkg.Dir
-				folderListing.flow.SetWidgets([]Widgeter{newVfsListingPureWidgetWithSelection(localFs, path)})
+				folderListing.flow.SetWidgets([]Widgeter{newVfsListingPureWidgetWithSelection(onlyGoFiles{FileSystem: localFs}, path)})
 				//ExternallyUpdated(folderListing)
 			}
 		}
