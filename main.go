@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -4236,17 +4237,17 @@ func NewVfsListingWidget(pos mgl64.Vec2, vfs vfs.FileSystem, path string) *VfsLi
 }
 
 // TODO: Use a custom path type instead of a string?
-func (w *VfsListingWidget) GetSelectedPath() (path string) {
+func (w *VfsListingWidget) GetSelectedPath() (selectedPath string) {
 	for _, widget := range w.flow.Widgets {
 		if pure := widget.(*VfsListingPureWidget); pure.GetSelected() != nil {
 			fis := pure.GetSelected().(FileInfoStringer)
-			path = filepath.Join(pure.path, fis.Name())
+			selectedPath = path.Join(pure.path, fis.Name())
 			if fis.IsDir() {
-				path += string(filepath.Separator)
+				selectedPath += string(PathSeparator)
 			}
 		}
 	}
-	return path
+	return selectedPath
 }
 
 func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
@@ -4363,7 +4364,7 @@ func newVfsListingPureWidgetWithSelection(vfs vfs.FileSystem, path string) Widge
 
 func (w *VfsListingPureWidget) selectionChangedTest() {
 	if w.GetSelected() != nil && w.GetSelected().(FileInfoStringer).IsDir() {
-		path := filepath.Join(w.path, w.GetSelected().(FileInfoStringer).Name()) // TODO: Use "path" package for vfs, not "filepath".
+		path := path.Join(w.path, w.GetSelected().(FileInfoStringer).Name())
 		var newFolder Widgeter
 
 		/*if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
