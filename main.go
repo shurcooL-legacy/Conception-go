@@ -3721,7 +3721,7 @@ type SearchableListWidget struct {
 	*CompositeWidget
 
 	// Internal access shortcuts (also inside CompositeWidget).
-	searchField          Widgeter
+	searchField          *TextBoxWidget
 	listWidget           *FilterableSelecterWidget
 	listWidgetScrollPane *ScrollPaneWidget
 
@@ -8591,6 +8591,42 @@ func main() {
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
 		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true, FindPanel: true})
 		widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{200 + 2, 0}, mgl64.Vec2{750, float64(windowSize1 - 2)}, editor))
+
+		// TODO: This should be at the canvas-scope rather than editor-scope, I think.
+		selectPackageListing := &CustomWidget{
+			Widget: NewWidget(np, np),
+			ProcessEventFunc: func(inputEvent InputEvent) {
+				if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+					switch glfw.Key(inputEvent.InputId) {
+					case glfw.KeyO:
+						if inputEvent.ModifierKey&glfw.ModSuper != 0 {
+							goPackageListing.SetKeyboardFocus()
+							goPackageListing.searchField.caretPosition.SelectAll() // HACK: Using many private fields.
+						}
+					}
+				}
+			},
+		}
+		editor.ExtensionsTest = append(editor.ExtensionsTest, selectPackageListing)
+
+		focusEditor := &CustomWidget{
+			Widget: NewWidget(np, np),
+			ProcessEventFunc: func(inputEvent InputEvent) {
+				if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+					switch glfw.Key(inputEvent.InputId) {
+					case glfw.KeyEnter:
+						editor.caretPosition.Move(-3)
+
+						// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+						keyboardPointer.OriginMapping = []Widgeter{editor}
+					case glfw.KeyEscape:
+						// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+						keyboardPointer.OriginMapping = []Widgeter{editor}
+					}
+				}
+			},
+		}
+		goPackageListing.ExtensionsTest = append(goPackageListing.ExtensionsTest, focusEditor)
 
 		// View sidebar
 		{
