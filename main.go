@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -7878,14 +7877,6 @@ func initHttpHandlers() {
 	})*/
 	http.Handle("/favicon.ico", http.NotFoundHandler())
 	http.Handle("/status/", http.StripPrefix("/status", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
-
-		// HACK: Handle .go files specially, just assume they're in "./GoLand"
-		/*if strings.HasSuffix(req.URL.Path, ".go") {
-			w.Header().Set("Content-Type", "text/plain")
-			w.Write(MustReadFileB(filepath.Join("../../../", req.URL.Path)))
-			return
-		}*/
-
 		var b string
 
 		// TODO: Try to lookup the GoPackage rather than creating a new one.
@@ -7942,13 +7933,6 @@ func initHttpHandlers() {
 					}
 					b += "\n```diff\n" + workingDiff + "\n```\n"
 				}
-			}
-
-			b += "\n---\n\n"
-
-			b += "```\n" + goPackage.Bpkg.Dir + "\n```\n"
-			for _, name := range append(goPackage.Bpkg.GoFiles, goPackage.Bpkg.CgoFiles...) {
-				b += fmt.Sprintf("[%s](%s)  \n", name, path.Join("/status/", importPath, name))
 			}
 		} else {
 			b += fmt.Sprintf("Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
