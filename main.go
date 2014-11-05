@@ -434,7 +434,8 @@ type Widgeter interface {
 	LayoutNeeded()
 	Render()
 	Hit(mgl64.Vec2) []Widgeter
-	ProcessEvent(InputEvent) // TODO: Upgrade to MatchEventQueue() or so
+	ProcessEvent(InputEvent)                     // TODO: Upgrade to MatchEventQueue() or so
+	ContainsWidget(widget, target Widgeter) bool // Returns true if target is widget or within it.
 
 	Pos() *mgl64.Vec2
 	Size() *mgl64.Vec2
@@ -486,6 +487,9 @@ func (w *Widget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	}
 }
 func (w *Widget) ProcessEvent(inputEvent InputEvent) {}
+func (_ *Widget) ContainsWidget(widget, target Widgeter) bool {
+	return widget == target
+}
 
 func (w *Widget) Pos() *mgl64.Vec2  { return &w.pos }
 func (w *Widget) Size() *mgl64.Vec2 { return &w.size }
@@ -1742,9 +1746,9 @@ func (w *WindowWidget) ProcessEvent(inputEvent InputEvent) {
 
 // ---
 
-func (widgets Widgeters) ContainsWidget(targetWidget Widgeter) bool {
+func (widgets Widgeters) ContainsWidget(target Widgeter) bool {
 	for _, widget := range widgets {
-		if widget == targetWidget {
+		if widget.ContainsWidget(widget, target) {
 			return true
 		}
 	}
@@ -2104,9 +2108,9 @@ func (w *CompositeWidget) AddWidget(widget Widgeter) {
 	w.Layout()
 }
 
-func (w *CompositeWidget) RemoveWidget(targetWidget Widgeter) {
+func (w *CompositeWidget) RemoveWidget(target Widgeter) {
 	for index, widget := range w.Widgets {
-		if widget == targetWidget {
+		if widget == target {
 			copy(w.Widgets[index:], w.Widgets[index+1:])
 			w.Widgets[len(w.Widgets)-1] = nil
 			w.Widgets = w.Widgets[:len(w.Widgets)-1]
@@ -3602,7 +3606,7 @@ func (this *FileOpener) Update() {
 		SetViewGroup(this.editor, "")
 	}
 
-	if path := this.GetSources()[0].(*FolderListingWidget).GetSelectedPath(); strings.HasSuffix(path, ".go") {
+	if path := this.GetSources()[0].(*VfsListingWidget).GetSelectedPath(); strings.HasSuffix(path, ".go") {
 		this.openedFile = NewFileView(path)
 
 		this.openedFile.AddAndSetViewGroup(this.editor, tryReadFile(path))
@@ -3708,8 +3712,7 @@ func WidgeterIndex(widgeters []Widgeter, w Widgeter) int {
 			return index
 		}
 	}
-
-	return -1
+	panic("WidgeterIndex: not found")
 }
 
 // ---
@@ -3927,12 +3930,13 @@ type Selecter interface {
 // TODO: Refactor other list-like widgets to use this?
 type FilterableSelecterWidget struct {
 	Widget
-	longestEntryLength int
-	selected           map[uint64]struct{} // index of selected entries [0, len)
-	manuallyPicked     fmt.Stringer
-	DepNode2Manual     // SelectionChanged
-	layoutDepNode2     DepNode2Func
-	options            SelecterWidgetOptions
+	longestEntryLength   int
+	selected             map[uint64]struct{} // index of selected entries [0, len)
+	manuallyPicked       fmt.Stringer
+	DepNode2Manual       // SelectionChanged
+	SelectionChangedPost func()
+	layoutDepNode2       DepNode2Func
+	options              SelecterWidgetOptions
 
 	entries *FilterableSliceStringer
 }
@@ -3962,6 +3966,7 @@ func NewFilterableSelecterWidget(pos mgl64.Vec2, entries SliceStringer, filter M
 	}
 
 	filterableEntries := NewFilterableSliceStringer(entries, filter)
+	filterableEntries.Update() // HACK: Try to do this, in case GetSelected() is called immediately, so it doesn't return nil despite there being a selected entry.
 
 	w := &FilterableSelecterWidget{
 		Widget:   NewWidget(pos, np),
@@ -4037,6 +4042,9 @@ func (w *FilterableSelecterWidget) selectionChangedTest() {
 
 	w.manuallyPicked = w.entries.Get(firstSelected)
 
+	if w.SelectionChangedPost != nil {
+		w.SelectionChangedPost()
+	}
 	ExternallyUpdated(w)
 }
 
@@ -4784,7 +4792,7 @@ func (w *VfsListingWidget) GetSelectedPath() (path string) {
 }
 
 func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
-	/*if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+	if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyLeft:
 			c := keyboardPointer.OriginMapping[0] // HACK
@@ -4796,6 +4804,7 @@ func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
 				c = w.flow.Widgets[index-1]
 				keyboardPointer.OriginMapping = []Widgeter{c, w}
 				if cp, ok := c.(*VfsListingPureWidget); ok {
+					// TODO: Optimize so it doesn't refresh just because you navigated to parent folder?
 					cp.selectionChangedTest()
 				}
 			}
@@ -4808,13 +4817,13 @@ func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
 				// HACK: Temporarily set both this and parent as mapping here
 				c = w.flow.Widgets[index+1]
 				keyboardPointer.OriginMapping = []Widgeter{c, w}
-				if cp, ok := c.(*VfsListingPureWidget); ok && cp.selected == 0 && len(cp.entries) > 0 {
-					cp.selected = 1
+				if cp, ok := c.(*VfsListingPureWidget); ok && cp.GetSelected() == nil && cp.entries.Len() > 0 {
+					cp.selected = map[uint64]struct{}{0: struct{}{}}
 					cp.selectionChangedTest()
 				}
 			}
 		}
-	}*/
+	}
 }
 
 // ---
@@ -4833,13 +4842,10 @@ func (fi FileInfoStringer) String() string {
 
 type VfsListingPureWidget struct {
 	*FilterableSelecterWidget
-	vfs                vfs.FileSystem
-	path               string
-
-	selectionChangedTestDepNode2 DepNode2Func
+	vfs  vfs.FileSystem
+	path string
 }
 
-// TEST
 func newVfsListingPureWidget(vfs vfs.FileSystem, path string) Widgeter {
 	entries, err := vfs.ReadDir(path)
 	if err != nil {
@@ -4856,12 +4862,35 @@ func newVfsListingPureWidget(vfs vfs.FileSystem, path string) Widgeter {
 
 	w := &VfsListingPureWidget{
 		FilterableSelecterWidget: NewSelecterWidget(np, ss, &SelecterWidgetOptions{SelecterWidgetType: OptionalSelection}),
-		vfs: vfs,
-		path:path,
+		vfs:  vfs,
+		path: path,
+	}
+	w.FilterableSelecterWidget.SelectionChangedPost = func() { w.selectionChangedTest() }
+
+	return w
+}
+
+// TEST
+func newVfsListingPureWidgetWithSelection(vfs vfs.FileSystem, path string) Widgeter {
+	entries, err := vfs.ReadDir(path)
+	if err != nil {
+		panic(err)
 	}
 
-	w.selectionChangedTestDepNode2.UpdateFunc = func(DepNode2I) { w.selectionChangedTest() }
-	w.selectionChangedTestDepNode2.AddSources(w.FilterableSelecterWidget) // TODO: What about removing w when it's "deleted"?
+	ss := &SliceStringerS{}
+	for _, v := range entries {
+		if strings.HasPrefix(v.Name(), ".") {
+			continue
+		}
+		ss.entries = append(ss.entries, FileInfoStringer{FileInfo: v})
+	}
+
+	w := &VfsListingPureWidget{
+		FilterableSelecterWidget: NewSelecterWidget(np, ss, &SelecterWidgetOptions{SelecterWidgetType: SingleSelection}),
+		vfs:  vfs,
+		path: path,
+	}
+	w.FilterableSelecterWidget.SelectionChangedPost = func() { w.selectionChangedTest() }
 
 	return w
 }
@@ -4914,12 +4943,48 @@ func (w *VfsListingPureWidget) selectionChangedTest() {
 		p.SetWidgets(p.Widgets[:index+1])
 	}
 
-	//ExternallyUpdated(w.Parent().Parent().(DepNode2ManualI))
+	ExternallyUpdated(w.Parent().Parent().(DepNode2ManualI)) // VfsListingWidget.SelectionChanged.
 }
 
-func (w *VfsListingPureWidget) LayoutNeeded() {
-	w.FilterableSelecterWidget.LayoutNeeded()
-	MakeUpdated(&w.selectionChangedTestDepNode2)
+func (w *VfsListingPureWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
+	if len(w.FilterableSelecterWidget.Hit(ParentPosition)) > 0 {
+		return []Widgeter{w, w.FilterableSelecterWidget}
+	} else {
+		return nil
+	}
+}
+func (w *VfsListingPureWidget) ProcessEvent(inputEvent InputEvent) {
+	w.FilterableSelecterWidget.ProcessEvent(inputEvent)
+
+	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+		// HACK: Temporarily set both this and parent as mapping here
+		p := w.Parent().Parent().(*VfsListingWidget)
+		keyboardPointer.OriginMapping = []Widgeter{w, p}
+	}
+}
+func (w *VfsListingPureWidget) ContainsWidget(widget, target Widgeter) bool {
+	return widget == target || w.FilterableSelecterWidget == target
+}
+
+// ---
+
+type onlyGoFiles struct {
+	vfs.FileSystem
+}
+
+func (fs onlyGoFiles) ReadDir(path string) ([]os.FileInfo, error) {
+	fis, err := fs.FileSystem.ReadDir(path)
+	var filtered []os.FileInfo
+	for _, v := range fis {
+		if !strings.HasPrefix(v.Name(), ".") && strings.HasSuffix(v.Name(), ".go") && !v.IsDir() {
+			filtered = append(filtered, v)
+		}
+	}
+	return filtered, err
 }
 
 // ---
@@ -8784,13 +8849,13 @@ func main() {
 	case 6:
 		{
 			{
-				entries := NewSliceStringerS("one", "two", "three")
-				w := NewSelecterWidget(mgl64.Vec2{500, 200}, entries, nil)
+				w := NewFolderListingWidget(mgl64.Vec2{200, 200}, "./")
 				widgets = append(widgets, w)
 			}
 
 			{
-				w := NewFolderListingWidget(mgl64.Vec2{200, 200}, "./")
+				entries := NewSliceStringerS("one", "two", "three")
+				w := NewSelecterWidget(mgl64.Vec2{500, 200}, entries, nil)
 				widgets = append(widgets, w)
 			}
 
@@ -8825,6 +8890,13 @@ func main() {
 				widgets = append(widgets, w0)
 
 				w := NewVfsListingWidget(mgl64.Vec2{500, 400}, fs, "/")
+				widgets = append(widgets, w)
+			}
+
+			{
+				fs := onlyGoFiles{FileSystem: vfs.OS("./")}
+
+				w := NewVfsListingWidget(mgl64.Vec2{200, 600}, fs, "/")
 				widgets = append(widgets, w)
 			}
 		}
@@ -9043,20 +9115,29 @@ func main() {
 		goPackageListing := NewGoPackageListingWidget(mgl64.Vec2{0, 200}, mgl64.Vec2{200, 500 - fontHeight - 2})
 		widgets = append(widgets, goPackageListing)
 
-		folderListing := NewFolderListingWidget(np, "../../../") // Hopefully the "$GOPATH/src/" folder
+		localFs := vfs.OS("/")
+
+		folderListing := NewVfsListingWidget(np, localFs, "/")
 		widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{0, 200 + 500 + 2}, mgl64.Vec2{200, float64(windowSize1 - 702 - 2)}, folderListing))
 
 		// TEST, HACK: Open the folder listing to the folder of the Go package
-		folderListingDirChanger := DepNode2Func{}
+		/*folderListingDirChanger := DepNode2Func{}
 		folderListingDirChanger.UpdateFunc = func(this DepNode2I) {
 			if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
 				path := goPackage.Bpkg.Dir
-				folderListing.flow.SetWidgets([]Widgeter{newFolderListingPureWidgetWithSelection(path)})
-				ExternallyUpdated(folderListing)
+				folderListing.flow.SetWidgets([]Widgeter{newVfsListingPureWidgetWithSelection(localFs, path)})
+				//ExternallyUpdated(folderListing)
 			}
 		}
 		folderListingDirChanger.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
-		keepUpdatedTEST = append(keepUpdatedTEST, &folderListingDirChanger)
+		keepUpdatedTEST = append(keepUpdatedTEST, &folderListingDirChanger)*/
+		goPackageListing.listWidget.SelectionChangedPost = func() {
+			if goPackage := goPackageListing.OnSelectionChanged().GetSelected().(*GoPackage); goPackage != nil {
+				path := goPackage.Bpkg.Dir
+				folderListing.flow.SetWidgets([]Widgeter{newVfsListingPureWidgetWithSelection(localFs, path)})
+				//ExternallyUpdated(folderListing)
+			}
+		}
 
 		// Main editor
 		editorContent := NewMultilineContent()
@@ -9078,7 +9159,7 @@ func main() {
 					return
 				}
 
-				path := this.GetSources()[1].(*FolderListingWidget).GetSelectedPath()
+				path := this.GetSources()[1].(*VfsListingWidget).GetSelectedPath()
 				if path == "" || !strings.HasSuffix(path, ".go") {
 					return
 				}
@@ -9132,7 +9213,7 @@ func main() {
 						return
 					}
 
-					path := this.GetSources()[1].(*FolderListingWidget).GetSelectedPath()
+					path := this.GetSources()[1].(*VfsListingWidget).GetSelectedPath()
 					if path == "" || !strings.HasSuffix(path, ".go") {
 						return
 					}
