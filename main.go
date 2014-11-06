@@ -8024,9 +8024,9 @@ func initHttpHandlers() {
 	}))
 
 	// TODO: Needed for TableOfContents, find a better way.
-	// HACK: Relative path into github.com/shurcooL/play, need a better way.
-	http.Handle("/table-of-contents.go.js", gopherjs_http.GoFiles("../play/74/script.go"))
-	http.HandleFunc("/table-of-contents.css", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "../play/74/style.css") })
+	// HACK: Relative path into github.com/shurcooL/frontend, need a better way.
+	http.Handle("/table-of-contents.go.js", gopherjs_http.GoFiles("../frontend/table-of-contents/main.go"))
+	http.HandleFunc("/table-of-contents.css", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "../frontend/table-of-contents/style.css") })
 
 	http.Handle("/inline/", http.StripPrefix("/inline", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		importPath := req.URL.Path[1:]
