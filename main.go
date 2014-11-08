@@ -6532,6 +6532,8 @@ func (this *FindPanel) SetKeyboardFocus() {
 type FindResults struct {
 	Owner *TextBoxWidget
 
+	WholeWord bool // Only look for whole words.
+
 	segments []highlightSegment
 
 	DepNode2
@@ -6557,6 +6559,23 @@ func (this *FindResults) Update() {
 		nonresults := strings.Split(content, findTarget)
 		if len(nonresults) > 1 {
 			for _, nonresult := range nonresults[:len(nonresults)-1] {
+				if this.WholeWord {
+					content := this.GetSources()[0].(MultilineContentI)
+
+					cp := NewCaretPosition(content)
+					cp.TrySet(offset + uint32(len(nonresult)))
+					cp.selectionPosition.willMoveH(int32(len(findTarget)))
+
+					// TODO: Implement isWholeWord more efficiently without relying on virtual CaretPosition, just use linear content access.
+					wholeWord := isWholeWord(this.GetSources()[0].(MultilineContentI), cp)
+
+					if !wholeWord {
+						offset += uint32(len(nonresult))
+						offset += uint32(len(findTarget))
+						continue
+					}
+				}
+
 				offset += uint32(len(nonresult))
 				this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{1, 1, 1}})
 				offset += uint32(len(findTarget))
@@ -6682,14 +6701,9 @@ type WholeWordHighlighter struct {
 	DepNode2
 }
 
-func (this *WholeWordHighlighter) Update() {
-	content := this.GetSources()[0].(MultilineContentI)
-	caretPosition := this.GetSources()[1].(*CaretPosition)
-
-	this.wholeWord = false
-
+func isWholeWord(content MultilineContentI, caretPosition *CaretPosition) bool {
 	if !caretPosition.anySelection() {
-		return
+		return false
 	}
 
 	start, end := caretPosition.SelectionRange2()
@@ -6702,7 +6716,14 @@ func (this *WholeWordHighlighter) Update() {
 	x.TryMoveH(+1, true)
 	y.TryMoveH(-1, true)
 
-	this.wholeWord = y.Compare(start) == 0 && x.Compare(end) == 0
+	return (y.Compare(start) == 0 && x.Compare(end) == 0)
+}
+
+func (this *WholeWordHighlighter) Update() {
+	content := this.GetSources()[0].(MultilineContentI)
+	caretPosition := this.GetSources()[1].(*CaretPosition)
+
+	this.wholeWord = isWholeWord(content, caretPosition)
 }
 
 func (this *WholeWordHighlighter) IsWholeWord() bool {
@@ -6805,7 +6826,7 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 		w.wholeWordHighlighter = &WholeWordHighlighter{}
 		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition, &w.layoutDepNode2) // layoutDepNode2 is needed to ensure caret position is kept within bounds as a prerequisite.
 
-		w.wholeWordResults = &FindResults{Owner: w}
+		w.wholeWordResults = &FindResults{Owner: w, WholeWord: true}
 		w.wholeWordResults.AddSources(w.Content, w.wholeWordHighlighter)
 	}
 
