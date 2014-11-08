@@ -6492,7 +6492,9 @@ type FindPanel struct {
 	Widgeter
 }
 
-func NewFindPanel(pos mgl64.Vec2, findResults *FindResults, caretPosition *CaretPosition) *FindPanel {
+func NewFindPanel(pos mgl64.Vec2, textBoxWidget *TextBoxWidget, caretPosition *CaretPosition) (*FindPanel, *FindResults) {
+	findResults := &FindResults{Owner: textBoxWidget}
+
 	findBox := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{SingleLine: true})
 
 	numResultsStringer := &DepStringerFunc{}
@@ -6508,7 +6510,15 @@ func NewFindPanel(pos mgl64.Vec2, findResults *FindResults, caretPosition *Caret
 	}
 	numResultsStringer.AddSources(findResults, caretPosition)
 
+	var wholeWordChange DepNode2Manual
+	wholeWordAction := func() {
+		findResults.WholeWord = !findResults.WholeWord
+		ExternallyUpdated(&wholeWordChange)
+	}
+	wholeWordOnly := NewTriButtonExternalStateWidget(np, func() bool { return findResults.WholeWord }, wholeWordAction)
+
 	findPanelWidget := NewBackgroundWidget(pos, NewFlowLayoutWidget(np, []Widgeter{
+		NewSpacerWidget(np, NewFlowLayoutWidget(pos, []Widgeter{wholeWordOnly, NewTextLabelWidgetString(np, "Whole")}, nil)),
 		NewSpacerWidget(np, NewTextLabelWidgetString(np, "Find:")),
 		NewSpacerWidget(np, findBox),
 		NewSpacerWidget(np, NewStringerWidget(np, numResultsStringer)),
@@ -6516,10 +6526,12 @@ func NewFindPanel(pos mgl64.Vec2, findResults *FindResults, caretPosition *Caret
 		NewSpacerWidget(np, NewButtonLabelWidget(np, "Previous", nil)),
 	}, nil))
 
+	findResults.AddSources(textBoxWidget.Content, findBox.Content, &wholeWordChange)
+
 	return &FindPanel{
 		FindBox:  findBox,
 		Widgeter: findPanelWidget,
-	}
+	}, findResults
 }
 
 func (this *FindPanel) SetKeyboardFocus() {
@@ -6819,9 +6831,7 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 	}
 
 	if w.options.FindPanel {
-		w.findResults = &FindResults{Owner: w}
-		w.findPanel = NewFindPanel(mgl64.Vec2{0, 0}, w.findResults, w.caretPosition) // TODO: Make it appear on bottom instead of (0, 0) top left corner.
-		w.findResults.AddSources(w.Content, w.findPanel.FindBox.Content)
+		w.findPanel, w.findResults = NewFindPanel(mgl64.Vec2{0, 0}, w, w.caretPosition) // TODO: Make it appear on bottom instead of (0, 0) top left corner.
 
 		w.wholeWordHighlighter = &WholeWordHighlighter{}
 		w.wholeWordHighlighter.AddSources(w.Content, w.caretPosition, &w.layoutDepNode2) // layoutDepNode2 is needed to ensure caret position is kept within bounds as a prerequisite.
@@ -8055,7 +8065,9 @@ func initHttpHandlers() {
 	// TODO: Needed for TableOfContents, find a better way.
 	// HACK: Relative path into github.com/shurcooL/frontend, need a better way.
 	http.Handle("/table-of-contents.go.js", gopherjs_http.GoFiles("../frontend/table-of-contents/main.go"))
-	http.HandleFunc("/table-of-contents.css", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "../frontend/table-of-contents/style.css") })
+	http.HandleFunc("/table-of-contents.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "../frontend/table-of-contents/style.css")
+	})
 
 	http.Handle("/inline/", http.StripPrefix("/inline", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		importPath := req.URL.Path[1:]
@@ -8320,6 +8332,9 @@ func main() {
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
 	switch *modeFlag {
+	case 7:
+		{
+		}
 	case 6:
 		{
 			/*{
