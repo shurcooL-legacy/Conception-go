@@ -7379,15 +7379,23 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 						// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
 
-						declNode := entry.(*NodeStringer)
+						declNode := entry.(*NodeStringer).Node
 
 						file := globalParsedFile.fset.File(declNode.Pos())
 						if file == nil {
 							return
 						}
 
-						w.caretPosition.TrySet(uint32(file.Offset(declNode.Pos())))
-						w.CenterOnCaretPosition()
+						pos, end := declNode.Pos(), declNode.End()
+						switch d := declNode.(type) {
+						case *ast.FuncDecl:
+							// Select func name only.
+							pos, end = d.Name.Pos(), d.Name.End()
+						}
+
+						w.caretPosition.TrySet(uint32(file.Offset(pos)))
+						w.caretPosition.caretPosition.willMoveH(int32(end - pos))
+						w.CenterOnCaretPositionIfOffscreen()
 					}
 					scrollToSymbolB.AddSources(popupTest.OnSelectionChanged())
 					keepUpdatedTEST = append(keepUpdatedTEST, &scrollToSymbolB)
