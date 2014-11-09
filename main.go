@@ -292,7 +292,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 const fontWidth, fontHeight = 6, 12
 
 func InitFont() {
-	LoadTexture("./Font.png")
+	LoadTexture("./data/Font.png")
 
 	oFontBase = gl.GenLists(32 + 96*4)
 	for i := 0; i < 96*4; i++ {
@@ -8393,7 +8393,7 @@ func main() {
 		{
 			//entries := NewSliceStringerS("one", "two", "three")
 			//entries := &goPackagesSliceStringer{goPackages}
-			entries := NewSliceStringerAllGoPackages("./all-Go-packages.json")
+			entries := NewSliceStringerAllGoPackages("./data/all-Go-packages.json")
 
 			w := NewSearchableListWidgetAction(mgl64.Vec2{200, 0}, mgl64.Vec2{600, 600}, entries)
 			widgets = append(widgets, w)
