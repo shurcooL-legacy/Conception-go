@@ -31,10 +31,6 @@ import (
 	text_scanner "text/scanner"
 	"time"
 
-	"code.google.com/p/go.net/websocket"
-	"code.google.com/p/go.tools/go/types"
-	"code.google.com/p/go.tools/godoc/vfs"
-	goimports "code.google.com/p/go.tools/imports"
 	"github.com/bradfitz/iter"
 	"github.com/go-gl/glow/gl/2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
@@ -83,6 +79,10 @@ import (
 	"github.com/shurcooL/markdownfmt/markdown"
 	sg_vcs "github.com/sourcegraph/go-vcs/vcs"
 	"github.com/sourcegraph/vcsstore/vcsclient"
+	"golang.org/x/net/websocket"
+	"golang.org/x/tools/go/types"
+	"golang.org/x/tools/godoc/vfs"
+	goimports "golang.org/x/tools/imports"
 	"gopkg.in/pipe.v2"
 	"honnef.co/go/importer"
 )
@@ -3699,7 +3699,6 @@ type Selecter interface {
 	DepNode2I
 }
 
-// TODO: Refactor other list-like widgets to use this?
 type FilterableSelecterWidget struct {
 	Widget
 	longestEntryLength   int
