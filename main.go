@@ -50,7 +50,6 @@ import (
 	. "github.com/shurcooL/go/gists/gist5423254"
 	. "github.com/shurcooL/go/gists/gist5504644"
 	. "github.com/shurcooL/go/gists/gist5639599"
-	. "github.com/shurcooL/go/gists/gist5645828"
 	. "github.com/shurcooL/go/gists/gist5892738"
 	. "github.com/shurcooL/go/gists/gist5953185"
 	. "github.com/shurcooL/go/gists/gist6003701"
@@ -7697,19 +7696,7 @@ func initHttpHandlers() {
 		// TODO: Try to lookup the GoPackage rather than creating a new one.
 		importPath := req.URL.Path[1:]
 		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
-			// TODO: Cache this via DepNode2I
-			dpkg, err := GetDocPackageAll(goPackage.Bpkg, nil)
-			if err == nil {
-				b += Underline(`import "`+dpkg.ImportPath+`"`) + "\n```Go\n"
-				var buf bytes.Buffer
-				FprintPackageFullSummary(&buf, dpkg)
-				b += buf.String()
-				b += "\n```\n"
-			} else {
-				b += Underline(`import "`+importPath+`"`) + "\n```\n"
-				b += err.Error()
-				b += "\n```\n"
-			}
+			b += Underline(`import "` + importPath + `"`)
 
 			goPackage.UpdateVcs()
 			if goPackage.Dir.Repo != nil {
@@ -7719,12 +7706,12 @@ func initHttpHandlers() {
 
 			if goPackage.Dir.Repo != nil {
 				// Branches.
-				b += "\n" + Underline("Branches") + "\n"
-				b += u6.Branches(goPackage.Dir.Repo)
+				b += "\n" + Underline("Branches")
+				b += "\n" + u6.Branches(goPackage.Dir.Repo)
 			}
 
-			b += "\n" + Underline("Status") + "\n"
-			b += "```\n" + status.PorcelainPresenter(goPackage) + "\n```\n"
+			b += "\n" + Underline("Status")
+			b += "\n```\n" + status.PorcelainPresenter(goPackage) + "\n```\n"
 
 			if goPackage.Dir.Repo != nil {
 				b += "\n```\n"
