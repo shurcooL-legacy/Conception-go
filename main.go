@@ -6593,10 +6593,9 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc MultilineContentI, optio
 	}
 	w.scrollToCaret.AddSources(w.caretPosition)
 
-	// DEBUG, TEMPORARY: Turn on Go highlighting for everything
-	//if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
-	//if false {
-	if _, instant := w.Content.(*MultilineContentFuncInstant); !instant { // The MultilineContentFuncInstant hack is unsafe to use with highlighting
+	if uri, ok := w.Content.GetUriForProtocol("file://"); ok && strings.HasSuffix(string(uri), ".go") {
+		//if false {
+		//if _, instant := w.Content.(*MultilineContentFuncInstant); !instant { // The MultilineContentFuncInstant hack is unsafe to use with highlighting
 		highlightedGoContent := &highlightedGoContent{}
 		highlightedGoContent.AddSources(mc)
 
@@ -8397,6 +8396,13 @@ func main() {
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
 		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true, FindPanel: true})
 		widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{200 + 2, 0}, mgl64.Vec2{750, float64(windowSize1 - 2)}, editor))
+
+		// HACK: Force Go highlighting for main editor. There should be a better way to set a content type and set highlighter based on that.
+		{
+			highlightedGoContent := &highlightedGoContent{}
+			highlightedGoContent.AddSources(editorContent)
+			editor.HighlightersTest = append(editor.HighlightersTest, highlightedGoContent)
+		}
 
 		// TODO: This should be at the canvas-scope rather than editor-scope, I think.
 		selectPackageListing := &CustomWidget{
