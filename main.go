@@ -7329,6 +7329,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 
 				selStart, selEnd := w.caretPosition.SelectionRange()
+				MakeUpdated(w.findResults)
 				if start, end, ok := w.findResults.GetResult(selStart, selEnd, direction); ok {
 					w.caretPosition.TrySet(start)
 					w.caretPosition.caretPosition.willMoveH(int32(end - start))
