@@ -7727,7 +7727,7 @@ func initHttpHandlers() {
 
 				// git diff
 				if workingDiff := u6.GoPackageWorkingDiff(goPackage); workingDiff != "" {
-					b += "\n" /*+ `<a id="git-diff"></a>`*/ + Underline("git diff")
+					b += "\n" + Underline("git diff")
 					cmd := exec.Command("git", "diff", "--stat")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
