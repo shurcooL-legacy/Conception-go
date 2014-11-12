@@ -6162,6 +6162,9 @@ func (this *diffHighlighter) Update() {
 			lineFirstChar = content.Content()[content.Line(lineIndex).Start]
 		}
 		switch lineFirstChar {
+		case '@':
+			this.segments = append(this.segments, highlightSegment{bold: true, color: mgl64.Vec3{0.5, 0, 0.5}, offset: content.Line(lineIndex).Start})
+			this.segments = append(this.segments, highlightSegment{bold: true, offset: content.Line(lineIndex).End()})
 		case '+':
 			if lastIns == -1 {
 				lastIns = lineIndex
@@ -6234,8 +6237,23 @@ func (this *diffHighlighter) SegmentToTextStyle(index uint32) *TextStyle {
 	if color.ApproxEqual(mgl64.Vec3{}) {
 		colorPtr = nil
 	}
-	return &TextStyle{
-		BackgroundColor: &colorPtr,
+	switch {
+	case this.Segment(index).bold && colorPtr != nil: // Beginning of '@' line.
+		fontOptions := Bold
+		return &TextStyle{
+			FontOptions: &fontOptions,
+			TextColor:   &color,
+		}
+	case this.Segment(index).bold && colorPtr == nil: // End of '@' line.
+		fontOptions := Regular
+		return &TextStyle{
+			FontOptions: &fontOptions,
+			TextColor:   &color,
+		}
+	default: // A normal diff segment.
+		return &TextStyle{
+			BackgroundColor: &colorPtr,
+		}
 	}
 }
 
