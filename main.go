@@ -6281,6 +6281,8 @@ func NewFindPanel(pos mgl64.Vec2, textBoxWidget *TextBoxWidget, caretPosition *C
 	}
 	numResultsStringer.AddSources(findResults, caretPosition)
 
+	caseSensitive := NewTriButtonExternalStateWidget(np, func() bool { return true }, func() { fmt.Println("not yet implemented") })
+
 	var wholeWordChange DepNode2Manual
 	wholeWordAction := func() {
 		findResults.WholeWord = !findResults.WholeWord
@@ -6289,6 +6291,7 @@ func NewFindPanel(pos mgl64.Vec2, textBoxWidget *TextBoxWidget, caretPosition *C
 	wholeWordOnly := NewTriButtonExternalStateWidget(np, func() bool { return findResults.WholeWord }, wholeWordAction)
 
 	findPanelWidget := NewBackgroundWidget(pos, NewFlowLayoutWidget(np, []Widgeter{
+		NewSpacerWidget(np, NewFlowLayoutWidget(pos, []Widgeter{caseSensitive, NewTextLabelWidgetString(np, "Case")}, nil)),
 		NewSpacerWidget(np, NewFlowLayoutWidget(pos, []Widgeter{wholeWordOnly, NewTextLabelWidgetString(np, "Whole")}, nil)),
 		NewSpacerWidget(np, NewTextLabelWidgetString(np, "Find:")),
 		NewSpacerWidget(np, findBox),
