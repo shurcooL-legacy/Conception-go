@@ -70,6 +70,7 @@ import (
 	"github.com/shurcooL/go/gopherjs_http"
 	"github.com/shurcooL/go/markdown_http"
 	"github.com/shurcooL/go/pipe_util"
+	"github.com/shurcooL/go/u/u4"
 	"github.com/shurcooL/go/u/u5"
 	"github.com/shurcooL/go/u/u6"
 	"github.com/shurcooL/go/vcs"
@@ -7132,18 +7133,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyE:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				if fileUri, ok := w.Content.GetUriForProtocol("file://"); ok {
-					// Open in external editor
-					func(filePath string) {
-
-						// HACK: OS X specific
-						cmd := exec.Command("open", filePath)
-						err := cmd.Start()
-						if err != nil {
-							panic(err)
-						}
-						go cmd.Wait() // It looks like I need to wait for the process, else it doesn't terminate properly
-
-					}(string(fileUri[len("file://"):]))
+					// Open in external editor.
+					u4.Open(fileUri.Path())
 				}
 			} else if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModControl {
 				// Go to end of line.
@@ -7706,7 +7697,7 @@ func initHttpHandlers() {
 		fmt.Fprintln(w)
 		fmt.Fprintf(w, "%#v\n", widgets)
 	})*/
-	http.Handle("/favicon.ico", http.NotFoundHandler())
+	http.Handle("/favicon.ico/", http.NotFoundHandler())
 	http.Handle("/status/", http.StripPrefix("/status", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		var b string
 
