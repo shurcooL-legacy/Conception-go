@@ -93,6 +93,7 @@ var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 var keepRunning = true
 var oFontBase, oFontBackground uint32
 var redraw bool = true
+var windowPointer *Pointer
 var mousePointer *Pointer
 var keyboardPointer *Pointer
 var websocketPointer *Pointer // TEST
@@ -2149,6 +2150,10 @@ func (w *CanvasWidget) Render() {
 }
 
 func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
+	if inputEvent.Pointer.VirtualCategory == WINDOWING {
+		w.Layout()
+	}
+
 	if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
@@ -5056,6 +5061,7 @@ func (this *MultilineContentFile) NotifyChange() {
 	NewContent := tryReadFile(this.path)
 	if NewContent != this.Content() {
 		SetViewGroupOther(this, NewContent)
+		redraw = true
 	}
 }
 
@@ -7484,6 +7490,7 @@ type VirtualCategory uint8
 const (
 	TYPING VirtualCategory = iota
 	POINTING
+	WINDOWING
 )
 
 type Pointer struct {
@@ -7943,6 +7950,7 @@ func main() {
 			panic(err)
 		}
 		globalWindow = window
+		windowPointer = &Pointer{VirtualCategory: WINDOWING}
 
 		window.SetInputMode(glfw.Cursor, glfw.CursorHidden)
 		window.MakeContextCurrent()
@@ -7991,6 +7999,15 @@ func main() {
 			gl.Ortho(0, float64(windowSize[0]), float64(windowSize[1]), 0, -1, 1)
 			gl.MatrixMode(gl.MODELVIEW)
 
+			inputEvent := InputEvent{
+				Pointer:    windowPointer,
+				EventTypes: map[EventType]bool{AXIS_EVENT: true},
+				InputId:    0,
+				Buttons:    nil,
+				Sliders:    nil,
+				Axes:       []float64{float64(windowSize[0]), float64(windowSize[1])},
+			}
+			inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 			redraw = true
 		}
 		{
@@ -8104,6 +8121,8 @@ func main() {
 	switch *modeFlag {
 	case 7:
 		{
+			w := NewTextFileWidget(mgl64.Vec2{200, 200}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/play/31/main.go")
+			widgets = append(widgets, w)
 		}
 	case 6:
 		{
@@ -9589,6 +9608,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
 	}
 	widget.(*CanvasWidget).offsetBy1Px()
+	windowPointer.OriginMapping = []Widgeter{widget}
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
