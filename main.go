@@ -67,9 +67,9 @@ import (
 	. "github.com/shurcooL/go/gists/gist7728088"
 	. "github.com/shurcooL/go/gists/gist7802150"
 	"github.com/shurcooL/go/gists/gist8065433"
-	"github.com/shurcooL/go/gopherjs_http"
 	"github.com/shurcooL/go/markdown_http"
 	"github.com/shurcooL/go/pipe_util"
+	"github.com/shurcooL/go/u/u10"
 	"github.com/shurcooL/go/u/u4"
 	"github.com/shurcooL/go/u/u5"
 	"github.com/shurcooL/go/u/u6"
@@ -7757,7 +7757,7 @@ func initHttpHandlers() {
 
 		return []byte(b), nil
 	})))
-	http.Handle("/status", markdown_http.MarkdownOptionsHandlerFunc(func(req *http.Request) ([]byte, *markdown_http.Options, error) {
+	http.Handle("/status", u10.MarkdownOptionsHandlerFunc(func(req *http.Request) ([]byte, *u10.Options, error) {
 		started := time.Now()
 
 		_, short := req.URL.Query()["short"]
@@ -7836,15 +7836,8 @@ func initHttpHandlers() {
 
 		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
 
-		return buf.Bytes(), &markdown_http.Options{TableOfContents: true}, nil
+		return buf.Bytes(), &u10.Options{TableOfContents: true}, nil
 	}))
-
-	// TODO: Needed for TableOfContents, find a better way.
-	// HACK: Relative path into github.com/shurcooL/frontend, need a better way.
-	http.Handle("/table-of-contents.go.js", gopherjs_http.GoFiles("../frontend/table-of-contents/main.go"))
-	http.HandleFunc("/table-of-contents.css", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "../frontend/table-of-contents/style.css")
-	})
 
 	http.Handle("/inline/", http.StripPrefix("/inline", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		importPath := req.URL.Path[1:]
