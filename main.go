@@ -3394,7 +3394,7 @@ func (this *FileOpener) Update() {
 			MakeUpdatedLock.Lock() // HACK
 			if goPackage.Dir.Repo != nil {
 				vcsLocalInvalidator := &VcsLocalInvalidator{Repo: goPackage.Dir.Repo}
-				vcsLocalInvalidator.AddSources(this.openedFile)
+				vcsLocalInvalidator.AddSources(&this.openedFile.FileContentChanged)
 				keepUpdatedTEST = append(keepUpdatedTEST, vcsLocalInvalidator) // TODO: Clear old ones...
 			}
 		}
@@ -5075,7 +5075,7 @@ type FileView struct {
 	path string
 	ViewGroup
 
-	DepNode2Manual // File content changed.
+	FileContentChanged DepNode2Manual // File content changed.
 
 	lastContentQUICKHACK string // HACK: Need this here for `git diff` testing
 }
@@ -5109,7 +5109,7 @@ func (this *FileView) SetSelf(content string) {
 		log.Println(err)
 	}
 	this.lastContentQUICKHACK = content
-	ExternallyUpdated(&this.DepNode2Manual) // File content changed.
+	ExternallyUpdated(&this.FileContentChanged) // File content changed.
 }
 
 // TODO: Change detection, closing, etc.
@@ -5119,7 +5119,8 @@ func (this *FileView) NotifyChange() {
 	if NewContent != this.lastContentQUICKHACK {
 		this.lastContentQUICKHACK = NewContent
 		SetViewGroupOther(this, NewContent)
-		ExternallyUpdated(&this.DepNode2Manual) // File content changed.
+		ExternallyUpdated(&this.FileContentChanged) // File content changed.
+		redraw = true
 	}
 }
 
@@ -8114,7 +8115,13 @@ func main() {
 	switch *modeFlag {
 	case 7:
 		{
-			w := NewTextFileWidget(mgl64.Vec2{200, 200}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/play/31/main.go")
+			//w := NewTextFileWidget(mgl64.Vec2{200, 200}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/play/31/main.go")
+			//widgets = append(widgets, w)
+
+			editorContent := NewMultilineContent()
+			w := NewTextBoxWidgetExternalContent(mgl64.Vec2{200, 200}, editorContent, nil)
+			openedFile := NewFileView("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/play/31/main.go")
+			openedFile.AddAndSetViewGroup(editorContent, tryReadFile(openedFile.path))
 			widgets = append(widgets, w)
 		}
 	case 6:
