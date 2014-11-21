@@ -7744,12 +7744,23 @@ func initHttpHandlers() {
 				// git diff
 				if workingDiff := u6.GoPackageWorkingDiff(goPackage); workingDiff != "" {
 					b += "\n" + Underline("git diff")
-					cmd := exec.Command("git", "diff", "--stat")
+					cmd := exec.Command("git", "diff", "--stat", "HEAD")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
 						b += "\n```\n" + TrimLastNewline(string(stat)) + "\n```\n"
 					}
 					b += "\n```diff\n" + workingDiff + "\n```\n"
+				}
+
+				// git diff against master.
+				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
+					b += "\n" + Underline("git diff against master")
+					cmd := exec.Command("git", "diff", "--stat", "master")
+					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
+					if stat, err := cmd.CombinedOutput(); err == nil {
+						b += "\n```\n" + TrimLastNewline(string(stat)) + "\n```\n"
+					}
+					b += "\n```diff\n" + workingDiffMaster + "\n```\n"
 				}
 			}
 		} else {
