@@ -1,4 +1,4 @@
-Conception-go
+Conception-go [![Build Status](https://travis-ci.org/shurcooL/Conception-go.svg?branch=master)](https://travis-ci.org/shurcooL/Conception-go)
 =============
 
 This is a work in progress Go implementation of [Conception](https://github.com/shurcooL/Conception#demonstration).
