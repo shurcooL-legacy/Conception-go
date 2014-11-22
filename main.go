@@ -6399,8 +6399,8 @@ func (this *FindResults) Update() {
 	this.segments = append(this.segments, highlightSegment{offset: uint32(len(content))})
 
 	// TODO: Is this the best place to do this? Shouldn't Update() not have event side-effects?
-	// If find panel is visible, update the selection.
-	if this.Owner.isFindPanelVisible() {
+	// If find panel is visible and selected, update the selection.
+	if this.Owner.isFindPanelVisible() && this.Owner.isFindPanelFindBoxSelected() {
 		this.Owner.caretPosition.RestoreState(this.Owner.findPanel.OriginalView.caretPosition) // Move cursor but not view, so it doesn't jump.
 		selStart, selEnd := this.Owner.caretPosition.SelectionRange()
 		_ = selEnd // TODO: Verify if this the right way to not skip first selection...
@@ -6706,6 +6706,10 @@ func (w *TextBoxWidget) isFindPanelVisible() bool {
 		}
 	}
 	return false
+}
+
+func (w *TextBoxWidget) isFindPanelFindBoxSelected() bool {
+	return keyboardPointer.OriginMapping.ContainsWidget(w.findPanel.FindBox)
 }
 
 func (w *TextBoxWidget) NotifyChange() {
