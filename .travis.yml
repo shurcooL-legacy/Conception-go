@@ -1,6 +1,8 @@
 language: go
 go:
   - 1.3
+before_install:
+  - sudo apt-get install -qq libgl1-mesa-dev xorg-dev
 script:
   - diff -u <(echo -n) <(gofmt -d ./)
   - go tool vet -composites=false ./
