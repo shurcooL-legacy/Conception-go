@@ -662,7 +662,7 @@ func NewTest4Widget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source 
 		}
 		out += "\n"
 
-		out += fmt.Sprintf("%d-%d, %p, %T\n\n", smallestV.Pos()-1, smallestV.End()-1, smallestV, smallestV)
+		out += fmt.Sprintf("%d-%d, %p, %T\n\n", smallestV.Pos()-1, smallestV.End()-1, (interface{})(smallestV), smallestV)
 
 		out += SprintAst(fset, smallestV) + "\n\n"
 

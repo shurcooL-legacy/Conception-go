@@ -1,0 +1,7 @@
+language: go
+go:
+  - 1.3
+script:
+  - diff -u <(echo -n) <(gofmt -d ./)
+  - go tool vet -composites=false ./
+  - go test -v -race ./...
