@@ -3626,14 +3626,14 @@ func (this *FilterableSliceStringer) Update() {
 	source := this.GetSources()[0].(SliceStringer)
 	filter := this.GetSources()[1].(MultilineContentI)
 
+	filterLower := strings.ToLower(filter.Content())
+
 	this.filteredEntries = nil
 	for index := uint64(0); index < source.Len(); index++ {
 		entry := source.Get(index).String()
 
-		if filter.Content() != "" {
-			if !strings.Contains(strings.ToLower(entry), strings.ToLower(filter.Content())) { // TODO: Do case folding correctly
-				continue
-			}
+		if filterLower != "" && !strings.Contains(strings.ToLower(entry), filterLower) { // TODO: Do case folding correctly
+			continue
 		}
 
 		this.filteredEntries = append(this.filteredEntries, source.Get(index))
