@@ -5711,15 +5711,26 @@ func (this *highlightedGoContent) Update() {
 		offset := uint32(fset.Position(pos).Offset)
 
 		switch {
-		case tok.IsKeyword() || tok.IsOperator() && tok < token.LPAREN:
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.004, 0, 0.714}, bold: true})
-		case tok.IsLiteral() && tok != token.IDENT:
+		case tok.IsKeyword() || (tok.IsOperator() && tok < token.LPAREN):
+			//return syntaxhighlight.KEYWORD
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.004, 0, 0.694}, bold: true})
+
+		// Literals.
+		case tok == token.INT || tok == token.FLOAT || tok == token.IMAG:
+			//return syntaxhighlight.DECIMAL
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}})
-		case lit == "false" || lit == "true":
+		case tok == token.STRING || tok == token.CHAR:
+			//return syntaxhighlight.STRING
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}})
+		case lit == "true" || lit == "false" || lit == "iota":
+			//return syntaxhighlight.LITERAL
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.008, 0.024, 1}})
+
 		case tok == token.COMMENT:
+			//return syntaxhighlight.COMMENT
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0.506, 0.094}})
 		default:
+			//return syntaxhighlight.PLAINTEXT
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0, 0}})
 		}
 	}
