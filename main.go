@@ -2816,7 +2816,7 @@ func NewFooWidget2(pos mgl64.Vec2) Widgeter {
 
 					var s text_scanner.Scanner
 					s.Init(strings.NewReader(searchField.Content.Content()))
-					s.Mode = text_scanner.ScanStrings
+					s.Mode = text_scanner.ScanIdents | text_scanner.ScanStrings
 
 					var tokens []tokenText
 					for tok := s.Scan(); tok != text_scanner.EOF; tok = s.Scan() {
@@ -2824,8 +2824,16 @@ func NewFooWidget2(pos mgl64.Vec2) Widgeter {
 					}
 
 					var out string
+					var cmd []string
 					for _, tt := range tokens {
 						out += fmt.Sprintf("%v:%v ", text_scanner.TokenString(tt.t), tt.s)
+						cmd = append(cmd, tt.s)
+					}
+
+					switch {
+					case len(cmd) == 1 && cmd[0] == "exit":
+						fmt.Println("Closing.")
+						keepRunning = false
 					}
 
 					SetViewGroup(listWidget.Content, listWidget.Content.Content()+out+"\n")
@@ -2839,6 +2847,9 @@ func NewFooWidget2(pos mgl64.Vec2) Widgeter {
 	widgets := []Widgeter{listWidgetScrollPane, searchField}
 
 	w := &FooWidget2{FlowLayoutWidget: NewFlowLayoutWidget(pos, widgets, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})}
+
+	// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+	keyboardPointer.OriginMapping = []Widgeter{searchField}
 
 	return w
 }
@@ -7961,6 +7972,8 @@ func main() {
 		glfw.WindowHint(glfw.Samples, 8) // Anti-aliasing
 		//glfw.WindowHint(glfw.Decorated, glfw.False)
 		switch *modeFlag {
+		case 8:
+			window, err = glfw.CreateWindow(fontWidth*80, fontHeight*24, "", nil, nil)
 		case 1:
 			window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
 		default:
@@ -8139,6 +8152,20 @@ func main() {
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
 	switch *modeFlag {
+	case 8:
+		{
+			widgets = append(widgets, NewChannelExpeWidget(mgl64.Vec2{10, 220}))
+
+			{
+				w := NewFooWidget(mgl64.Vec2{200, 200})
+				widgets = append(widgets, w)
+			}
+
+			{
+				w := NewFooWidget2(mgl64.Vec2{200, 640})
+				widgets = append(widgets, w)
+			}
+		}
 	case 7:
 		{
 			//w := NewTextFileWidget(mgl64.Vec2{200, 200}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/play/31/main.go")
@@ -8219,13 +8246,6 @@ func main() {
 			}
 			foo.AddSources(w.OnSelectionChanged())
 			keepUpdatedTEST = append(keepUpdatedTEST, &foo)
-
-			// ---
-
-			if false {
-				w := NewFooWidget2(mgl64.Vec2{200, 640})
-				widgets = append(widgets, w)
-			}
 		}
 	case 4:
 
@@ -9628,6 +9648,9 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	}
 
 	switch *modeFlag {
+	case 8:
+		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
+		widget.(*CanvasWidget).offset = mgl64.Vec2{-200, -640}
 	case 1, 5:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: false})
 	default:
@@ -9638,7 +9661,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
-	if keyboardPointer != nil {
+	if keyboardPointer != nil && len(keyboardPointer.OriginMapping) == 0 {
 		// Give the canvas initial keyboard focus
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		keyboardPointer.OriginMapping = []Widgeter{widget}
