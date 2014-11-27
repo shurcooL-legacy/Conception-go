@@ -77,14 +77,14 @@ import (
 	"github.com/shurcooL/go/vfs_util"
 	"github.com/shurcooL/gostatus/status"
 	"github.com/shurcooL/markdownfmt/markdown"
-	sg_vcs "github.com/sourcegraph/go-vcs/vcs"
-	"github.com/sourcegraph/vcsstore/vcsclient"
 	"golang.org/x/net/websocket"
 	"golang.org/x/tools/go/types"
 	"golang.org/x/tools/godoc/vfs"
 	goimports "golang.org/x/tools/imports"
 	"gopkg.in/pipe.v2"
 	"honnef.co/go/importer"
+	sg_vcs "sourcegraph.com/sourcegraph/go-vcs/vcs"
+	"sourcegraph.com/sourcegraph/vcsstore/vcsclient"
 )
 
 var modeFlag = flag.Int("mode", 1, "Mode.")
