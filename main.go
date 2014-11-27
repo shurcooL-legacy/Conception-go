@@ -7152,10 +7152,12 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			if !w.options.Private &&
 				inputEvent.ModifierKey == glfw.ModSuper {
 
+				s := w.caretPosition.SaveState()
 				w.caretPosition.CreateSelectionLineIfNone()
 				if selectionContent := w.caretPosition.GetSelectionContent(); selectionContent != "" {
 					globalWindow.SetClipboardString(selectionContent) // TODO: Don't use globalWindow
 				}
+				w.caretPosition.RestoreState(s)
 			}
 		case glfw.KeyV:
 			if inputEvent.ModifierKey == glfw.ModSuper {
