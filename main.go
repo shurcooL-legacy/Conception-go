@@ -8237,7 +8237,7 @@ func main() {
 		{
 			//entries := NewSliceStringerS("one", "two", "three")
 			//entries := &goPackagesSliceStringer{goPackages}
-			entries := NewSliceStringerAllGoPackages("./data/all-Go-packages.json")
+			entries := NewSliceStringerAllGoPackages("/Users/Dmitri/Dropbox/Work/2013/Data Sets/all-Go-packages.json")
 
 			w := NewSearchableListWidgetAction(mgl64.Vec2{200, 0}, mgl64.Vec2{600, 600}, entries)
 			widgets = append(widgets, w)
