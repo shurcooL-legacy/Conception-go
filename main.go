@@ -7388,6 +7388,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				}
 
 				textBox := NewTextBoxWidget(np)
+				SetViewGroup(textBox.Content, strconv.Itoa(w.caretPosition.caretPosition.lineIndex+1))
+				textBox.caretPosition.SelectAll()
 				popupTest := NewBackgroundWidget(mgl64.Vec2{200, 0}, NewFlowLayoutWidget(np, []Widgeter{
 					NewSpacerWidget(np, NewTextLabelWidgetString(np, "Go To Line:")),
 					NewSpacerWidget(np, textBox),
