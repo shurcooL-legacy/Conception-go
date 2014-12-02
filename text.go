@@ -10,6 +10,8 @@ import (
 
 	"github.com/go-gl/glow/gl/2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
+
+	"github.com/shurcooL/Conception-go/caret"
 )
 
 type FontOptions uint8
@@ -75,7 +77,7 @@ func (o *OpenGlStream) PrintLine(s string) {
 	if o.BorderColor != nil {
 		gl.PushAttrib(gl.CURRENT_BIT)
 
-		expandedLineLength := ExpandedLength(s, o.advance)
+		expandedLineLength := caret.ExpandedLength(s, o.advance)
 
 		backgroundColor := nearlyWhiteColor
 		if o.BackgroundColor != nil {
