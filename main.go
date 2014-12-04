@@ -5,9 +5,11 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/printer"
 	"go/scanner"
@@ -60,11 +62,9 @@ import (
 	. "github.com/shurcooL/go/gists/gist6545684"
 	. "github.com/shurcooL/go/gists/gist7390843"
 	. "github.com/shurcooL/go/gists/gist7480523"
-	. "github.com/shurcooL/go/gists/gist7519227"
 	. "github.com/shurcooL/go/gists/gist7576154"
 	. "github.com/shurcooL/go/gists/gist7576804"
 	. "github.com/shurcooL/go/gists/gist7651991"
-	. "github.com/shurcooL/go/gists/gist7728088"
 	. "github.com/shurcooL/go/gists/gist7802150"
 	"github.com/shurcooL/go/gists/gist8065433"
 	"github.com/shurcooL/go/markdown_http"
@@ -628,7 +628,7 @@ func NewTest4Widget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source 
 				//panic("found vs. found2 diff")
 			}
 			for _, v := range found2 {
-				if !found[v] {
+				if _, ok := found[v]; !ok {
 					fmt.Printf("%+v\n%+v\n", found, found2)
 					foundDiff = true
 					//panic("found vs. found2 diff")
@@ -7225,7 +7225,7 @@ func initHttpHandlers() {
 				}
 			}
 		} else {
-			b += fmt.Sprintf("Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, os.Getenv("GOPATH"))
+			b += fmt.Sprintf("Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, build.Default.GOPATH)
 		}
 
 		return []byte(b), nil
@@ -7336,18 +7336,6 @@ func getRootPath(goPackage *GoPackage) (rootPath string) {
 	} else {
 		return goPackage.Dir.Repo.Vcs.RootPath()
 	}
-}
-
-// ---
-
-// HACK
-type goPackageHardcoded struct {
-	DepNode2Manual
-}
-
-func (*goPackageHardcoded) GetSelectedGoPackage() *GoPackage {
-	x := NewImportPathFound("github.com/gists/gist7176504", "/Users/Dmitri/Dropbox/Work/2013/GoLand/")
-	return GoPackageFromImportPathFound(x)
 }
 
 // ---
@@ -8321,15 +8309,6 @@ func main() {
 			widgets = append(widgets, NewTextLabelWidgetGoon(mgl64.Vec2{500, 732 + 4}, &goCompileErrorsManagerTest.All))
 		}
 
-		// Shows the AST node underneath caret (asynchonously via LiveGoroutineExpeWidget)
-		if false {
-			//w, _ := NewTest3Widget(np, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
-			w, _ := NewTest4Widget(np, &goPackageHardcoded{}, widgets[2].(*FlowLayoutWidget).Widgets[0].(*TextFileWidget).TextBoxWidget)
-			widgets[2].(*FlowLayoutWidget).Widgets = append(widgets[2].(*FlowLayoutWidget).Widgets, w)
-			w.SetParent(widgets[2]) // Needed for pointer coordinates to be accurate
-			widgets[2].(*FlowLayoutWidget).Layout()
-		}
-
 		widgets = append(widgets, &BoxWidget{NewWidget(mgl64.Vec2{50, 150}, mgl64.Vec2{16, 16}), "The Original Box"})
 		widgets = append(widgets, NewCompositeWidget(mgl64.Vec2{150, 150},
 			[]Widgeter{
@@ -8823,9 +8802,22 @@ func main() {
 				if err != nil {
 					return goon.SdumpExpr("Error creating gist.", err, string(out))
 				}
-				GistId, err := ParseGistId(out)
+				parseGistId := func(gistJsonResponse []byte) (gistId string, err error) {
+					var gistJson struct {
+						Id *string
+					}
+					switch err := json.Unmarshal(gistJsonResponse, &gistJson); {
+					case err == nil && gistJson.Id != nil:
+						return *gistJson.Id, nil
+					case err == nil && gistJson.Id == nil:
+						return "", errors.New("gist id field missing")
+					default:
+						return "", err
+					}
+				}
+				gistId, err := parseGistId(out)
 				if err != nil {
-					return goon.SdumpExpr("Error parsing GistId.", err, string(out))
+					return goon.SdumpExpr("Error parsing Gist Id.", err, string(out))
 				}
 
 				// Clone the gist repo
@@ -8833,8 +8825,8 @@ func main() {
 				Command := "cd ../../../../" // Hopefully the "$GOPATH/" folder
 				Command += "\nmkdir -p \"./src/gist.github.com\""
 				Command += "\ncd \"./src/gist.github.com\""
-				Command += "\ngit clone https://gist.github.com/" + GistId + ".git \"./" + GistId + ".git\""
-				//Command += "\ncurl -d 'path=gist.github.com/" + GistId + ".git' http://godoc.org/-/refresh";
+				Command += "\ngit clone https://gist.github.com/" + gistId + ".git \"./" + gistId + ".git\""
+				//Command += "\ncurl -d 'path=gist.github.com/" + gistId + ".git' http://godoc.org/-/refresh";
 				cmd = exec.Command("bash", "-c", Command)
 				out, err = cmd.CombinedOutput()
 				if err != nil {
@@ -8842,11 +8834,11 @@ func main() {
 				}
 
 				// Open it in a new LiveProgramFileWidget
-				//const auto FullPath = "./GoLand/src/gist.github.com/" + GistId + ".git/main.go";
+				//const auto FullPath = "./GoLand/src/gist.github.com/" + gistId + ".git/main.go";
 				//AddWidgetForPath(FullPath, *MainCanvas, *m_TypingModule, m_CurrentProject);
 
 				// Return import statement as the output
-				return ". \"gist.github.com/" + GistId + ".git\""
+				return ". \"gist.github.com/" + gistId + ".git\""
 			}
 			output := NewLiveGoroutineExpeWidget(np, true, []DepNode2I{gistButtonTrigger}, params, action)
 
