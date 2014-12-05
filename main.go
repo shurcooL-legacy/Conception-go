@@ -7326,7 +7326,7 @@ func initHttpHandlers() {
 }
 
 func getRootPath(goPackage *GoPackage) (rootPath string) {
-	if goPackage.Standard {
+	if goPackage.Bpkg.Goroot {
 		return ""
 	}
 
