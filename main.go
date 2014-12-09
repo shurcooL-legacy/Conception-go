@@ -52,7 +52,6 @@ import (
 	. "github.com/shurcooL/go/gists/gist5423254"
 	. "github.com/shurcooL/go/gists/gist5504644"
 	. "github.com/shurcooL/go/gists/gist5639599"
-	. "github.com/shurcooL/go/gists/gist5892738"
 	. "github.com/shurcooL/go/gists/gist5953185"
 	. "github.com/shurcooL/go/gists/gist6003701"
 	. "github.com/shurcooL/go/gists/gist6096872"
@@ -69,6 +68,7 @@ import (
 	"github.com/shurcooL/go/gists/gist8065433"
 	"github.com/shurcooL/go/markdown_http"
 	"github.com/shurcooL/go/pipe_util"
+	"github.com/shurcooL/go/trim"
 	"github.com/shurcooL/go/u/u10"
 	"github.com/shurcooL/go/u/u4"
 	"github.com/shurcooL/go/u/u5"
@@ -383,7 +383,7 @@ type Test2Widget struct {
 }
 
 func NewTest2Widget(pos mgl64.Vec2, field *float64) *Test2Widget {
-	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, NewMultilineContentFuncInstant(func() string { return TrimLastNewline(goon.Sdump(*field)) }), nil), field: field}
+	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, NewMultilineContentFuncInstant(func() string { return trim.LastNewline(goon.Sdump(*field)) }), nil), field: field}
 }
 
 func (w *Test2Widget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
@@ -1129,7 +1129,7 @@ func (this *GoCompileErrorsTest) Update() {
 		lineIndex := lineNumber - 1 // Convert line number (e.g. 1) to line index (e.g. 0)
 
 		in = in[x+1:]
-		message := TrimFirstSpace(in)
+		message := trim.FirstSpace(in)
 
 		return GoCompilerError{FileUri: FileUri("file://" + fileUri), ErrorMessage: GoErrorMessage{LineIndex: lineIndex, Message: message}}
 	}
@@ -4881,7 +4881,7 @@ func NewTextLabelWidgetString(pos mgl64.Vec2, s string) *TextLabelWidget {
 }
 
 func NewTextLabelWidgetGoon(pos mgl64.Vec2, any interface{}) *TextLabelWidget {
-	mc := NewMultilineContentFuncInstant(func() string { return TrimLastNewline(goon.Sdump(any)) })
+	mc := NewMultilineContentFuncInstant(func() string { return trim.LastNewline(goon.Sdump(any)) })
 	return NewTextLabelWidgetExternalContent(pos, mc)
 }
 
@@ -7208,7 +7208,7 @@ func initHttpHandlers() {
 					cmd := exec.Command("git", "diff", "--stat", "HEAD")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
-						b += "\n```\n" + TrimLastNewline(string(stat)) + "\n```\n"
+						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
 					}
 					b += "\n```diff\n" + workingDiff + "\n```\n"
 				}
@@ -7219,7 +7219,7 @@ func initHttpHandlers() {
 					cmd := exec.Command("git", "diff", "--stat", "master")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
-						b += "\n```\n" + TrimLastNewline(string(stat)) + "\n```\n"
+						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
 					}
 					b += "\n```diff\n" + workingDiffMaster + "\n```\n"
 				}
@@ -8970,7 +8970,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				for _, widget := range mousePointer.Mapping {
 					out += fmt.Sprintf("%T\n", widget)
 				}
-				return TrimLastNewline(out)
+				return trim.LastNewline(out)
 			}
 			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Mouse Mapping"))
 		}
@@ -8979,7 +8979,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				for _, widget := range mousePointer.OriginMapping {
 					out += fmt.Sprintf("%T\n", widget)
 				}
-				return TrimLastNewline(out)
+				return trim.LastNewline(out)
 			}
 			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Mouse Origin Mapping"))
 		}
@@ -8988,7 +8988,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				for _, widget := range keyboardPointer.OriginMapping {
 					out += fmt.Sprintf("%T\n", widget)
 				}
-				return TrimLastNewline(out)
+				return trim.LastNewline(out)
 			}
 			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Keyboard Origin Mapping"))
 		}
