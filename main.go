@@ -6617,7 +6617,7 @@ func main() {
 		switch *modeFlag {
 		case 8:
 			window, err = glfw.CreateWindow(fontWidth*80, fontHeight*24, "", nil, nil)
-		case 1:
+		case 1, 0:
 			window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
 		default:
 			window, err = glfw.CreateWindow(980, 880, "", nil, nil)
