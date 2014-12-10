@@ -4249,7 +4249,8 @@ type GoonWidget struct {
 func NewGoonWidget(pos mgl64.Vec2, a interface{}) Widgeter {
 	title := GetParentArgExprAsString(1)
 	if !strings.HasPrefix(title, "&") {
-		panic("NewGoonWidget: Need to pass address of value.")
+		log.Println("NewGoonWidget: Need to pass address of value.")
+		title = "&<unknown>"
 	}
 	//goonWidget := newGoonWidget(mathgl.Vec2d{fontHeight + 2}, title[1:], reflect.ValueOf(a))
 	goonWidget := setupInternals3(mgl64.Vec2{fontHeight + 2}, title[1:], bypass.UnsafeReflectValue(reflect.ValueOf(a)).Elem())
