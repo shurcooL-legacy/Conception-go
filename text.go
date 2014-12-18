@@ -97,7 +97,9 @@ func (o *OpenGlStream) PrintLine(s string) {
 			tabSpaces := 4 - (o.advance % 4)
 			o.PrintSegment(strings.Repeat(" ", int(tabSpaces))) // Tab.
 			if o.ShowInvisibles {
+				gl.PushAttrib(gl.CURRENT_BIT)
 				DrawBorderlessBox(o.pos.Add(mgl64.Vec2{1, fontHeight/2 - 1}), mgl64.Vec2{fontWidth*float64(tabSpaces) - 2, 2}, selectedTextDarkColor)
+				gl.PopAttrib()
 			}
 			o.advanceBy(tabSpaces)
 		}
