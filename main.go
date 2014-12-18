@@ -2127,8 +2127,8 @@ func (w *CanvasWidget) Render() {
 
 	// Background.
 	{
-		backgroundTopColor := mgl64.Vec3{226 / 255.0, 144 / 255.0, 153 / 255.0}
-		backgroundBottomColor := mgl64.Vec3{96 / 255.0, 93 / 255.0, 160 / 255.0}
+		backgroundTopColor := mgl64.Vec3{52 / 255.0, 102 / 255.0, 164 / 255.0}
+		backgroundBottomColor := mgl64.Vec3{227 / 255.0, 189 / 255.0, 162 / 255.0}
 
 		DrawBorderlessGradientBox(w.pos, w.size, backgroundTopColor, backgroundBottomColor)
 	}
@@ -3323,7 +3323,8 @@ func NewHttpServerTestWidget(pos mgl64.Vec2) *HttpServerTestWidget {
 			go func() {
 				err := ListenAndServeStoppable(httpServerAddr, nil, w.stopServerChan)
 				if err != nil {
-					panic(err)
+					log.Println("HttpServerTestWidget:", err)
+					w.started = false
 				}
 			}()
 		} else {
