@@ -1006,9 +1006,21 @@ func (this *goSymbolsC) Update() {
 	for _, decl := range fileAst.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			funcDeclSignature := &ast.FuncDecl{Recv: d.Recv, Name: d.Name, Type: d.Type}
-			nodeStringer := NodeStringer{Node: d, str: SprintAstBare(funcDeclSignature)}
+			name := d.Name.String()
+			if d.Recv != nil {
+				name = "(" + SprintAstBare(d.Recv.List[0].Type) + ") " + name
+			}
+			nodeStringer := NodeStringer{Node: d.Name, str: name}
 			this.entries = append(this.entries, nodeStringer)
+		case *ast.GenDecl:
+			switch d.Tok {
+			case token.TYPE:
+				for _, spec := range d.Specs {
+					name := spec.(*ast.TypeSpec).Name.String()
+					nodeStringer := NodeStringer{Node: spec.(*ast.TypeSpec).Name, str: name}
+					this.entries = append(this.entries, nodeStringer)
+				}
+			}
 		}
 	}
 }
@@ -5888,11 +5900,6 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 						}
 
 						pos, end := declNode.Pos(), declNode.End()
-						switch d := declNode.(type) {
-						case *ast.FuncDecl:
-							// Select func name only.
-							pos, end = d.Name.Pos(), d.Name.End()
-						}
 
 						w.caretPosition.SetSelection(uint32(file.Offset(pos)), uint32(end-pos))
 						w.CenterOnCaretPositionIfOffscreen()
@@ -6203,7 +6210,7 @@ func (this *Pointer) Render() {
 
 		gl.PushMatrix()
 		defer gl.PopMatrix()
-		gl.Translated(float64(float64(NearInt64(this.State.Axes[0]))+0.5), float64(float64(NearInt64(this.State.Axes[1]))+0.5), 0)
+		gl.Translated(float64(NearInt64(this.State.Axes[0]))+0.5, float64(NearInt64(this.State.Axes[1]))+0.5, 0)
 
 		const size float64 = fontHeight
 		gl.Color3d(1, 1, 1)
