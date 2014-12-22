@@ -221,7 +221,7 @@ func (this *highlightedGoContent) Update() {
 		case tok == token.STRING || tok == token.CHAR:
 			//return syntaxhighlight.STRING
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}})
-		case lit == "true" || lit == "false" || lit == "iota":
+		case lit == "true" || lit == "false" || lit == "iota" || lit == "nil":
 			//return syntaxhighlight.LITERAL
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.008, 0.024, 1}})
 
