@@ -245,12 +245,23 @@ func (cp *caretPositionInternal) Compare(other *caretPositionInternal) int8 {
 
 // TODO: Change amount to a proper type with 4 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
 // TOOD: Rename to JumpTo or something to indicate it's a method that can never fail.
+// Move jumps the caret position to a new position. This operation never fails, but may not have any effect.
+// If amount is ±1, move by 1 character within same line if possible.
+// If amount is ±2, jump to start/end of line.
+// If amount is ±3, jump to start/end of content.
 func (cp *caretPositionInternal) Move(amount int8) {
 	originalPosition := *cp
 
 	switch amount {
-	case -1, +1:
-		panic("Move(+-1) deprecated, should use TryMoveH")
+	// Move by 1 character within same line, if possible.
+	case -1:
+		if cp.positionWithinLine > 0 {
+			cp.positionWithinLine--
+		}
+	case +1:
+		if cp.positionWithinLine < cp.w.Line(cp.lineIndex).Length() {
+			cp.positionWithinLine++
+		}
 	case -2:
 		cp.positionWithinLine = 0
 	case +2:
@@ -394,7 +405,7 @@ func (cp *CaretPosition) Logical() uint32 {
 	return cp.caretPosition.Logical()
 }
 
-func (cp *CaretPosition) SelectionRange() (start uint32, end uint32) {
+func (cp *CaretPosition) SelectionRange() (start, end uint32) {
 	min := intmath.MinUint32(cp.caretPosition.Logical(), cp.selectionPosition.Logical())
 	max := intmath.MaxUint32(cp.caretPosition.Logical(), cp.selectionPosition.Logical())
 	return min, max
@@ -447,6 +458,10 @@ func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
 // HACK: leaveSelection is currently an optional bool parameter
 // TODO: Change amount to a proper type with 4 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
 // TOOD: Rename to JumpTo or something to indicate it's a method that can never fail.
+// Move jumps the caret position to a new position. This operation never fails, but may not have any effect.
+// If amount is ±1, move by 1 character within same line if possible.
+// If amount is ±2, jump to start/end of line.
+// If amount is ±3, jump to start/end of content.
 func (cp *CaretPosition) Move(amount int8, leaveSelectionOptional ...bool) {
 	// HACK, TODO: Make leaveSelection a required parameter?
 	leaveSelection := len(leaveSelectionOptional) != 0 && leaveSelectionOptional[0]
@@ -553,13 +568,73 @@ func (cp *CaretPosition) SetSelection(start, length uint32) {
 
 // ExpandedPosition returns logical character units of primary cursor position.
 // Multiply by (fontWidth, fontHeight) to get physical coords.
-func (cp *CaretPosition) ExpandedPosition() (x uint32, y uint32) {
+func (cp *CaretPosition) ExpandedPosition() (x, y uint32) {
 	return cp.caretPosition.expandedPosition()
 }
 
-// Returns line number of primary caret. Line number is line index + 1, so it starts at 1.
+// LineNumber returns line number of primary caret. Line number is line index + 1, so it starts at 1.
 func (cp *CaretPosition) LineNumber() int {
 	return cp.caretPosition.lineIndex + 1
+}
+
+// lineIndexSpan returns line indicies that are spanned by the selection.
+func (cp *CaretPosition) lineIndexSpan() (first, last int) {
+	min := intmath.MinInt(cp.caretPosition.lineIndex, cp.selectionPosition.lineIndex)
+	max := intmath.MaxInt(cp.caretPosition.lineIndex, cp.selectionPosition.lineIndex)
+	return min, max
+}
+
+// DecreaseIndent decreases indent of lines that fall within selection by 1 tab (for lines where it's possible).
+func (cp *CaretPosition) DecreaseIndent() {
+	selStart, selEnd := cp.SelectionRange2()
+	first, last := cp.lineIndexSpan()
+
+	newContent := cp.w.Content()[:cp.w.Line(first).Start()]
+	for lineIndex := first; lineIndex <= last; lineIndex++ {
+		contentLine := cp.w.Line(lineIndex)
+
+		if lineIndex != first {
+			newContent += "\n"
+		}
+		line := cp.w.Content()[contentLine.Start():contentLine.End()]
+		if strings.HasPrefix(line, "\t") {
+			line = line[1:] // Trim leading tab.
+
+			if lineIndex == first {
+				selStart.Move(-1)
+			}
+			if lineIndex == last {
+				selEnd.Move(-1)
+			}
+		}
+		newContent += line
+	}
+	newContent += cp.w.Content()[cp.w.Line(last).End():]
+
+	gist7802150.SetViewGroup(cp.w, newContent)
+}
+
+// IncreaseIndent increases indent of all lines that fall within selection by 1 tab.
+func (cp *CaretPosition) IncreaseIndent() {
+	selStart, selEnd := cp.SelectionRange2()
+	first, last := cp.lineIndexSpan()
+
+	newContent := cp.w.Content()[:cp.w.Line(first).Start()]
+	for lineIndex := first; lineIndex <= last; lineIndex++ {
+		contentLine := cp.w.Line(lineIndex)
+
+		if lineIndex != first {
+			newContent += "\n"
+		}
+		newContent += "\t" + cp.w.Content()[contentLine.Start():contentLine.End()]
+	}
+	newContent += cp.w.Content()[cp.w.Line(last).End():]
+
+	gist7802150.SetViewGroup(cp.w, newContent)
+
+	// Safe to use willMoveH after SetViewGroup, since we know each line will always get a character longer.
+	selStart.willMoveH(1)
+	selEnd.willMoveH(1)
 }
 
 // LeadingTabCount returns number of leading tabs on current line.

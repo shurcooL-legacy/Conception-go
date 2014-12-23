@@ -5831,6 +5831,14 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					w.caretPosition.ReplaceSelectionWith(clipboard)
 				}
 			}
+		case glfw.KeyLeftBracket:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.caretPosition.DecreaseIndent()
+			}
+		case glfw.KeyRightBracket:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.caretPosition.IncreaseIndent()
+			}
 		case glfw.KeyE:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				if fileUri, ok := w.Content.GetUriForProtocol("file://"); ok {
