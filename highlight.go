@@ -189,14 +189,14 @@ func (this *highlightedGoContent) NewIterator(offset uint32) HighlighterIterator
 	return NewHighlighterIterator(this, offset)
 }
 
-// Token syntaxhighlight.Kind -> token text style.
-var highlightGoStyle = map[int]highlightSegment{
-	syntaxhighlight.KEYWORD:   highlightSegment{color: mgl64.Vec3{0.004, 0, 0.694}, fontOptions: Bold},
-	syntaxhighlight.DECIMAL:   highlightSegment{color: mgl64.Vec3{0.804, 0, 0}, fontOptions: Italic},
-	syntaxhighlight.STRING:    highlightSegment{color: mgl64.Vec3{0.804, 0, 0}},
-	syntaxhighlight.LITERAL:   highlightSegment{color: mgl64.Vec3{0.008, 0.024, 1}, fontOptions: Italic},
-	syntaxhighlight.COMMENT:   highlightSegment{color: mgl64.Vec3{0, 0.506, 0.094}},
-	syntaxhighlight.PLAINTEXT: highlightSegment{color: mgl64.Vec3{0, 0, 0}},
+// Token kind -> token text style.
+var highlightGoStyle = map[syntaxhighlight.Kind]highlightSegment{
+	syntaxhighlight.Keyword:   highlightSegment{color: mgl64.Vec3{0.004, 0, 0.694}, fontOptions: Bold},
+	syntaxhighlight.Decimal:   highlightSegment{color: mgl64.Vec3{0.804, 0, 0}, fontOptions: Italic},
+	syntaxhighlight.String:    highlightSegment{color: mgl64.Vec3{0.804, 0, 0}},
+	syntaxhighlight.Literal:   highlightSegment{color: mgl64.Vec3{0.008, 0.024, 1}, fontOptions: Italic},
+	syntaxhighlight.Comment:   highlightSegment{color: mgl64.Vec3{0, 0.506, 0.094}},
+	syntaxhighlight.Plaintext: highlightSegment{color: mgl64.Vec3{0, 0, 0}},
 }
 
 func (this *highlightedGoContent) Update() {
