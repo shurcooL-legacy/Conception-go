@@ -172,9 +172,9 @@ func (this *selectionHighlighterIterator) Advance(span uint32) *TextStyle {
 // ---
 
 type highlightSegment struct {
-	offset uint32
-	color  mgl64.Vec3
-	bold   bool
+	offset      uint32
+	color       mgl64.Vec3
+	fontOptions FontOptions
 }
 
 type highlightedGoContent struct {
@@ -209,21 +209,22 @@ func (this *highlightedGoContent) Update() {
 
 		offset := uint32(fset.Position(pos).Offset)
 
+		// TODO: Factor out this logic; use highlight_go.tokenKind and have a css-like mappings from syntaxhighlight.KEYWORD -> TextStyle.
 		switch {
-		case tok.IsKeyword() || (tok.IsOperator() && tok < token.LPAREN):
+		case tok.IsKeyword() || (tok.IsOperator() && tok <= token.ELLIPSIS):
 			//return syntaxhighlight.KEYWORD
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.004, 0, 0.694}, bold: true})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.004, 0, 0.694}, fontOptions: Bold})
 
 		// Literals.
-		case tok == token.INT || tok == token.FLOAT || tok == token.IMAG:
+		case tok == token.INT || tok == token.FLOAT || tok == token.IMAG || tok == token.CHAR:
 			//return syntaxhighlight.DECIMAL
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}})
-		case tok == token.STRING || tok == token.CHAR:
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}, fontOptions: Italic})
+		case tok == token.STRING:
 			//return syntaxhighlight.STRING
 			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}})
 		case lit == "true" || lit == "false" || lit == "iota" || lit == "nil":
 			//return syntaxhighlight.LITERAL
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.008, 0.024, 1}})
+			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.008, 0.024, 1}, fontOptions: Italic})
 
 		case tok == token.COMMENT:
 			//return syntaxhighlight.COMMENT
@@ -254,10 +255,7 @@ func (this *highlightedGoContent) LenSegments() int {
 }
 func (this *highlightedGoContent) SegmentToTextStyle(index uint32) *TextStyle {
 	color := this.Segment(index).color
-	var fontOptions FontOptions
-	if this.Segment(index).bold {
-		fontOptions = Bold
-	}
+	fontOptions := this.Segment(index).fontOptions
 	return &TextStyle{
 		FontOptions: &fontOptions,
 		TextColor:   &color,
@@ -681,8 +679,8 @@ func (this *diffHighlighter) Update() {
 		}
 		switch lineFirstChar {
 		case '@':
-			this.segments = append(this.segments, highlightSegment{bold: true, color: mgl64.Vec3{0.5, 0, 0.5}, offset: content.Line(lineIndex).Start()})
-			this.segments = append(this.segments, highlightSegment{bold: true, offset: content.Line(lineIndex).End()})
+			this.segments = append(this.segments, highlightSegment{fontOptions: Bold, color: mgl64.Vec3{0.5, 0, 0.5}, offset: content.Line(lineIndex).Start()})
+			this.segments = append(this.segments, highlightSegment{fontOptions: Bold, offset: content.Line(lineIndex).End()})
 		case '+':
 			if lastIns == -1 {
 				lastIns = lineIndex
@@ -756,13 +754,13 @@ func (this *diffHighlighter) SegmentToTextStyle(index uint32) *TextStyle {
 		colorPtr = nil
 	}
 	switch {
-	case this.Segment(index).bold && colorPtr != nil: // Beginning of '@' line.
+	case this.Segment(index).fontOptions == Bold && colorPtr != nil: // Beginning of '@' line.
 		fontOptions := Bold
 		return &TextStyle{
 			FontOptions: &fontOptions,
 			TextColor:   &color,
 		}
-	case this.Segment(index).bold && colorPtr == nil: // End of '@' line.
+	case this.Segment(index).fontOptions == Bold && colorPtr == nil: // End of '@' line.
 		fontOptions := Regular
 		return &TextStyle{
 			FontOptions: &fontOptions,

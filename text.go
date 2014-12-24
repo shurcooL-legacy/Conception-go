@@ -14,6 +14,7 @@ import (
 	"github.com/shurcooL/Conception-go/caret"
 )
 
+// FontOptions specifies the properties of the font.
 type FontOptions uint8
 
 const (
@@ -22,6 +23,12 @@ const (
 	Italic
 	BoldItalic
 )
+
+// IsBold returns true if the font has the bold property set.
+func (fo FontOptions) IsBold() bool { return fo == Bold || fo == BoldItalic }
+
+// IsItalic returns true if the font has the italic property set.
+func (fo FontOptions) IsItalic() bool { return fo == Italic || fo == BoldItalic }
 
 type OpenGlStream struct {
 	pos        mgl64.Vec2
