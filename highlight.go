@@ -10,6 +10,8 @@ import (
 	"github.com/mb0/diff"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/shurcooL/go/gists/gist7802150"
+	"github.com/shurcooL/go/highlight_go"
+	"github.com/sourcegraph/syntaxhighlight"
 
 	"github.com/shurcooL/Conception-go/caret"
 )
@@ -187,6 +189,16 @@ func (this *highlightedGoContent) NewIterator(offset uint32) HighlighterIterator
 	return NewHighlighterIterator(this, offset)
 }
 
+// Token syntaxhighlight.Kind -> token text style.
+var highlightGoStyle = map[int]highlightSegment{
+	syntaxhighlight.KEYWORD:   highlightSegment{color: mgl64.Vec3{0.004, 0, 0.694}, fontOptions: Bold},
+	syntaxhighlight.DECIMAL:   highlightSegment{color: mgl64.Vec3{0.804, 0, 0}, fontOptions: Italic},
+	syntaxhighlight.STRING:    highlightSegment{color: mgl64.Vec3{0.804, 0, 0}},
+	syntaxhighlight.LITERAL:   highlightSegment{color: mgl64.Vec3{0.008, 0.024, 1}, fontOptions: Italic},
+	syntaxhighlight.COMMENT:   highlightSegment{color: mgl64.Vec3{0, 0.506, 0.094}},
+	syntaxhighlight.PLAINTEXT: highlightSegment{color: mgl64.Vec3{0, 0, 0}},
+}
+
 func (this *highlightedGoContent) Update() {
 	content := this.GetSources()[0].(caret.MultilineContentI)
 
@@ -208,31 +220,9 @@ func (this *highlightedGoContent) Update() {
 		}
 
 		offset := uint32(fset.Position(pos).Offset)
-
-		// TODO: Factor out this logic; use highlight_go.tokenKind and have a css-like mappings from syntaxhighlight.KEYWORD -> TextStyle.
-		switch {
-		case tok.IsKeyword() || (tok.IsOperator() && tok <= token.ELLIPSIS):
-			//return syntaxhighlight.KEYWORD
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.004, 0, 0.694}, fontOptions: Bold})
-
-		// Literals.
-		case tok == token.INT || tok == token.FLOAT || tok == token.IMAG || tok == token.CHAR:
-			//return syntaxhighlight.DECIMAL
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}, fontOptions: Italic})
-		case tok == token.STRING:
-			//return syntaxhighlight.STRING
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.804, 0, 0}})
-		case lit == "true" || lit == "false" || lit == "iota" || lit == "nil":
-			//return syntaxhighlight.LITERAL
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0.008, 0.024, 1}, fontOptions: Italic})
-
-		case tok == token.COMMENT:
-			//return syntaxhighlight.COMMENT
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0.506, 0.094}})
-		default:
-			//return syntaxhighlight.PLAINTEXT
-			this.segments = append(this.segments, highlightSegment{offset: offset, color: mgl64.Vec3{0, 0, 0}})
-		}
+		kind := highlight_go.TokenKind(tok, lit)
+		s := highlightGoStyle[kind]
+		this.segments = append(this.segments, highlightSegment{offset: offset, color: s.color, fontOptions: s.fontOptions})
 	}
 
 	// HACK: Fake last element.
