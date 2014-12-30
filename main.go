@@ -7204,12 +7204,12 @@ func main() {
 							r.ReadBytes('\n')
 						}
 						var b bytes.Buffer
-						b.ReadFrom(r)
+						io.Copy(&b, s.Stdin)
 						if b.Len() == 0 {
 							return nil
 						}
 						b.Truncate(b.Len() - 1)
-						b.WriteTo(s.Stdout)
+						io.Copy(s.Stdout, &b)
 						return nil
 					}),
 				))
@@ -7345,9 +7345,9 @@ func main() {
 						pipe_util.ExecCombinedOutput("go", "build", "-o", "/dev/null", goPackage.Bpkg.ImportPath),
 						pipe.TaskFunc(func(s *pipe.State) error {
 							var b bytes.Buffer
-							b.ReadFrom(s.Stdin)
+							io.Copy(&b, s.Stdin)
 							SetViewGroup(buildOutput, b.String())
-							b.WriteTo(s.Stdout)
+							io.Copy(s.Stdout, &b)
 							return nil
 						}),
 					))
@@ -7373,9 +7373,9 @@ func main() {
 							pipe_util.ExecCombinedOutput("go", "build", "-o", con2RunBinPath, goPackage.Bpkg.ImportPath),
 							pipe.TaskFunc(func(s *pipe.State) error {
 								var b bytes.Buffer
-								b.ReadFrom(s.Stdin)
+								io.Copy(&b, s.Stdin)
 								SetViewGroup(buildOutput, b.String())
-								b.WriteTo(s.Stdout)
+								io.Copy(s.Stdout, &b)
 								return nil
 							}),
 						),
