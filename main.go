@@ -7204,7 +7204,7 @@ func main() {
 							r.ReadBytes('\n')
 						}
 						var b bytes.Buffer
-						io.Copy(&b, s.Stdin)
+						io.Copy(&b, r)
 						if b.Len() == 0 {
 							return nil
 						}
