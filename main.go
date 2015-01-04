@@ -96,8 +96,10 @@ var mousePointer *Pointer
 var keyboardPointer *Pointer
 var websocketPointer *Pointer // TEST
 
+var buildOutput caret.MultilineContentI
+var buildOutputCurrentPackage caret.MultilineContentI
+var goCompileErrorsCurrentPackage GoCompileErrorsTest
 var goCompileErrorsManagerTest GoCompileErrorsManagerTest
-var goCompileErrorsEnabledTest *TriButtonExternalStateWidget
 
 var booVcs *exp12.Directory
 
@@ -1099,6 +1101,7 @@ func (this *GoCompileErrorsManagerTest) Update() {
 
 type GoCompileErrorsTest struct {
 	DepNode2
+	Dir string // Assume build output is relative to this dir. If empty, assume cwd.
 
 	Out []GoCompilerError
 }
@@ -1119,7 +1122,7 @@ func (this *GoCompileErrorsTest) Update() {
 		if x == -1 {
 			return nil
 		}
-		fileUri, err := filepath.Abs(in[:x])
+		fileUri, err := filepath.Abs(filepath.Join(this.Dir, in[:x]))
 		if err != nil {
 			return nil
 		}
@@ -7128,7 +7131,7 @@ func main() {
 		editorFileOpener.AddSources(folderListing, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
 		editor := NewTextBoxWidgetExternalContent(np, editorContent, &TextBoxWidgetOptions{PopupTest: true, FindPanel: true})
-		widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{200 + 2, 0}, mgl64.Vec2{750, float64(windowSize1 - 2)}, editor))
+		widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{200 + 2, 0}, mgl64.Vec2{750, float64(windowSize1 - 200 - 4)}, editor))
 
 		// HACK: Force Go highlighting for main editor. There should be a better way to set a content type and set highlighter based on that.
 		{
@@ -7172,6 +7175,127 @@ func main() {
 			},
 		}
 		goPackageListing.ExtensionsTest = append(goPackageListing.ExtensionsTest, focusEditor)
+
+		// Output box.
+		{
+			//output := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{FindPanel: true})
+			output := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{})
+			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{200 + 2, float64(windowSize1 - 200 - 2)}, mgl64.Vec2{750, 200}, output))
+
+			// HACK: These should go elsewhere rather than be declared ad-hoc.
+			var this = struct {
+				p            PipeFactory
+				s            *pipe.State
+				stdoutChan   ChanWriter
+				stderrChan   ChanWriter
+				finishedChan chan error
+			}{finishedChan: make(chan error)}
+
+			{
+				// go run.
+				template3 := NewPipeTemplateDynamic()
+				template3.UpdateFunc = func(this DepNode2I) {
+					template3.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "Nothing to go run."))
+
+					if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
+						template3.Template = NewPipeTemplate(pipe.Script(
+							pipe.Println(fmt.Sprintf("Building %q.", goPackage.Bpkg.ImportPath)),
+							pipe.Line(
+								pipe_util.ExecCombinedOutput("go", "build", "-o", con2RunBinPath, goPackage.Bpkg.ImportPath),
+								pipe.TaskFunc(func(s *pipe.State) error {
+									var b bytes.Buffer
+									io.Copy(&b, s.Stdin)
+									goCompileErrorsCurrentPackage.Dir = goPackage.Bpkg.Dir
+									SetViewGroup(buildOutputCurrentPackage, b.String())
+									io.Copy(s.Stdout, &b)
+									return nil
+								}),
+							),
+							pipe.Println("Running."),
+							pipe.Exec(con2RunBinPath),
+							pipe.Println("Done."),
+						))
+						template3.Template.Dir = goPackage.Bpkg.Dir
+					}
+				}
+				template3.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
+
+				this.p = template3
+			}
+
+			buildAndRun := &CustomWidget{
+				Widget: NewWidget(np, np),
+				ProcessEventFunc: func(inputEvent InputEvent) {
+					if inputEvent.Pointer.VirtualCategory == TYPING && inputEvent.EventTypes[BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+						switch glfw.Key(inputEvent.InputId) {
+						case glfw.KeyB:
+							if inputEvent.ModifierKey == glfw.ModSuper {
+								this.stdoutChan = make(ChanWriter)
+								this.stderrChan = make(ChanWriter)
+								var p pipe.Pipe
+								this.s, p = this.p.NewPipe(this.stdoutChan, this.stderrChan)
+
+								go func(s *pipe.State, p pipe.Pipe) {
+									err := p(s)
+									if err == nil {
+										err = this.s.RunTasks()
+									}
+									//close(this.w.stdoutChan) // This is causing panics because pipe tries to write to closed channel.
+									//close(this.w.stderrChan)
+									this.finishedChan <- err
+								}(this.s, p)
+							}
+						case glfw.KeyC:
+							if inputEvent.ModifierKey == glfw.ModControl {
+								if this.s != nil {
+									this.s.Kill()
+									this.s = nil
+								}
+
+								SetViewGroup(output.Content, output.Content.Content()+"^C\n")
+							}
+						case glfw.KeyL:
+							if inputEvent.ModifierKey == glfw.ModControl {
+								SetViewGroup(output.Content, "")
+								SetViewGroup(buildOutput, "")
+								SetViewGroup(buildOutputCurrentPackage, "")
+							}
+						}
+					}
+				},
+				PollLogicFunc: func(_ *CustomWidget) {
+					select {
+					case b, ok := <-this.stdoutChan:
+						if ok {
+							SetViewGroup(output.Content, output.Content.Content()+string(b))
+							redraw = true
+						}
+					default:
+					}
+
+					select {
+					case b, ok := <-this.stderrChan:
+						if ok {
+							SetViewGroup(output.Content, output.Content.Content()+string(b))
+							redraw = true
+						}
+					default:
+					}
+
+					select {
+					/*case processState := <-w.finishedChan:
+					if processState.Success() {
+						// TODO: Is ChangeListener stuff a good fit for these not-really-change events?
+						w.SuccessDepNode.NotifyAllListeners()
+					}*/
+					case <-this.finishedChan:
+						//ExternallyUpdated(w)
+					default:
+					}
+				},
+			}
+			editor.ExtensionsTest = append(editor.ExtensionsTest, buildAndRun)
+		}
 
 		// View sidebar
 		{
@@ -7323,14 +7447,20 @@ func main() {
 			// ---
 
 			// Build Output.
-			buildOutput := NewMultilineContent()
+			buildOutput = NewMultilineContent()
 			nextTool9Collapsible := NewCollapsibleWidget(np, NewTextBoxWidgetExternalContent(np, buildOutput, nil), "Build Output")
+			buildOutputCurrentPackage = NewMultilineContent()
 
 			// Go Compile Errors hardcoded TEST
 			{
 				goCompileErrorsTest := GoCompileErrorsTest{}
 				goCompileErrorsTest.AddSources(buildOutput)
 				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
+			}
+			{
+				goCompileErrorsCurrentPackage = GoCompileErrorsTest{}
+				goCompileErrorsCurrentPackage.AddSources(buildOutputCurrentPackage)
+				goCompileErrorsManagerTest.AddSources(&goCompileErrorsCurrentPackage)
 			}
 
 			// ---
@@ -7374,7 +7504,8 @@ func main() {
 							pipe.TaskFunc(func(s *pipe.State) error {
 								var b bytes.Buffer
 								io.Copy(&b, s.Stdin)
-								SetViewGroup(buildOutput, b.String())
+								goCompileErrorsCurrentPackage.Dir = goPackage.Bpkg.Dir
+								SetViewGroup(buildOutputCurrentPackage, b.String())
 								io.Copy(s.Stdout, &b)
 								return nil
 							}),
@@ -7538,7 +7669,7 @@ func main() {
 		{
 			// TODO: Use DepNode2 so that if this is false, then goCompileErrorsManagerTest.All (and goCompileErrorsTest also) shouldn't get updated
 			goCompileErrorsEnabled := true
-			goCompileErrorsEnabledTest = NewTriButtonExternalStateWidget(mgl64.Vec2{500, 700}, func() bool { return goCompileErrorsEnabled }, func() { goCompileErrorsEnabled = !goCompileErrorsEnabled })
+			goCompileErrorsEnabledTest := NewTriButtonExternalStateWidget(mgl64.Vec2{500, 700}, func() bool { return goCompileErrorsEnabled }, func() { goCompileErrorsEnabled = !goCompileErrorsEnabled })
 			widgets = append(widgets, goCompileErrorsEnabledTest)
 
 			//widgets = append(widgets, NewTextLabelWidgetGoon(mathgl.Vec2d{500, 716 + 2}, &goCompileErrorsManagerTest.DepNode2.NeedToUpdate))
