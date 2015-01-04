@@ -7229,6 +7229,10 @@ func main() {
 						switch glfw.Key(inputEvent.InputId) {
 						case glfw.KeyB:
 							if inputEvent.ModifierKey == glfw.ModSuper {
+								// Clear.
+								SetViewGroup(output.Content, "")
+								SetViewGroup(buildOutput, "")
+
 								this.stdoutChan = make(ChanWriter)
 								this.stderrChan = make(ChanWriter)
 								var p pipe.Pipe
@@ -7255,6 +7259,7 @@ func main() {
 							}
 						case glfw.KeyL:
 							if inputEvent.ModifierKey == glfw.ModControl {
+								// Clear.
 								SetViewGroup(output.Content, "")
 								SetViewGroup(buildOutput, "")
 							}
