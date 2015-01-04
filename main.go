@@ -97,8 +97,7 @@ var keyboardPointer *Pointer
 var websocketPointer *Pointer // TEST
 
 var buildOutput caret.MultilineContentI
-var buildOutputCurrentPackage caret.MultilineContentI
-var goCompileErrorsCurrentPackage GoCompileErrorsTest
+var goCompileErrorsTest GoCompileErrorsTest
 var goCompileErrorsManagerTest GoCompileErrorsManagerTest
 
 var booVcs *exp12.Directory
@@ -7205,8 +7204,8 @@ func main() {
 								pipe.TaskFunc(func(s *pipe.State) error {
 									var b bytes.Buffer
 									io.Copy(&b, s.Stdin)
-									goCompileErrorsCurrentPackage.Dir = goPackage.Bpkg.Dir
-									SetViewGroup(buildOutputCurrentPackage, b.String())
+									goCompileErrorsTest.Dir = goPackage.Bpkg.Dir
+									SetViewGroup(buildOutput, b.String())
 									io.Copy(s.Stdout, &b)
 									return nil
 								}),
@@ -7258,7 +7257,6 @@ func main() {
 							if inputEvent.ModifierKey == glfw.ModControl {
 								SetViewGroup(output.Content, "")
 								SetViewGroup(buildOutput, "")
-								SetViewGroup(buildOutputCurrentPackage, "")
 							}
 						}
 					}
@@ -7449,18 +7447,12 @@ func main() {
 			// Build Output.
 			buildOutput = NewMultilineContent()
 			nextTool9Collapsible := NewCollapsibleWidget(np, NewTextBoxWidgetExternalContent(np, buildOutput, nil), "Build Output")
-			buildOutputCurrentPackage = NewMultilineContent()
 
 			// Go Compile Errors hardcoded TEST
 			{
-				goCompileErrorsTest := GoCompileErrorsTest{}
+				goCompileErrorsTest = GoCompileErrorsTest{}
 				goCompileErrorsTest.AddSources(buildOutput)
 				goCompileErrorsManagerTest.AddSources(&goCompileErrorsTest)
-			}
-			{
-				goCompileErrorsCurrentPackage = GoCompileErrorsTest{}
-				goCompileErrorsCurrentPackage.AddSources(buildOutputCurrentPackage)
-				goCompileErrorsManagerTest.AddSources(&goCompileErrorsCurrentPackage)
 			}
 
 			// ---
@@ -7476,6 +7468,7 @@ func main() {
 						pipe.TaskFunc(func(s *pipe.State) error {
 							var b bytes.Buffer
 							io.Copy(&b, s.Stdin)
+							goCompileErrorsTest.Dir = ""
 							SetViewGroup(buildOutput, b.String())
 							io.Copy(s.Stdout, &b)
 							return nil
@@ -7504,8 +7497,8 @@ func main() {
 							pipe.TaskFunc(func(s *pipe.State) error {
 								var b bytes.Buffer
 								io.Copy(&b, s.Stdin)
-								goCompileErrorsCurrentPackage.Dir = goPackage.Bpkg.Dir
-								SetViewGroup(buildOutputCurrentPackage, b.String())
+								goCompileErrorsTest.Dir = goPackage.Bpkg.Dir
+								SetViewGroup(buildOutput, b.String())
 								io.Copy(s.Stdout, &b)
 								return nil
 							}),
