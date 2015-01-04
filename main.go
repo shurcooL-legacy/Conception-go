@@ -201,7 +201,7 @@ func (this *DepNode) NotifyAllListeners() {
 
 type Widgeter interface {
 	PollLogic()
-	Close() error
+	io.Closer
 	Layout()
 	LayoutNeeded()
 	Render()
@@ -299,6 +299,7 @@ type CustomWidget struct {
 	PollLogicFunc    func(this *CustomWidget)
 	RenderFunc       func()
 	ProcessEventFunc func(inputEvent InputEvent)
+	CloseFunc        func() error
 }
 
 func (this *CustomWidget) PollLogic() {
@@ -323,6 +324,13 @@ func (this *CustomWidget) ProcessEvent(inputEvent InputEvent) {
 	} else {
 		this.Widget.ProcessEvent(inputEvent)
 	}
+}
+
+func (this *CustomWidget) Close() error {
+	if this.CloseFunc == nil {
+		return nil
+	}
+	return this.CloseFunc()
 }
 
 // ---
@@ -6149,6 +6157,13 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 }
 
+func (w *TextBoxWidget) Close() error {
+	for _, extension := range w.ExtensionsTest {
+		extension.Close()
+	}
+	return nil
+}
+
 // ---
 
 type TextFileWidget struct {
@@ -7229,6 +7244,12 @@ func main() {
 						switch glfw.Key(inputEvent.InputId) {
 						case glfw.KeyB:
 							if inputEvent.ModifierKey == glfw.ModSuper {
+								// Stop previous process.
+								if this.s != nil {
+									this.s.Kill()
+									this.s = nil
+								}
+
 								// Clear.
 								SetViewGroup(output.Content, "")
 								SetViewGroup(buildOutput, "")
@@ -7250,6 +7271,7 @@ func main() {
 							}
 						case glfw.KeyC:
 							if inputEvent.ModifierKey == glfw.ModControl {
+								// Stop previous process.
 								if this.s != nil {
 									this.s.Kill()
 									this.s = nil
@@ -7265,6 +7287,15 @@ func main() {
 							}
 						}
 					}
+				},
+				CloseFunc: func() error {
+					// Stop previous process.
+					if this.s != nil {
+						this.s.Kill()
+						this.s = nil
+					}
+
+					return nil
 				},
 				PollLogicFunc: func(_ *CustomWidget) {
 					select {
