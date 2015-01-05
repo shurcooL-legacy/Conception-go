@@ -14,7 +14,7 @@ Screenshot
 
 A screenshot showing off a single aspect of the project that was recently added or improved.
 
-![In-place Errors](https://dl.dropboxusercontent.com/u/8554242/dmitri/projects/Conception/images/Go/in-place-errors-improved.png)
+![Early 2015 Overview](https://dl.dropboxusercontent.com/u/8554242/dmitri/projects/Conception/images/Go/early-2015-overview.png)
 
 Installation
 ------------
