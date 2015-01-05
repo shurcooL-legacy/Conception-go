@@ -6797,7 +6797,7 @@ func main() {
 			redraw = true // HACK
 		})
 
-		window.SetCharacterCallback(func(w *glfw.Window, char rune) {
+		window.SetCharCallback(func(w *glfw.Window, char rune) {
 			inputEvent := InputEvent{
 				Pointer:    keyboardPointer,
 				EventTypes: map[EventType]bool{CHARACTER_EVENT: true},
