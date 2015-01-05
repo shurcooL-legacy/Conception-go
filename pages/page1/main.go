@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"math/rand"
 	"runtime"
 	"time"
 
@@ -23,7 +24,7 @@ func main() {
 	}
 	defer glfw.Terminate()
 
-	window, err := glfw.CreateWindow(400, 400, "", nil, nil)
+	window, err := glfw.CreateWindow(1536, 960, "", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -92,6 +93,12 @@ func main() {
 
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
+	rand.Seed(4)
+	var widget = MultitouchTestBoxWidget{pos: mgl64.Vec2{600, 300}, color: rand.Intn(6)}
+	var widget2 = MultitouchTestBoxWidget{pos: mgl64.Vec2{600 + 210, 300 + 210}, color: rand.Intn(6)}
+	var widget3 = MultitouchTestBoxWidget{pos: mgl64.Vec2{600 + 210, 300}, color: rand.Intn(6)}
+	var widget4 = MultitouchTestBoxWidget{pos: mgl64.Vec2{600, 300 + 210}, color: rand.Intn(6)}
+
 	for !mustBool(window.ShouldClose()) {
 		glfw.PollEvents()
 
@@ -100,11 +107,50 @@ func main() {
 
 		gl.Clear(gl.COLOR_BUFFER_BIT)
 
+		widget.Render()
+		widget2.Render()
+		widget3.Render()
+		widget4.Render()
+
 		mousePointer.Render()
 
 		window.SwapBuffers()
 		runtime.Gosched()
 	}
+}
+
+type MultitouchTestBoxWidget struct {
+	pos   mgl64.Vec2
+	color int
+}
+
+func (w *MultitouchTestBoxWidget) Render() {
+	colors := [...]mgl64.Vec3{
+		{0 / 255.0, 140 / 255.0, 0 / 255.0},
+		{0 / 255.0, 98 / 255.0, 140 / 255.0},
+		{194 / 255.0, 74 / 255.0, 0 / 255.0},
+		{89 / 255.0, 0 / 255.0, 140 / 255.0},
+		{191 / 255.0, 150 / 255.0, 0 / 255.0},
+		{140 / 255.0, 0 / 255.0, 0 / 255.0},
+	}
+
+	backgroundColor := colors[w.color]
+
+	borderColor := backgroundColor
+
+	DrawBox(w.pos, mgl64.Vec2{200, 200}, borderColor, backgroundColor)
+}
+
+// ---
+
+func DrawBorderlessBox(pos, size mgl64.Vec2, backgroundColor mgl64.Vec3) {
+	gl.Color3dv((*float64)(&backgroundColor[0]))
+	gl.Rectd(float64(pos[0]), float64(pos[1]), float64(pos.Add(size)[0]), float64(pos.Add(size)[1]))
+}
+
+func DrawBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
+	DrawBorderlessBox(pos.Add(mgl64.Vec2{-1, -1}), size.Add(mgl64.Vec2{2, 2}), borderColor)
+	DrawBorderlessBox(pos, size, backgroundColor)
 }
 
 // ---
