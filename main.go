@@ -927,7 +927,7 @@ func (this nodeStringer) String() string { return this.str }
 
 type twoNodeStringer struct {
 	pos, end token.Pos
-	str string
+	str      string
 }
 
 func NewTwoNodeStringer(node0, node1 ast.Node, str string) NodeStringer {
