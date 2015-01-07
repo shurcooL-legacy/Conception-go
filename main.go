@@ -909,17 +909,34 @@ func (this *docPackage) Update() {
 
 // ---
 
-// TEST
-type NodeStringer struct {
+type NodeStringer interface {
+	ast.Node
+	fmt.Stringer
+}
+
+type nodeStringer struct {
 	ast.Node
 	str string
 }
 
 func NewNodeStringer(node ast.Node) NodeStringer {
-	return NodeStringer{Node: node, str: SprintAstBare(node)}
+	return nodeStringer{Node: node, str: SprintAstBare(node)}
 }
 
-func (this *NodeStringer) String() string { return this.str }
+func (this nodeStringer) String() string { return this.str }
+
+type twoNodeStringer struct {
+	pos, end token.Pos
+	str string
+}
+
+func NewTwoNodeStringer(node0, node1 ast.Node, str string) NodeStringer {
+	return twoNodeStringer{pos: node0.Pos(), end: node1.End(), str: str}
+}
+
+func (this twoNodeStringer) Pos() token.Pos { return this.pos }
+func (this twoNodeStringer) End() token.Pos { return this.end }
+func (this twoNodeStringer) String() string { return this.str }
 
 // ---
 
@@ -930,7 +947,7 @@ type goSymbols struct {
 }
 
 func (this *goSymbols) Get(index uint64) fmt.Stringer {
-	return &this.entries[index]
+	return this.entries[index]
 }
 
 func (this *goSymbols) Len() uint64 {
@@ -990,7 +1007,7 @@ func (this *goSymbolsB) Update() {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
 				funcDeclSignature := &ast.FuncDecl{Recv: d.Recv, Name: d.Name, Type: d.Type}
-				nodeStringer := NodeStringer{Node: d, str: SprintAstBare(funcDeclSignature)}
+				nodeStringer := nodeStringer{Node: d, str: SprintAstBare(funcDeclSignature)}
 				this.entries = append(this.entries, nodeStringer)
 			}
 		}
@@ -1015,18 +1032,17 @@ func (this *goSymbolsC) Update() {
 	for _, decl := range fileAst.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			name := d.Name.String()
 			if d.Recv != nil {
-				name = "(" + SprintAstBare(d.Recv.List[0].Type) + ") " + name
+				name := "(" + SprintAstBare(d.Recv.List[0].Type) + ") " + d.Name.String()
+				this.entries = append(this.entries, NewTwoNodeStringer(d.Recv, d.Name, name))
+			} else {
+				this.entries = append(this.entries, NewNodeStringer(d.Name))
 			}
-			nodeStringer := NodeStringer{Node: d.Name, str: name}
-			this.entries = append(this.entries, nodeStringer)
 		case *ast.GenDecl:
 			switch d.Tok {
 			case token.TYPE:
 				for _, spec := range d.Specs {
-					name := spec.(*ast.TypeSpec).Name.String()
-					nodeStringer := NodeStringer{Node: spec.(*ast.TypeSpec).Name, str: name}
+					nodeStringer := NewNodeStringer(spec.(*ast.TypeSpec).Name)
 					this.entries = append(this.entries, nodeStringer)
 				}
 			}
@@ -5910,14 +5926,14 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 						// TODO: Replace with entry.(Something).CaretPositionStart, End -> editor.ScrollToCaret(Start, End)
 
-						declNode := entry.(*NodeStringer).Node
+						nodeStringer := entry.(NodeStringer)
 
-						file := globalParsedFile.fset.File(declNode.Pos())
+						file := globalParsedFile.fset.File(nodeStringer.Pos())
 						if file == nil {
 							return
 						}
 
-						pos, end := declNode.Pos(), declNode.End()
+						pos, end := nodeStringer.Pos(), nodeStringer.End()
 
 						w.caretPosition.SetSelection(uint32(file.Offset(pos)), uint32(end-pos))
 						w.CenterOnCaretPositionIfOffscreen()
