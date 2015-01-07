@@ -6429,10 +6429,7 @@ func initHttpHandlers() {
 			b += Underline(`import "` + importPath + `"`)
 
 			goPackage.UpdateVcs()
-			if goPackage.Dir.Repo != nil {
-				MakeUpdated(goPackage.Dir.Repo.VcsLocal)
-				MakeUpdated(goPackage.Dir.Repo.VcsRemote)
-			}
+			goPackage.UpdateVcsFields()
 
 			if goPackage.Dir.Repo != nil {
 				// Branches.
