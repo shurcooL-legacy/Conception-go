@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-gl/glow/gl/2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
-	glfw "github.com/shurcooL/glfw3"
+	glfw "github.com/shurcooL/goglfw"
 )
 
 // TODO: Remove these
@@ -16,9 +16,11 @@ var globalWindow *glfw.Window
 
 var mousePointer *Pointer
 
-func main() {
+func init() {
 	runtime.LockOSThread()
+}
 
+func main() {
 	if err := glfw.Init(); err != nil {
 		panic(err)
 	}
