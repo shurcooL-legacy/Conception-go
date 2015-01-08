@@ -5,8 +5,8 @@ before_install:
   - sudo apt-get install -qq libgl1-mesa-dev xorg-dev
 install:
   - go get golang.org/x/tools/cmd/vet
-  - go get -t -v ./...
 script:
+  - go get -t -v ./...
   - diff -u <(echo -n) <(gofmt -d ./)
   - go tool vet -composites=false ./
   - go test -v -race ./...
