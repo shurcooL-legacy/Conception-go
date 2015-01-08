@@ -6616,6 +6616,10 @@ func init() {
 	}
 }
 
+func init() {
+	runtime.LockOSThread()
+}
+
 func main() {
 	//defer profile.Start(profile.CPUProfile).Stop()
 	//defer profile.Start(profile.MemProfile).Stop()
@@ -6628,9 +6632,9 @@ func main() {
 	var inputEventQueue2 = make(chan InputEvent, 32)
 	var window *glfw.Window
 
-	if !*headlessFlag {
-		runtime.LockOSThread()
-
+	if *headlessFlag {
+		runtime.UnlockOSThread()
+	} else {
 		// Verify the GLFW library and header versions match
 		{
 			major, minor, revision := glfw.GetVersion()
@@ -8420,6 +8424,8 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		w = append(w, NewHttpServerTestWidget(mgl64.Vec2{10, 130}))
 
 		widgets = append(widgets, NewCollapsibleWidget(np, NewFlowLayoutWidget(np, w, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout}), "Debug"))
+	} else {
+		NewHttpServerTestWidget(np)
 	}
 
 	switch *modeFlag {
@@ -8432,7 +8438,9 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
 	}
 	widget.(*CanvasWidget).offsetBy1Px()
-	windowPointer.OriginMapping = []Widgeter{widget}
+	if windowPointer != nil {
+		windowPointer.OriginMapping = []Widgeter{widget}
+	}
 	//widget := NewFlowLayoutWidget(mathgl.Vec2d{1, 1}, widgets, nil)
 	//widget = NewCompositeWidget(mathgl.Vec2d{1, 1}, widgets)
 
