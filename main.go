@@ -5801,26 +5801,26 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				// TODO: Go to start of line-ish (toggle between real start and non-whitespace start); leave Move(-2) alone because it's used elsewhere for existing purpose
 				w.caretPosition.Move(-2, inputEvent.ModifierKey&glfw.ModShift != 0)
 			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
-				w.caretPosition.TryMoveH(-1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
+				w.caretPosition.TryMoveH(caret.Backward, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
 			}
 		case glfw.KeyRight:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
 				// Go to end of line.
 				w.caretPosition.Move(+2, inputEvent.ModifierKey&glfw.ModShift != 0)
 			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
-				w.caretPosition.TryMoveH(+1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
+				w.caretPosition.TryMoveH(caret.Forward, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
 			}
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
 				w.caretPosition.Move(-3, inputEvent.ModifierKey&glfw.ModShift != 0)
 			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
-				w.caretPosition.TryMoveV(-1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
+				w.caretPosition.TryMoveV(caret.Backward, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModSuper {
 				w.caretPosition.Move(+3, inputEvent.ModifierKey&glfw.ModShift != 0)
 			} else if inputEvent.ModifierKey & ^(glfw.ModShift|glfw.ModAlt) == 0 {
-				w.caretPosition.TryMoveV(+1, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
+				w.caretPosition.TryMoveV(caret.Forward, inputEvent.ModifierKey&glfw.ModShift != 0, inputEvent.ModifierKey&glfw.ModAlt != 0)
 			}
 		case glfw.KeyA:
 			if inputEvent.ModifierKey == glfw.ModSuper {

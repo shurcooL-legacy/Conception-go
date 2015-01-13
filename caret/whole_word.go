@@ -1,7 +1,7 @@
 package caret
 
 // TODO: Implement IsWholeWord more efficiently without relying on virtual CaretPosition, just use linear content access.
-//       But reuse TryMoveH jump condition logic for word boundaries.
+//       But reuse tryMoveH jump condition logic for word boundaries.
 
 func IsWholeWord(content MultilineContentI, caretPosition *CaretPosition) bool {
 	if !caretPosition.AnySelection() {
@@ -15,8 +15,8 @@ func IsWholeWord(content MultilineContentI, caretPosition *CaretPosition) bool {
 	y := &caretPositionInternal{w: content}
 	x.MoveTo(start)
 	y.MoveTo(end)
-	x.TryMoveH(+1, true)
-	y.TryMoveH(-1, true)
+	x.tryMoveH(+1, true)
+	y.tryMoveH(-1, true)
 
 	return (y.Compare(start) == 0 && x.Compare(end) == 0)
 }

@@ -88,10 +88,9 @@ func (cp *caretPositionInternal) Logical() uint32 {
 	return cp.w.Line(cp.lineIndex).Start() + cp.positionWithinLine
 }
 
-// TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
-func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
-	switch amount {
-	case -1:
+func (cp *caretPositionInternal) tryMoveH(direction direction, jumpWords bool) {
+	switch direction {
+	case Backward:
 		if cp.Logical() >= 1 {
 			if jumpWords {
 				// Skip spaces to the left
@@ -109,7 +108,7 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 				cp.willMoveH(-1)
 			}
 		}
-	case +1:
+	case Forward:
 		if cp.Logical() < uint32(cp.w.LenContent()) {
 			if jumpWords {
 				// Skip spaces to the right
@@ -133,14 +132,14 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 type direction int8
 
 const (
-	backward direction = -1
-	forward  direction = +1
+	Backward direction = -1
+	Forward  direction = +1
 )
 
 // expandSelection goes in direction over core characters only.
 func (cp *caretPositionInternal) expandSelection(direction direction) {
 	switch direction {
-	case backward:
+	case Backward:
 		if cp.Logical() > 0 {
 			// Skip non-spaces to the left.
 			lookAt := cp.Logical()
@@ -150,7 +149,7 @@ func (cp *caretPositionInternal) expandSelection(direction direction) {
 
 			cp.willMoveH(int32(lookAt) - int32(cp.Logical()))
 		}
-	case forward:
+	case Forward:
 		if cp.Logical() < uint32(cp.w.LenContent()) {
 			// Skip non-spaces to the right.
 			lookAt := cp.Logical()
@@ -204,10 +203,9 @@ func (cp *caretPositionInternal) willMoveH(amount int32) {
 	gist7802150.ExternallyUpdated(&cp.DepNode2Manual)
 }
 
-// TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
-func (cp *caretPositionInternal) TryMoveV(amount int8, jumpWords bool) {
-	switch amount {
-	case -1:
+func (cp *caretPositionInternal) tryMoveV(direction direction, jumpWords bool) {
+	switch direction {
+	case Backward:
 		if cp.lineIndex > 0 {
 			if jumpWords {
 				for cp.lineIndex > 0 {
@@ -228,7 +226,7 @@ func (cp *caretPositionInternal) TryMoveV(amount int8, jumpWords bool) {
 		} else {
 			cp.Move(-2)
 		}
-	case +1:
+	case Forward:
 		if cp.lineIndex < cp.w.LenLines()-1 {
 			if jumpWords {
 				for cp.lineIndex < cp.w.LenLines()-1 {
@@ -456,29 +454,28 @@ func (cp *CaretPosition) AnySelection() bool {
 	return cp.caretPosition.Compare(cp.selectionPosition) != 0
 }
 
-// TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
-func (cp *CaretPosition) TryMoveH(amount int8, leaveSelection, jumpWords bool) {
+func (cp *CaretPosition) TryMoveH(direction direction, leaveSelection, jumpWords bool) {
 	min, max := cp.SelectionRange2()
 
-	switch amount {
-	case -1:
+	switch direction {
+	case Backward:
 		if cp.AnySelection() && !leaveSelection {
 			max.MoveTo(min)
 		} else {
 			if cp.caretPosition.Logical() >= 1 { // TODO: Where should this check happen
-				cp.caretPosition.TryMoveH(amount, jumpWords)
+				cp.caretPosition.tryMoveH(direction, jumpWords)
 
 				if !leaveSelection {
 					cp.selectionPosition.MoveTo(cp.caretPosition)
 				}
 			}
 		}
-	case +1:
+	case Forward:
 		if cp.AnySelection() && !leaveSelection {
 			min.MoveTo(max)
 		} else {
 			if cp.caretPosition.Logical() < uint32(cp.w.LenContent()) { // TODO: Where should this check happen
-				cp.caretPosition.TryMoveH(amount, jumpWords)
+				cp.caretPosition.tryMoveH(direction, jumpWords)
 
 				if !leaveSelection {
 					cp.selectionPosition.MoveTo(cp.caretPosition)
@@ -511,9 +508,8 @@ func (cp *CaretPosition) MoveTo(target *caretPositionInternal) {
 	cp.selectionPosition.MoveTo(target)
 }
 
-// TODO: Change amount to a proper type with 2 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
-func (cp *CaretPosition) TryMoveV(amount int8, leaveSelection, jumpWords bool) {
-	cp.caretPosition.TryMoveV(amount, jumpWords)
+func (cp *CaretPosition) TryMoveV(direction direction, leaveSelection, jumpWords bool) {
+	cp.caretPosition.tryMoveV(direction, jumpWords)
 
 	if !leaveSelection {
 		cp.selectionPosition.MoveTo(cp.caretPosition)
@@ -556,7 +552,7 @@ func (cp *CaretPosition) CreateSelectionLineIfNone() {
 	if !cp.AnySelection() {
 		cp.selectionPosition.Move(-2)
 		cp.caretPosition.Move(+2)
-		cp.caretPosition.TryMoveH(+1, false)
+		cp.caretPosition.tryMoveH(+1, false)
 	}
 }
 
