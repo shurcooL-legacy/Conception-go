@@ -130,6 +130,39 @@ func (cp *caretPositionInternal) TryMoveH(amount int8, jumpWords bool) {
 	}
 }
 
+type direction int8
+
+const (
+	backward direction = -1
+	forward  direction = +1
+)
+
+// expandSelection goes in direction over core characters only.
+func (cp *caretPositionInternal) expandSelection(direction direction) {
+	switch direction {
+	case backward:
+		if cp.Logical() > 0 {
+			// Skip non-spaces to the left.
+			lookAt := cp.Logical()
+			for lookAt > 0 && isCoreCharacter(cp.w.Content()[lookAt-1]) {
+				lookAt--
+			}
+
+			cp.willMoveH(int32(lookAt) - int32(cp.Logical()))
+		}
+	case forward:
+		if cp.Logical() < uint32(cp.w.LenContent()) {
+			// Skip non-spaces to the right.
+			lookAt := cp.Logical()
+			for lookAt < uint32(cp.w.LenContent()) && isCoreCharacter(cp.w.Content()[lookAt]) {
+				lookAt++
+			}
+
+			cp.willMoveH(int32(lookAt) - int32(cp.Logical()))
+		}
+	}
+}
+
 // Moves caret horizontally by amount. It doesn't do bounds checking, so it's
 // the caller's responsibility to ensure it's a legal amount to move by.
 //
@@ -564,6 +597,21 @@ func (cp *CaretPosition) TrySet(position uint32, leaveSelectionOptional ...bool)
 func (cp *CaretPosition) SetSelection(start, length uint32) {
 	cp.TrySet(start)
 	cp.caretPosition.willMoveH(int32(length))
+}
+
+func (cp *CaretPosition) ExpandSelectionToWord() {
+	switch 1 {
+	case 0:
+		if cp.AnySelection() {
+			return
+		}
+	case 1:
+		// Try it out so that it always works, even if there's already a selection...
+		cp.selectionPosition, cp.caretPosition = cp.SelectionRange2()
+	}
+
+	cp.selectionPosition.expandSelection(-1)
+	cp.caretPosition.expandSelection(+1)
 }
 
 // ExpandedPosition returns logical character units of primary cursor position.

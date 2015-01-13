@@ -6040,6 +6040,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				popupTest.SetKeyboardFocus()
 
 				if w.caretPosition.AnySelection() {
+					// Set find text to selection.
 					SetViewGroup(w.findPanel.FindBox.Content, w.caretPosition.GetSelectionContent())
 				}
 				w.findPanel.FindBox.caretPosition.SelectAll()
@@ -6149,6 +6150,14 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 
 				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 				keyboardPointer.OriginMapping = []Widgeter{textBox}
+			}
+		case glfw.KeyD:
+			if inputEvent.ModifierKey == glfw.ModSuper {
+				w.caretPosition.ExpandSelectionToWord()
+				if w.caretPosition.AnySelection() {
+					// Set find text to selection.
+					SetViewGroup(w.findPanel.FindBox.Content, w.caretPosition.GetSelectionContent())
+				}
 			}
 		case glfw.KeyEscape:
 			// Close the last popup, if any.
