@@ -4864,6 +4864,17 @@ func (this *MultilineContentFunc) NotifyChange() {
 
 // ---
 
+// TODO: Finish implementation.
+type MultilineContentFunc2 struct {
+}
+
+func NewMultilineContentFunc2(contentFunc DepStringerI) *MultilineContentFunc2 {
+	this := &MultilineContentFunc2{}
+	return this
+}
+
+// ---
+
 type MultilineContentFuncInstant struct {
 	*MultilineContentFunc
 }
@@ -4985,6 +4996,7 @@ func (this *DepStringerFunc) String() string {
 
 // ---
 
+// StringerWidget currently supports only single-line text.
 type StringerWidget struct {
 	Widget
 	content        DepStringerI
@@ -7359,55 +7371,143 @@ func main() {
 
 		// View sidebar
 		{
-			// git diff
-			template := NewPipeTemplateDynamic()
-			template.UpdateFunc = func(this DepNode2I) {
-				template.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "No git diff available."))
+			// git diff (file).
+			var gitDiffFileCollapsible Widgeter
+			{
+				template := NewPipeTemplateDynamic()
+				template.UpdateFunc = func(this DepNode2I) {
+					template.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "No git diff available."))
 
-				goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage()
-				if goPackage == nil {
-					return
-				}
+					goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage()
+					if goPackage == nil {
+						return
+					}
 
-				path := this.GetSources()[1].(*VfsListingWidget).GetSelectedPath()
-				if path == "" || !strings.HasSuffix(path, ".go") {
-					return
-				}
+					path := this.GetSources()[1].(*VfsListingWidget).GetSelectedPath()
+					if path == "" || !strings.HasSuffix(path, ".go") {
+						return
+					}
 
-				dir, file := filepath.Split(path)
-				if goPackage.Dir.Repo == nil || goPackage.Dir.Repo.Vcs.Type() != vcs.Git {
-					return
-				}
+					dir, file := filepath.Split(path)
+					if goPackage.Dir.Repo == nil || goPackage.Dir.Repo.Vcs.Type() != vcs.Git {
+						return
+					}
 
-				template.Template = NewPipeTemplate(pipe.Line(
-					// TODO: Reuse u6.GoPackageWorkingDiff.
-					pipe.Exec("git", "diff", "--no-ext-diff", "--", file),
-					pipe.TaskFunc(func(s *pipe.State) error {
-						r := bufio.NewReader(s.Stdin)
-						for _ = range iter.N(4) {
-							r.ReadBytes('\n')
-						}
-						var b bytes.Buffer
-						io.Copy(&b, r)
-						if b.Len() == 0 {
+					template.Template = NewPipeTemplate(pipe.Line(
+						// TODO: Reuse u6.GoPackageWorkingDiff.
+						pipe.Exec("git", "diff", "--no-ext-diff", "--", file),
+						pipe.TaskFunc(func(s *pipe.State) error {
+							r := bufio.NewReader(s.Stdin)
+							for _ = range iter.N(4) {
+								r.ReadBytes('\n')
+							}
+							var b bytes.Buffer
+							io.Copy(&b, r)
+							if b.Len() == 0 {
+								return nil
+							}
+							b.Truncate(b.Len() - 1)
+							io.Copy(s.Stdout, &b)
 							return nil
-						}
-						b.Truncate(b.Len() - 1)
-						io.Copy(s.Stdout, &b)
-						return nil
-					}),
-				))
-				template.Template.Dir = dir
+						}),
+					))
+					template.Template.Dir = dir
+				}
+				template.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, folderListing)
+
+				gitDiffFile := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
+
+				diffHighlighter := &diffHighlighter{}
+				diffHighlighter.AddSources(gitDiffFile.Content)
+				gitDiffFile.HighlightersTest = append(gitDiffFile.HighlightersTest, diffHighlighter)
+				gitDiffFile.LineHighlighter = diffHighlighter
+
+				gitDiffFileCollapsible = NewCollapsibleWidget(np, gitDiffFile, "git diff (file)")
 			}
-			template.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, folderListing)
 
-			gitDiff := NewLivePipeExpeWidget(np, []DepNode2I{editorContent}, template) // TODO: Are both editorContent and folderListing deps needed? Or is editorContent enough, since it probably depends on folderListing, etc.
-			diffHighlighter := &diffHighlighter{}
-			diffHighlighter.AddSources(gitDiff.Content)
-			gitDiff.HighlightersTest = append(gitDiff.HighlightersTest, diffHighlighter)
-			gitDiff.LineHighlighter = diffHighlighter
+			// ---
 
-			gitDiffCollapsible := NewCollapsibleWidget(np, gitDiff, "git diff")
+			// TODO: Make this refresh when window gains focus (just in case another file was modified externally).
+			var gitDiffCollapsible Widgeter
+			{
+				// git diff (package).
+				gitDiffStringer := &DepStringerFunc{}
+				gitDiffStringer.UpdateFunc = func(this DepNode2I) {
+					gitDiffStringer.content = "No git diff available."
+
+					goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage()
+					if goPackage == nil {
+						return
+					}
+
+					MakeUpdatedLock.Unlock() // HACK: Needed because UpdateVcs() calls MakeUpdated().
+					goPackage.UpdateVcs()
+					MakeUpdatedLock.Lock() // HACK
+					if goPackage.Dir.Repo == nil {
+						return
+					}
+
+					MakeUpdatedLock.Unlock() // HACK: Needed because we're calling MakeUpdated() directly.
+					MakeUpdated(goPackage.Dir.Repo.VcsLocal)
+					MakeUpdatedLock.Lock() // HACK
+					gitDiffStringer.content = u6.GoPackageWorkingDiff(goPackage)
+					redraw = true
+				}
+				gitDiffStringer.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editorContent)
+
+				// TODO: This needs to be refactored to use more modern DepNode2I, which will make this simpler and reduce duplication.
+				gitDiff := NewTextBoxWidgetExternalContent(np, NewMultilineContentFunc(func() string { return gitDiffStringer.String() }, []DepNodeI{&UniversalClock}), nil)
+				gitDiff.DepsTest = append(gitDiff.DepsTest, gitDiffStringer)
+
+				diffHighlighter := &diffHighlighter{}
+				diffHighlighter.AddSources(gitDiff.Content)
+				gitDiff.HighlightersTest = append(gitDiff.HighlightersTest, diffHighlighter)
+				gitDiff.LineHighlighter = diffHighlighter
+
+				gitDiffCollapsible = NewCollapsibleWidget(np, gitDiff, "git diff")
+			}
+
+			// ---
+
+			// TODO: Make this refresh when window gains focus (just in case another file was modified externally).
+			var gitDiffAgainstMasterCollapsible Widgeter
+			{
+				// git diff against master.
+				gitDiffStringer := &DepStringerFunc{}
+				gitDiffStringer.UpdateFunc = func(this DepNode2I) {
+					gitDiffStringer.content = "No git diff available."
+
+					goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage()
+					if goPackage == nil {
+						return
+					}
+
+					MakeUpdatedLock.Unlock() // HACK: Needed because UpdateVcs() calls MakeUpdated().
+					goPackage.UpdateVcs()
+					MakeUpdatedLock.Lock() // HACK
+					if goPackage.Dir.Repo == nil {
+						return
+					}
+
+					MakeUpdatedLock.Unlock() // HACK: Needed because we're calling MakeUpdated() directly.
+					MakeUpdated(goPackage.Dir.Repo.VcsLocal)
+					MakeUpdatedLock.Lock() // HACK
+					gitDiffStringer.content = u6.GoPackageWorkingDiffMaster(goPackage)
+					redraw = true
+				}
+				gitDiffStringer.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editorContent)
+
+				// TODO: This needs to be refactored to use more modern DepNode2I, which will make this simpler and reduce duplication.
+				gitDiff := NewTextBoxWidgetExternalContent(np, NewMultilineContentFunc(func() string { return gitDiffStringer.String() }, []DepNodeI{&UniversalClock}), nil)
+				gitDiff.DepsTest = append(gitDiff.DepsTest, gitDiffStringer)
+
+				diffHighlighter := &diffHighlighter{}
+				diffHighlighter.AddSources(gitDiff.Content)
+				gitDiff.HighlightersTest = append(gitDiff.HighlightersTest, diffHighlighter)
+				gitDiff.LineHighlighter = diffHighlighter
+
+				gitDiffAgainstMasterCollapsible = NewCollapsibleWidget(np, gitDiff, "git diff against master")
+			}
 
 			// ---
 
@@ -7689,7 +7789,7 @@ func main() {
 
 			// =====
 
-			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool9Collapsible, nextTool2Collapsible, nextTool2bCollapsible, nextTool2cCollapsible, nextToolCollapsible, gitDiffCollapsible, nextTool10Collapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
+			tools := NewFlowLayoutWidget(np, []Widgeter{nextTool8, nextTool9Collapsible, nextTool2Collapsible, nextTool2bCollapsible, nextTool2cCollapsible, nextToolCollapsible, gitDiffFileCollapsible, gitDiffCollapsible, gitDiffAgainstMasterCollapsible, nextTool10Collapsible, nextTool3bCollapsible, nextTool3Collapsible, nextTool4Collapsible, nextTool6Collapsible, nextTool7Collapsible}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
 			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{950 + 4, 0}, mgl64.Vec2{580, float64(windowSize1 - 2)}, tools))
 		}
 
@@ -8487,9 +8587,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		// Process Input.
 		inputEventQueue = ProcessInputEventQueue(widget, inputEventQueue)
 
-		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
-		UniversalClock.NotifyAllListeners()
-
 		// TEMPORARY, HACK
 		if booVcs != nil {
 			ExternallyUpdated(booVcs.Repo.VcsLocal.GetSources()[1].(DepNode2ManualI)) // TODO: Updating this every frame is very slow (and should be done in background, not block main thread)
@@ -8507,6 +8604,9 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		}
 
 		widget.PollLogic()
+
+		UniversalClock.TimePassed = 1.0 / 60 // TODO: Use proper value?
+		UniversalClock.NotifyAllListeners()
 
 		if redraw && !*headlessFlag {
 			//gl.Clear(gl.COLOR_BUFFER_BIT)
