@@ -668,9 +668,6 @@ func (this *diffHighlighter) Update() {
 			lineFirstChar = content.Content()[content.Line(lineIndex).Start()]
 		}
 		switch lineFirstChar {
-		case '@':
-			this.segments = append(this.segments, highlightSegment{fontOptions: Bold, color: mgl64.Vec3{0.5, 0, 0.5}, offset: content.Line(lineIndex).Start()})
-			this.segments = append(this.segments, highlightSegment{fontOptions: Bold, offset: content.Line(lineIndex).End()})
 		case '+':
 			if lastIns == -1 {
 				lastIns = lineIndex
@@ -713,6 +710,11 @@ func (this *diffHighlighter) Update() {
 				this.segments = append(this.segments, sectionSegments[1]...)
 			}
 			lastDel, lastIns = -1, -1
+
+			if lineFirstChar == '@' {
+				this.segments = append(this.segments, highlightSegment{fontOptions: Bold, color: mgl64.Vec3{0.5, 0, 0.5}, offset: content.Line(lineIndex).Start()})
+				this.segments = append(this.segments, highlightSegment{fontOptions: Bold, offset: content.Line(lineIndex).End()})
+			}
 		}
 	}
 
