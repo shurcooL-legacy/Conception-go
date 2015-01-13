@@ -104,6 +104,8 @@ var booVcs *exp12.Directory
 
 var lodBias float64 = -66.67
 
+var windowFocusedEvent DepNode2ManualI = &DepNode2Manual{} // TEST.
+
 // Colors
 var (
 	nearlyWhiteColor = mgl64.Vec3{0.975, 0.975, 0.975}
@@ -2186,7 +2188,7 @@ func (w *CanvasWidget) Render() {
 }
 
 func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == WINDOWING {
+	if inputEvent.Pointer.VirtualCategory == WINDOWING && inputEvent.EventTypes[AXIS_EVENT] {
 		w.Layout()
 	}
 
@@ -6764,6 +6766,25 @@ func main() {
 		}
 		window.SetFramebufferSizeCallback(framebufferSizeCallback)
 
+		focusCallback := func(w *glfw.Window, focused bool) {
+			// THINK: Is this the best way?
+			if focused {
+				ExternallyUpdated(windowFocusedEvent)
+			}
+
+			inputEvent := InputEvent{
+				Pointer:    windowPointer,
+				EventTypes: map[EventType]bool{BUTTON_EVENT: true},
+				InputId:    0,
+				Buttons:    []bool{focused},
+				Sliders:    nil,
+				Axes:       nil,
+			}
+			inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
+			redraw = true
+		}
+		window.SetFocusCallback(focusCallback)
+
 		mousePointer = &Pointer{VirtualCategory: POINTING}
 		keyboardPointer = &Pointer{VirtualCategory: TYPING}
 
@@ -7427,7 +7448,6 @@ func main() {
 
 			// ---
 
-			// TODO: Make this refresh when window gains focus (just in case another file was modified externally).
 			var gitDiffCollapsible Widgeter
 			{
 				// git diff (package).
@@ -7453,7 +7473,7 @@ func main() {
 					gitDiffStringer.content = u6.GoPackageWorkingDiff(goPackage)
 					redraw = true
 				}
-				gitDiffStringer.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editorContent)
+				gitDiffStringer.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editorContent, windowFocusedEvent)
 
 				// TODO: This needs to be refactored to use more modern DepNode2I, which will make this simpler and reduce duplication.
 				gitDiff := NewTextBoxWidgetExternalContent(np, NewMultilineContentFunc(func() string { return gitDiffStringer.String() }, []DepNodeI{&UniversalClock}), nil)
@@ -7469,7 +7489,6 @@ func main() {
 
 			// ---
 
-			// TODO: Make this refresh when window gains focus (just in case another file was modified externally).
 			var gitDiffAgainstMasterCollapsible Widgeter
 			{
 				// git diff against master.
@@ -7495,7 +7514,7 @@ func main() {
 					gitDiffStringer.content = u6.GoPackageWorkingDiffMaster(goPackage)
 					redraw = true
 				}
-				gitDiffStringer.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editorContent)
+				gitDiffStringer.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()}, editorContent, windowFocusedEvent)
 
 				// TODO: This needs to be refactored to use more modern DepNode2I, which will make this simpler and reduce duplication.
 				gitDiff := NewTextBoxWidgetExternalContent(np, NewMultilineContentFunc(func() string { return gitDiffStringer.String() }, []DepNodeI{&UniversalClock}), nil)
