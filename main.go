@@ -6267,7 +6267,7 @@ func (this *Pointer) Render() {
 
 			// HACK: OS X specific.
 			const border = 3
-			if this.State.Axes[1] < 0 || this.State.Axes[0] < border || this.State.Axes[0] > float64(windowSize[0])-border || this.State.Axes[1] > float64(windowSize[1])-border {
+			if this.State.Axes[1] < 0 || this.State.Axes[0] < border || this.State.Axes[0] >= float64(windowSize[0])-border || this.State.Axes[1] >= float64(windowSize[1])-border {
 				break
 			}
 		}
