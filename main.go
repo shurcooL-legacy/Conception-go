@@ -7936,7 +7936,7 @@ func main() {
 			action := func(params interface{}) string {
 				if strings.TrimSpace(params.(string)) != "" {
 					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
-					cmd := exec.Command("goe", "--quiet", "fmt", "github.com/shurcooL/go/gists/gist4727543", "github.com/shurcooL/go/gists/gist5498057", "Print(GetForcedUseFromImport(ReadAllStdin()))")
+					cmd := exec.Command("goe", "--quiet", "b, _ := ioutil.ReadAll(os.Stdin); fmt.Print(gist4727543.GetForcedUseFromImport(string(b)))")
 					//cmd := exec.Command("cat")
 					cmd.Stdin = strings.NewReader(strings.TrimSpace(src.Content.Content()))
 					out, err := cmd.CombinedOutput()
