@@ -2566,6 +2566,14 @@ func (w *ScrollPaneWidget) CenterOnArea(target, size mgl64.Vec2) {
 	w.Layout()
 }
 
+func (w *ScrollPaneWidget) ScrollToBottom() {
+	w.child.Pos()[1] = w.child.Pos()[1] - w.size[1]
+
+	// TODO: This shouldn't be needed if above logic is smarter.
+	// This is needed to normalize the view area, as the above potentially places the viewport outside of the widget
+	w.Layout()
+}
+
 func NearInt64(value float64) int64 {
 	if value >= 0 {
 		return int64(value + 0.5)
@@ -7253,7 +7261,8 @@ func main() {
 		{
 			//output := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{FindPanel: true})
 			output := NewTextBoxWidgetOptions(np, TextBoxWidgetOptions{})
-			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{200 + 2, float64(windowSize1 - 200 - 2)}, mgl64.Vec2{750, 200}, output))
+			scrollPane := NewScrollPaneWidget(mgl64.Vec2{200 + 2, float64(windowSize1 - 200 - 2)}, mgl64.Vec2{750, 200}, output)
+			widgets = append(widgets, scrollPane)
 
 			// HACK: These should go elsewhere rather than be declared ad-hoc.
 			var this = struct {
@@ -7361,6 +7370,7 @@ func main() {
 					case b, ok := <-this.stdoutChan:
 						if ok {
 							SetViewGroup(output.Content, output.Content.Content()+string(b))
+							scrollPane.ScrollToBottom() // TEST
 							redraw = true
 						}
 					default:
@@ -7370,6 +7380,7 @@ func main() {
 					case b, ok := <-this.stderrChan:
 						if ok {
 							SetViewGroup(output.Content, output.Content.Content()+string(b))
+							scrollPane.ScrollToBottom() // TEST
 							redraw = true
 						}
 					default:
