@@ -9,6 +9,7 @@ import (
 )
 
 func AttachTo(window *glfw.Window) {
+	// THINK, TODO: Implement?
 }
 
 type VirtualCategory uint8
@@ -18,6 +19,8 @@ const (
 	POINTING
 	WINDOWING
 )
+
+//go:generate stringer -type=VirtualCategory
 
 type Pointer struct {
 	VirtualCategory VirtualCategory
@@ -46,7 +49,7 @@ func (this *Pointer) Render() {
 
 		gl.PushMatrix()
 		defer gl.PopMatrix()
-		gl.Translated(float64(NearInt64(this.State.Axes[0]))+0.5, float64(NearInt64(this.State.Axes[1]))+0.5, 0)
+		gl.Translated(float64(nearInt64(this.State.Axes[0]))+0.5, float64(nearInt64(this.State.Axes[1]))+0.5, 0)
 
 		const size float64 = 12
 		gl.Color3d(1, 1, 1)
@@ -70,15 +73,14 @@ func (this *Pointer) Render() {
 }
 
 type PointerState struct {
-	Buttons []bool // True means pressed down
+	Buttons []bool // True means pressed down.
 	Axes    []float64
 
-	Timestamp int64
+	Time time.Time
 }
 
-// A pointer is defined to be active if any of its buttons are pressed down
+// A pointer is defined to be active if any of its buttons are pressed down.
 func (ps *PointerState) IsActive() bool {
-	//IsAnyButtonsPressed()
 	for _, button := range ps.Buttons {
 		if button {
 			return true
@@ -88,11 +90,10 @@ func (ps *PointerState) IsActive() bool {
 }
 
 func (ps *PointerState) Button(button int) bool {
-	if button < len(ps.Buttons) {
-		return ps.Buttons[button]
-	} else {
+	if button >= len(ps.Buttons) {
 		return false
 	}
+	return ps.Buttons[button]
 }
 
 type EventType uint8
@@ -110,7 +111,7 @@ const (
 
 type InputEvent struct {
 	Pointer    *Pointer
-	EventTypes map[EventType]bool
+	EventTypes map[EventType]struct{}
 	InputId    uint16
 	// TODO: Add pointers to BeforeState and AfterState?
 
@@ -176,18 +177,14 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 		inputEventQueue = inputEventQueue[1:]
 	}
 
-	inputEventQueue = []InputEvent{}
-
 	return inputEventQueue
 }
 
-func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []InputEvent {
-	//fmt.Printf("%#v\n", inputEvent)
-
+func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []InputEvent {
 	preStateActive := inputEvent.Pointer.State.IsActive()
 
 	{
-		if inputEvent.EventTypes[BUTTON_EVENT] {
+		if _, ok := inputEvent.EventTypes[BUTTON_EVENT]; ok {
 			// Extend slice if needed.
 			neededSize := int(inputEvent.InputId) + len(inputEvent.Buttons)
 			if neededSize > len(inputEvent.Pointer.State.Buttons) {
@@ -197,7 +194,7 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 			copy(inputEvent.Pointer.State.Buttons[inputEvent.InputId:], inputEvent.Buttons)
 		}
 
-		if inputEvent.EventTypes[AXIS_EVENT] {
+		if _, ok := inputEvent.EventTypes[AXIS_EVENT]; ok {
 			// Extend slice if needed.
 			neededSize := int(inputEvent.InputId) + len(inputEvent.Axes)
 			if neededSize > len(inputEvent.Pointer.State.Axes) {
@@ -207,16 +204,16 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 			copy(inputEvent.Pointer.State.Axes[inputEvent.InputId:], inputEvent.Axes)
 		}
 
-		inputEvent.Pointer.State.Timestamp = time.Now().UnixNano()
+		inputEvent.Pointer.State.Time = time.Now()
 	}
 
 	postStateActive := inputEvent.Pointer.State.IsActive()
 
 	switch {
 	case !preStateActive && postStateActive:
-		inputEvent.EventTypes[POINTER_ACTIVATION] = true
+		inputEvent.EventTypes[POINTER_ACTIVATION] = struct{}{}
 	case preStateActive && !postStateActive:
-		inputEvent.EventTypes[POINTER_DEACTIVATION] = true
+		inputEvent.EventTypes[POINTER_DEACTIVATION] = struct{}{}
 	}
 
 	return append(inputEventQueue, inputEvent)
@@ -224,7 +221,7 @@ func EnqueueInputEvent(inputEvent InputEvent, inputEventQueue []InputEvent) []In
 
 // ---
 
-func NearInt64(value float64) int64 {
+func nearInt64(value float64) int64 {
 	if value >= 0 {
 		return int64(value + 0.5)
 	} else {
