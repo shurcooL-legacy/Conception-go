@@ -6651,6 +6651,8 @@ func main() {
 			window, err = glfw.CreateWindow(fontWidth*80, fontHeight*24, "", nil, nil)
 		case 1, 0:
 			window, err = glfw.CreateWindow(1536, 960, "", nil, nil)
+		case 9:
+			window, err = glfw.CreateWindow(1536, 960, "diff", nil, nil)
 		default:
 			window, err = glfw.CreateWindow(980, 880, "", nil, nil)
 		}
@@ -6846,6 +6848,62 @@ func main() {
 	spinner := SpinnerWidget{Widget: NewWidget(mgl64.Vec2{20, 20}, mgl64.Vec2{0, 0}), Spinner: 0}
 
 	switch *modeFlag {
+	case 9:
+		// Diff.
+		{
+			const c0, c1 = `const Tau = 2 * math.Pi
+
+func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
+	const x = 64
+
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
+	gl.Begin(gl.TRIANGLE_FAN)
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
+	for i := 0; i <= x; i++ {
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), ...)
+	}
+	gl.End()`, `
+func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
+	const TwoPi = math.Pi * 2
+
+	const x = 64
+
+	gl.Color3dv((*gl.Double)(&borderColor[0]))
+	gl.Begin(gl.TRIANGLE_FAN)
+	gl.Vertex2d(gl.Double(pos[0]), gl.Double(pos[1]))
+	for i := 0; i <= x; i++ {
+		// Completely new line
+		gl.Vertex2d(gl.Double(pos[0]+math.Sin(TwoPi*float64(i)/x)*size[0]/2), ...)
+	}
+	gl.End()`
+
+			box1 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(c0), nil)
+			box2 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(c1), nil)
+
+			windowSize0, windowSize1, _ := window.GetSize()
+			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, mgl64.Vec2{float64(windowSize0/2 - 2), float64(windowSize1 - fontHeight - 4)}, box1))
+			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{float64(windowSize0 / 2), fontHeight + 2}, mgl64.Vec2{float64(windowSize0/2 - 2), float64(windowSize1 - fontHeight - 4)}, box2))
+
+			if false {
+				highlightedDiff := &highlightedDiff{}
+				highlightedDiff.AddSources(box1.Content, box2.Content)
+
+				box1.HighlightersTest = append(box1.HighlightersTest, &highlightedDiffSide{highlightedDiff: highlightedDiff, side: 0})
+				box2.HighlightersTest = append(box2.HighlightersTest, &highlightedDiffSide{highlightedDiff: highlightedDiff, side: 1})
+			} else {
+				lineDiff := &lineDiff{}
+				lineDiff.AddSources(box1.Content, box2.Content)
+
+				lineDiffSide0 := &lineDiffSide{lineDiff: lineDiff, side: 0}
+				lineDiffSide1 := &lineDiffSide{lineDiff: lineDiff, side: 1}
+
+				box1.HighlightersTest = append(box1.HighlightersTest, lineDiffSide0)
+				box2.HighlightersTest = append(box2.HighlightersTest, lineDiffSide1)
+
+				box1.LineHighlighter = lineDiffSide0
+				box2.LineHighlighter = lineDiffSide1
+			}
+		}
 	case 8:
 		{
 			widgets = append(widgets, NewChannelExpeWidget(mgl64.Vec2{10, 220}))
@@ -8443,13 +8501,13 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			}
 		}
 
-		if false {
+		if true {
 			w := NewConnectionWidget(mgl64.Vec2{700, 500})
 			widgets = append(widgets, w)
 		}
 
 		// Test having multiple .go files stacked vertically with a FlowLayoutWidget.
-		if false {
+		if true {
 			box1 := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/go/u/u8/main.go")
 			box2 := NewTextFileWidget(np, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/go/u/u8/main_test.go")
 			boxes := NewFlowLayoutWidget(mgl64.Vec2{1130, 220}, Widgeters{box1, box2}, &FlowLayoutWidgetOptions{FlowLayoutType: VerticalLayout})
@@ -8522,7 +8580,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	case 8:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
 		widget.(*CanvasWidget).offset = mgl64.Vec2{-200, -640}
-	case 1, 5:
+	case 1, 5, 9:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: false})
 	default:
 		widget = NewCanvasWidget(mgl64.Vec2{0, 0}, widgets, &CanvasWidgetOptions{Scrollable: true})
