@@ -6756,11 +6756,16 @@ func main() {
 
 			inputEvent := InputEvent{
 				Pointer:    mousePointer,
-				EventTypes: map[events.EventType]bool{events.SLIDER_EVENT: true, events.AXIS_EVENT: true},
+				EventTypes: map[events.EventType]bool{events.SLIDER_EVENT: true},
 				InputId:    0,
 				Buttons:    nil,
 				Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
-				Axes:       []float64{x, y},
+			}
+			if cursorMode, err := w.GetInputMode(glfw.Cursor); err != nil {
+				panic(err)
+			} else if cursorMode != glfw.CursorDisabled {
+				inputEvent.EventTypes[events.AXIS_EVENT] = true
+				inputEvent.Axes = []float64{x, y}
 			}
 			lastMousePos[0] = x
 			lastMousePos[1] = y
