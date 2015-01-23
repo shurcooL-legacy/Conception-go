@@ -6600,15 +6600,16 @@ func init() {
 
 func init() {
 	runtime.LockOSThread()
+	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
 func main() {
 	//defer profile.Start(profile.CPUProfile).Stop()
 	//defer profile.Start(profile.MemProfile).Stop()
 
-	fmt.Printf("go version %s %s/%s.\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
+
+	fmt.Printf("go version %s %s/%s.\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
 	var inputEventQueue []InputEvent
 	var inputEventQueue2 = make(chan InputEvent, 32)
