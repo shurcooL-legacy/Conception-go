@@ -4,13 +4,7 @@ package events
 import (
 	"fmt"
 	"time"
-
-	glfw "github.com/shurcooL/glfw3"
 )
-
-func AttachTo(window *glfw.Window) {
-	// THINK, TODO: Implement?
-}
 
 type VirtualCategory uint8
 
@@ -119,7 +113,7 @@ type InputEvent struct {
 	// TODO: Characters? Split into distinct event types, bundle up in an event frame based on time?
 	Sliders     []float64
 	Axes        []float64
-	ModifierKey glfw.ModifierKey // HACK
+	ModifierKey uint8 // TODO: Think about the best solution here.
 }
 
 /*func (e InputEvent) String() string {

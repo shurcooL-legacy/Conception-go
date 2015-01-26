@@ -3,10 +3,10 @@ package main
 import (
 	"runtime"
 
-	"github.com/go-gl/glow/gl/2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/shurcooL/Conception-go/events"
-	glfw "github.com/shurcooL/glfw3"
+	glfw "github.com/shurcooL/goglfw"
+	"github.com/shurcooL/webgl"
 )
 
 var mousePointer *events.Pointer
@@ -15,6 +15,8 @@ var keyboardPointer *events.Pointer
 func init() {
 	runtime.LockOSThread()
 }
+
+var gl *webgl.Context
 
 func main() {
 	if err := glfw.Init(); err != nil {
@@ -28,23 +30,16 @@ func main() {
 	}
 	window.MakeContextCurrent()
 
-	if err := gl.Init(); nil != err {
-		panic(err)
-	}
+	gl = window.Context
 
 	glfw.SwapInterval(1) // Vsync.
 
 	framebufferSizeCallback := func(w *glfw.Window, framebufferSize0, framebufferSize1 int) {
-		gl.Viewport(0, 0, int32(framebufferSize0), int32(framebufferSize1))
+		gl.Viewport(0, 0, framebufferSize0, framebufferSize1)
 
 		var windowSize [2]int
 		windowSize[0], windowSize[1], _ = w.GetSize()
-
-		// Update the projection matrix.
-		gl.MatrixMode(gl.PROJECTION)
-		gl.LoadIdentity()
-		gl.Ortho(0, float64(windowSize[0]), float64(windowSize[1]), 0, -1, 1)
-		gl.MatrixMode(gl.MODELVIEW)
+		_, _ = windowSize[0], windowSize[1]
 
 		/*inputEvent := InputEvent{
 			Pointer:    windowPointer,
@@ -110,7 +105,7 @@ func main() {
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
 			Axes:        nil,
-			ModifierKey: mods,
+			ModifierKey: uint8(mods),
 		}
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
 	})
@@ -123,7 +118,7 @@ func main() {
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
 			Axes:        nil,
-			ModifierKey: mods,
+			ModifierKey: uint8(mods),
 		}
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
 
