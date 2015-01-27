@@ -191,12 +191,12 @@ func (this *highlightedGoContent) NewIterator(offset uint32) HighlighterIterator
 
 // Token kind -> token text style.
 var highlightGoStyle = map[syntaxhighlight.Kind]highlightSegment{
-	syntaxhighlight.Keyword:   highlightSegment{color: mgl64.Vec3{0.004, 0, 0.694}, fontOptions: Bold},
-	syntaxhighlight.Decimal:   highlightSegment{color: mgl64.Vec3{0.804, 0, 0}, fontOptions: Italic},
-	syntaxhighlight.String:    highlightSegment{color: mgl64.Vec3{0.804, 0, 0}},
-	syntaxhighlight.Literal:   highlightSegment{color: mgl64.Vec3{0.008, 0.024, 1}, fontOptions: Italic},
-	syntaxhighlight.Comment:   highlightSegment{color: mgl64.Vec3{0, 0.506, 0.094}},
-	syntaxhighlight.Plaintext: highlightSegment{color: mgl64.Vec3{0, 0, 0}},
+	syntaxhighlight.Keyword:   {color: mgl64.Vec3{0.004, 0, 0.694}, fontOptions: Bold},
+	syntaxhighlight.Decimal:   {color: mgl64.Vec3{0.804, 0, 0}, fontOptions: Italic},
+	syntaxhighlight.String:    {color: mgl64.Vec3{0.804, 0, 0}},
+	syntaxhighlight.Literal:   {color: mgl64.Vec3{0.008, 0.024, 1}, fontOptions: Italic},
+	syntaxhighlight.Comment:   {color: mgl64.Vec3{0, 0.506, 0.094}},
+	syntaxhighlight.Plaintext: {color: mgl64.Vec3{0, 0, 0}},
 }
 
 func (this *highlightedGoContent) Update() {

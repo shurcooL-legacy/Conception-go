@@ -3842,13 +3842,13 @@ func (w *FilterableSelecterWidget) NotifyChange() {
 
 		// Preserve selection
 		if w.entries.Get(index) == w.manuallyPicked {
-			w.selected = map[uint64]struct{}{index: struct{}{}}
+			w.selected = map[uint64]struct{}{index: {}}
 			selectionPreserved = true
 		}
 	}
 
 	if len(w.selected) > 0 && !selectionPreserved {
-		w.selected = map[uint64]struct{}{0: struct{}{}}
+		w.selected = map[uint64]struct{}{0: {}}
 		if w.entries.Len() > 0 {
 			// HACK, TODO: This should happen not when the selection is unpreserved, but when it is unchanged
 			// (i.e. it may be unpreserved, but still equal, then no need to report a change)
@@ -3973,7 +3973,7 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 				newSelected = uint64(localPosition[1] / fontHeight)
 			}
 			if _, ok := w.selected[newSelected]; !ok {
-				w.selected = map[uint64]struct{}{newSelected: struct{}{}}
+				w.selected = map[uint64]struct{}{newSelected: {}}
 				w.selectionChangedTest()
 			}
 		}
@@ -3990,24 +3990,24 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				if w.entries.Len() > 0 && firstSelected > 0 {
-					w.selected = map[uint64]struct{}{0: struct{}{}}
+					w.selected = map[uint64]struct{}{0: {}}
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
 				if w.entries.Len() > 0 && firstSelected > 0 {
-					w.selected = map[uint64]struct{}{firstSelected - 1: struct{}{}}
+					w.selected = map[uint64]struct{}{firstSelected - 1: {}}
 					w.selectionChangedTest()
 				}
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				if w.entries.Len() > 0 && firstSelected < uint64(w.entries.Len()-1) {
-					w.selected = map[uint64]struct{}{uint64(w.entries.Len() - 1): struct{}{}}
+					w.selected = map[uint64]struct{}{uint64(w.entries.Len() - 1): {}}
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
 				if w.entries.Len() > 0 && firstSelected < uint64(w.entries.Len()-1) {
-					w.selected = map[uint64]struct{}{firstSelected + 1: struct{}{}}
+					w.selected = map[uint64]struct{}{firstSelected + 1: {}}
 					w.selectionChangedTest()
 				}
 			}
@@ -4112,7 +4112,7 @@ func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
 				c = w.flow.Widgets[index+1]
 				keyboardPointer.OriginMapping = []Widgeter{c, w}
 				if cp, ok := c.(*VfsListingPureWidget); ok && cp.GetSelected() == nil && cp.entries.Len() > 0 {
-					cp.selected = map[uint64]struct{}{0: struct{}{}}
+					cp.selected = map[uint64]struct{}{0: {}}
 					cp.selectionChangedTest()
 				}
 			}
@@ -7445,7 +7445,7 @@ func main() {
 						pipe.Exec("git", "diff", "--no-ext-diff", "--", file),
 						pipe.TaskFunc(func(s *pipe.State) error {
 							r := bufio.NewReader(s.Stdin)
-							for _ = range iter.N(4) {
+							for range iter.N(4) {
 								r.ReadBytes('\n')
 							}
 							var b bytes.Buffer

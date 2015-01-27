@@ -67,7 +67,7 @@ func main() {
 	MousePos := func(w *glfw.Window, x, y float64) {
 		inputEvent := events.InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: struct{}{}},
+			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: {}},
 			InputId:    0,
 			Buttons:    nil,
 			Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
@@ -88,7 +88,7 @@ func main() {
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		inputEvent := events.InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: struct{}{}},
+			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: {}},
 			InputId:    2,
 			Buttons:    nil,
 			Sliders:    []float64{yoff, xoff},
@@ -100,7 +100,7 @@ func main() {
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 		inputEvent := events.InputEvent{
 			Pointer:     mousePointer,
-			EventTypes:  map[events.EventType]struct{}{events.BUTTON_EVENT: struct{}{}},
+			EventTypes:  map[events.EventType]struct{}{events.BUTTON_EVENT: {}},
 			InputId:     uint16(button),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
@@ -113,7 +113,7 @@ func main() {
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		inputEvent := events.InputEvent{
 			Pointer:     keyboardPointer,
-			EventTypes:  map[events.EventType]struct{}{events.BUTTON_EVENT: struct{}{}},
+			EventTypes:  map[events.EventType]struct{}{events.BUTTON_EVENT: {}},
 			InputId:     uint16(key),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
@@ -136,7 +136,7 @@ func main() {
 	window.SetCharCallback(func(w *glfw.Window, char rune) {
 		inputEvent := events.InputEvent{
 			Pointer:    keyboardPointer,
-			EventTypes: map[events.EventType]struct{}{events.CHARACTER_EVENT: struct{}{}},
+			EventTypes: map[events.EventType]struct{}{events.CHARACTER_EVENT: {}},
 			InputId:    uint16(char),
 			Buttons:    nil,
 			Sliders:    nil,

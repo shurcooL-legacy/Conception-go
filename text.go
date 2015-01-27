@@ -136,7 +136,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 		gl.Color3dv((*float64)(&o.BackgroundColor[0]))
 		gl.PushMatrix()
 		gl.Translated(float64(o.pos[0]), float64(o.pos[1]), 0)
-		for _ = range s {
+		for range s {
 			gl.CallList(oFontBackground)
 		}
 		gl.PopMatrix()
