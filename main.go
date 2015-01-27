@@ -6177,7 +6177,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		case glfw.KeyD:
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				w.caretPosition.ExpandSelectionToWord()
-				if w.caretPosition.AnySelection() {
+				if w.options.FindPanel && w.caretPosition.AnySelection() {
 					// Set find text to selection.
 					SetViewGroup(w.findPanel.FindBox.Content, w.caretPosition.GetSelectionContent())
 				}
