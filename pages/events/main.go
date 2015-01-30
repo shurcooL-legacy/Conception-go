@@ -38,7 +38,7 @@ func main() {
 		gl.Viewport(0, 0, framebufferSize0, framebufferSize1)
 
 		var windowSize [2]int
-		windowSize[0], windowSize[1], _ = w.GetSize()
+		windowSize[0], windowSize[1] = w.GetSize()
 		_, _ = windowSize[0], windowSize[1]
 
 		/*inputEvent := InputEvent{
@@ -53,7 +53,7 @@ func main() {
 	}
 	{
 		var framebufferSize [2]int
-		framebufferSize[0], framebufferSize[1], _ = window.GetFramebufferSize()
+		framebufferSize[0], framebufferSize[1] = window.GetFramebufferSize()
 		framebufferSizeCallback(window, framebufferSize[0], framebufferSize[1])
 	}
 	window.SetFramebufferSizeCallback(framebufferSizeCallback)
@@ -63,7 +63,7 @@ func main() {
 	keyboardPointer = &events.Pointer{VirtualCategory: events.TYPING}
 
 	var lastMousePos mgl64.Vec2
-	lastMousePos[0], lastMousePos[1], _ = window.GetCursorPosition()
+	lastMousePos[0], lastMousePos[1] = window.GetCursorPos()
 	MousePos := func(w *glfw.Window, x, y float64) {
 		inputEvent := events.InputEvent{
 			Pointer:    mousePointer,
@@ -72,9 +72,7 @@ func main() {
 			Buttons:    nil,
 			Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
 		}
-		if cursorMode, err := w.GetInputMode(glfw.Cursor); err != nil {
-			panic(err)
-		} else if cursorMode != glfw.CursorDisabled {
+		if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
 			inputEvent.EventTypes[events.AXIS_EVENT] = struct{}{}
 			inputEvent.Axes = []float64{x, y}
 		}
@@ -82,7 +80,7 @@ func main() {
 		lastMousePos[1] = y
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
 	}
-	window.SetCursorPositionCallback(MousePos)
+	window.SetCursorPosCallback(MousePos)
 	//MousePos(window, lastMousePos[0], lastMousePos[1])
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
@@ -125,11 +123,11 @@ func main() {
 		// HACK.
 		switch {
 		case key == glfw.Key1 && action == glfw.Press:
-			window.SetInputMode(glfw.Cursor, glfw.CursorNormal)
+			window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
 		case key == glfw.Key2 && action == glfw.Press:
-			window.SetInputMode(glfw.Cursor, glfw.CursorHidden)
+			window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
 		case key == glfw.Key3 && action == glfw.Press:
-			window.SetInputMode(glfw.Cursor, glfw.CursorDisabled)
+			window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 		}
 	})
 
@@ -147,7 +145,7 @@ func main() {
 
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
 
-	for !mustBool(window.ShouldClose()) {
+	for !window.ShouldClose() {
 		glfw.PollEvents()
 
 		// Process Input.
@@ -160,13 +158,4 @@ func main() {
 		window.SwapBuffers()
 		runtime.Gosched()
 	}
-}
-
-// ---
-
-func mustBool(b bool, err error) bool {
-	if err != nil {
-		panic(err)
-	}
-	return b
 }

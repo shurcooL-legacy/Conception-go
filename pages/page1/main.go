@@ -33,7 +33,7 @@ func main() {
 	globalWindow = window
 	window.MakeContextCurrent()
 
-	window.SetInputMode(glfw.Cursor, glfw.CursorHidden)
+	window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
 
 	if err := gl.Init(); nil != err {
 		panic(err)
@@ -45,7 +45,7 @@ func main() {
 		gl.Viewport(0, 0, int32(framebufferSize0), int32(framebufferSize1))
 
 		var windowSize [2]int
-		windowSize[0], windowSize[1], _ = w.GetSize()
+		windowSize[0], windowSize[1] = w.GetSize()
 
 		// Update the projection matrix
 		gl.MatrixMode(gl.PROJECTION)
@@ -65,7 +65,7 @@ func main() {
 	}
 	{
 		var framebufferSize [2]int
-		framebufferSize[0], framebufferSize[1], _ = window.GetFramebufferSize()
+		framebufferSize[0], framebufferSize[1] = window.GetFramebufferSize()
 		framebufferSizeCallback(window, framebufferSize[0], framebufferSize[1])
 	}
 	window.SetFramebufferSizeCallback(framebufferSizeCallback)
@@ -74,7 +74,7 @@ func main() {
 	mousePointer = &Pointer{VirtualCategory: POINTING}
 
 	var lastMousePos mgl64.Vec2
-	lastMousePos[0], lastMousePos[1], _ = window.GetCursorPosition()
+	lastMousePos[0], lastMousePos[1] = window.GetCursorPos()
 	MousePos := func(w *glfw.Window, x, y float64) {
 		//fmt.Println("MousePos:", x, y)
 
@@ -90,7 +90,7 @@ func main() {
 		lastMousePos[1] = y
 		inputEventQueue = EnqueueInputEvent(inputEvent, inputEventQueue)
 	}
-	window.SetCursorPositionCallback(MousePos)
+	window.SetCursorPosCallback(MousePos)
 	MousePos(window, lastMousePos[0], lastMousePos[1])
 
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
@@ -101,7 +101,7 @@ func main() {
 	var widget3 = newMultitouchTestBoxWidget(mgl64.Vec2{600 + 210, 300}, rand.Intn(6))
 	var widget4 = newMultitouchTestBoxWidget(mgl64.Vec2{600, 300 + 210}, rand.Intn(6))
 
-	for !mustBool(window.ShouldClose()) {
+	for !window.ShouldClose() {
 		glfw.PollEvents()
 
 		// Process Input.
@@ -187,15 +187,6 @@ func DrawBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
 	DrawBorderlessBox(pos, size, backgroundColor)
 }
 
-// ---
-
-func mustBool(b bool, err error) bool {
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
 // =====
 
 type VirtualCategory uint8
@@ -221,7 +212,7 @@ func (this *Pointer) Render() {
 			// HACK
 			var windowSize [2]int
 			if globalWindow != nil {
-				windowSize[0], windowSize[1], _ = globalWindow.GetSize()
+				windowSize[0], windowSize[1] = globalWindow.GetSize()
 			}
 
 			// HACK: OS X specific.
