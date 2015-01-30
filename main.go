@@ -1456,8 +1456,8 @@ func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
 		fmt.Printf("%q BoxWidget pressed!\n", w.Name)
-		x, y, _ := globalWindow.GetPosition()
-		globalWindow.SetPosition(x-16, y)
+		x, y := globalWindow.GetPos()
+		globalWindow.SetPos(x-16, y)
 	}
 }
 
@@ -2143,7 +2143,7 @@ func (w *CanvasWidget) Layout() {
 	// HACK
 	var windowSize0, windowSize1 int
 	if globalWindow != nil {
-		windowSize0, windowSize1, _ = globalWindow.GetSize()
+		windowSize0, windowSize1 = globalWindow.GetSize()
 	}
 	windowSize := mgl64.Vec2{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 	w.size = windowSize
@@ -3916,7 +3916,7 @@ func (w *FilterableSelecterWidget) Render() {
 	if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
 		beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 	}
-	_, height, _ := globalWindow.GetSize() // HACK: Should be some viewport
+	_, height := globalWindow.GetSize() // HACK: Should be some viewport
 	height -= debugSmallerViewport
 	if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
 		endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
@@ -5411,7 +5411,7 @@ func (w *TextBoxWidget) CenterOnCaretPositionIfOffscreen() {
 		if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
 			beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 		}
-		_, height, _ := globalWindow.GetSize() // HACK: Should be some viewport
+		_, height := globalWindow.GetSize() // HACK: Should be some viewport
 		height -= debugSmallerViewport
 		if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
 			endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
@@ -5603,7 +5603,7 @@ func (w *TextBoxWidget) Render() {
 	if beginVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, debugSmallerViewport})[1] / fontHeight); beginVisibleLineIndex > beginLineIndex {
 		beginLineIndex = intmath.MinInt(beginVisibleLineIndex, endLineIndex)
 	}
-	_, height, _ := globalWindow.GetSize() // HACK: Should be some viewport
+	_, height := globalWindow.GetSize() // HACK: Should be some viewport
 	height -= debugSmallerViewport
 	if endVisibleLineIndex := int(WidgeterS{w}.GlobalToLocal(mgl64.Vec2{0, float64(height)})[1]/fontHeight + 1); endVisibleLineIndex < endLineIndex {
 		endLineIndex = intmath.MaxInt(endVisibleLineIndex, beginLineIndex)
@@ -6263,7 +6263,7 @@ func (this *Pointer) Render() {
 			// HACK
 			var windowSize [2]int
 			if globalWindow != nil {
-				windowSize[0], windowSize[1], _ = globalWindow.GetSize()
+				windowSize[0], windowSize[1] = globalWindow.GetSize()
 			}
 
 			// HACK: OS X specific.
@@ -6663,7 +6663,7 @@ func main() {
 		globalWindow = window
 		windowPointer = &Pointer{VirtualCategory: events.WINDOWING}
 
-		window.SetInputMode(glfw.Cursor, glfw.CursorHidden)
+		window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
 		window.MakeContextCurrent()
 
 		if err := gl.Init(); nil != err {
@@ -6677,17 +6677,11 @@ func main() {
 		}
 
 		{
-			m, err := glfw.GetPrimaryMonitor()
-			if err != nil {
-				panic(err)
-			}
-			vm, err := m.GetVideoMode()
-			if err != nil {
-				panic(err)
-			}
+			m := glfw.GetPrimaryMonitor()
+			vm := m.GetVideoMode()
 
-			width, height, _ := window.GetSize()
-			window.SetPosition((vm.Width-width)/2, (vm.Height-height)/2)
+			width, height := window.GetSize()
+			window.SetPos((vm.Width-width)/2, (vm.Height-height)/2)
 		}
 		glfw.SwapInterval(1) // Vsync
 
@@ -6702,7 +6696,7 @@ func main() {
 			gl.Viewport(0, 0, int32(framebufferSize0), int32(framebufferSize1))
 
 			var windowSize [2]int
-			windowSize[0], windowSize[1], _ = w.GetSize()
+			windowSize[0], windowSize[1] = w.GetSize()
 
 			// Update the projection matrix
 			gl.MatrixMode(gl.PROJECTION)
@@ -6723,7 +6717,7 @@ func main() {
 		}
 		{
 			var framebufferSize [2]int
-			framebufferSize[0], framebufferSize[1], _ = window.GetFramebufferSize()
+			framebufferSize[0], framebufferSize[1] = window.GetFramebufferSize()
 			framebufferSizeCallback(window, framebufferSize[0], framebufferSize[1])
 		}
 		window.SetFramebufferSizeCallback(framebufferSizeCallback)
@@ -6751,7 +6745,7 @@ func main() {
 		keyboardPointer = &Pointer{VirtualCategory: events.TYPING}
 
 		var lastMousePos mgl64.Vec2
-		lastMousePos[0], lastMousePos[1], _ = window.GetCursorPosition()
+		lastMousePos[0], lastMousePos[1] = window.GetCursorPos()
 		MousePos := func(w *glfw.Window, x, y float64) {
 			//fmt.Println("MousePos:", x, y)
 
@@ -6762,9 +6756,7 @@ func main() {
 				Buttons:    nil,
 				Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
 			}
-			if cursorMode, err := w.GetInputMode(glfw.Cursor); err != nil {
-				panic(err)
-			} else if cursorMode != glfw.CursorDisabled {
+			if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
 				inputEvent.EventTypes[events.AXIS_EVENT] = true
 				inputEvent.Axes = []float64{x, y}
 			}
@@ -6773,7 +6765,7 @@ func main() {
 			inputEventQueue = EnqueueInputEvent(inputEventQueue, inputEvent)
 			redraw = true // TODO: Move redraw = true elsewhere? Like somewhere within events processing? Or keep it in all event handlers?
 		}
-		window.SetCursorPositionCallback(MousePos)
+		window.SetCursorPosCallback(MousePos)
 		MousePos(window, lastMousePos[0], lastMousePos[1])
 
 		window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
@@ -6805,8 +6797,8 @@ func main() {
 
 		window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 			/*if key == glfw.KeyEnter && action == glfw.Press {
-				x, y := window.GetPosition()
-				window.SetPosition(x-16, y)
+				x, y := window.GetPos()
+				window.SetPos(x-16, y)
 			}*/
 
 			inputEvent := InputEvent{
@@ -6886,7 +6878,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			box1 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(c0), nil)
 			box2 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(c1), nil)
 
-			windowSize0, windowSize1, _ := window.GetSize()
+			windowSize0, windowSize1 := window.GetSize()
 			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, mgl64.Vec2{float64(windowSize0/2 - 2), float64(windowSize1 - fontHeight - 4)}, box1))
 			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{float64(windowSize0 / 2), fontHeight + 2}, mgl64.Vec2{float64(windowSize0/2 - 2), float64(windowSize1 - fontHeight - 4)}, box2))
 
@@ -7189,7 +7181,7 @@ func main() {
 
 		var windowSize0, windowSize1 int
 		if window != nil {
-			windowSize0, windowSize1, _ = window.GetSize()
+			windowSize0, windowSize1 = window.GetSize()
 		}
 		windowSize := mgl64.Vec2{float64(windowSize0), float64(windowSize1)} // HACK: This is not updated as window resizes, etc.
 		_ = windowSize
