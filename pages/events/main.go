@@ -3,7 +3,6 @@ package main
 import (
 	"runtime"
 
-	"github.com/go-gl/mathgl/mgl64"
 	"github.com/shurcooL/Conception-go/events"
 	glfw "github.com/shurcooL/goglfw"
 	"github.com/shurcooL/webgl"
@@ -62,26 +61,21 @@ func main() {
 	mousePointer = &events.Pointer{VirtualCategory: events.POINTING}
 	keyboardPointer = &events.Pointer{VirtualCategory: events.TYPING}
 
-	var lastMousePos mgl64.Vec2
-	lastMousePos[0], lastMousePos[1] = window.GetCursorPos()
-	MousePos := func(w *glfw.Window, x, y float64) {
+	mouseMovement := func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
 		inputEvent := events.InputEvent{
 			Pointer:    mousePointer,
 			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: {}},
 			InputId:    0,
 			Buttons:    nil,
-			Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
+			Sliders:    []float64{xdelta, ydelta},
 		}
 		if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
 			inputEvent.EventTypes[events.AXIS_EVENT] = struct{}{}
-			inputEvent.Axes = []float64{x, y}
+			inputEvent.Axes = []float64{xpos, ypos}
 		}
-		lastMousePos[0] = x
-		lastMousePos[1] = y
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
 	}
-	window.SetCursorPosCallback(MousePos)
-	//MousePos(window, lastMousePos[0], lastMousePos[1])
+	window.SetMouseMovementCallback(mouseMovement)
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		inputEvent := events.InputEvent{
