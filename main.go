@@ -6537,11 +6537,10 @@ func initHttpHandlers() {
 
 		var buf = bytes.NewBufferString("# GOPATH Workspace diff\n\n")
 
+		var clean = true
 		for out := range outChan {
 			repo := out.(GoPackageRepo)
-
 			goPackage := repo.GoPackages()[0]
-
 			if goPackage.Dir.Repo.VcsLocal.Status != "" {
 				repoImportPathPattern := GetRepoImportPathPattern(repo.RootPath(), goPackage.Bpkg.SrcRoot)
 				fmt.Fprint(buf, "## "+repoImportPathPattern+"\n\n")
@@ -6549,10 +6548,11 @@ func initHttpHandlers() {
 				if !short {
 					fmt.Fprint(buf, "```diff\n"+u6.GoPackageWorkingDiff(goPackage)+"```\n\n")
 				}
+				clean = false
 			}
 		}
-		if buf.Len() == 0 {
-			fmt.Fprint(buf, "### working directory clean (across GOPATH workspaces)")
+		if clean {
+			fmt.Fprint(buf, "_(Working directory clean across all GOPATH workspaces.)_")
 		}
 
 		fmt.Printf("diffHandler: %v ms.\n", time.Since(started).Seconds()*1000)
