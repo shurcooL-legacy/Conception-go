@@ -4,8 +4,8 @@ import (
 	"runtime"
 
 	"github.com/shurcooL/Conception-go/events"
+	"github.com/shurcooL/gogl"
 	glfw "github.com/shurcooL/goglfw"
-	"github.com/shurcooL/webgl"
 )
 
 var mousePointer *events.Pointer
@@ -15,7 +15,7 @@ func init() {
 	runtime.LockOSThread()
 }
 
-var gl *webgl.Context
+var gl *gogl.Context
 
 func main() {
 	if err := glfw.Init(); err != nil {
