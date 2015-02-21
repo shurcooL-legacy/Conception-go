@@ -22,7 +22,7 @@ Installation
 ### OS X
 
 ```bash
-# Install latest Go, git, mercurial (if you don't already have them).
+# Install latest Go, git (if you don't already have them).
 ...
 
 # Step back and enjoy 1 command that installs Conception-go and all its dependencies.
@@ -41,9 +41,8 @@ curl -L https://golang.org/dl/go1.4.2.linux-amd64.tar.gz | sudo tar zx -C /usr/l
 export PATH=$PATH:/usr/local/go/bin
 export GOPATH=$HOME/MyGoWorkspace # Set your GOPATH as described at https://golang.org/doc/code.html#GOPATH (if you didn't already).
 
-# Install git, mercurial, OpenGL headers (if you don't already have them).
+# Install git, OpenGL headers (if you don't already have them).
 sudo apt-get install --yes git
-sudo apt-get install --yes mercurial # Because mercurial is not good, you'll have to add "Universe" to sources.list.
 sudo apt-get install --yes libgl1-mesa-dev xorg-dev # OpenGL headers.
 
 # Step back and enjoy 1 command that installs Conception-go and all its dependencies.
