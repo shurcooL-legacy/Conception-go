@@ -28,9 +28,8 @@ Installation
 # Step back and enjoy 1 command that installs Conception-go and all its dependencies.
 go get -u github.com/shurcooL/Conception-go
 
-# For now, it needs to be run from its source dir, so...
-cd $GOPATH/src/github.com/shurcooL/Conception-go
-go build && ./Conception-go
+# Run it.
+$GOPATH/bin/Conception-go
 ```
 
 ### Linux
@@ -50,7 +49,6 @@ sudo apt-get install --yes libgl1-mesa-dev xorg-dev # OpenGL headers.
 # Step back and enjoy 1 command that installs Conception-go and all its dependencies.
 go get -u github.com/shurcooL/Conception-go
 
-# For now, it needs to be run from its source dir, so...
-cd $GOPATH/src/github.com/shurcooL/Conception-go
-go build && ./Conception-go
+# Run it.
+$GOPATH/bin/Conception-go
 ```
