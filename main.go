@@ -32,10 +32,10 @@ import (
 	"time"
 
 	"github.com/bradfitz/iter"
-	"github.com/go-gl/glow/gl/2.1/gl"
+	"github.com/go-gl/gl/v2.1/gl"
+	"github.com/go-gl/glfw/v3.1/glfw"
 	"github.com/go-gl/mathgl/mgl64"
 	intmath "github.com/pkg/math"
-	glfw "github.com/shurcooL/glfw3" // Effectively, a fork of github.com/go-gl/glfw3 but with 3.1 PR merged.
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/exp/11"

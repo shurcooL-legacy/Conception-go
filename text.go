@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-gl/glow/gl/2.1/gl"
+	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
 
 	"github.com/shurcooL/Conception-go/caret"
