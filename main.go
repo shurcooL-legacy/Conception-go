@@ -6259,7 +6259,7 @@ func (this *Pointer) Render() {
 	switch {
 	case this.VirtualCategory == events.POINTING && len(this.State.Axes) >= 2:
 		// Prevent pointer from being drawn when the OS mouse pointer is visible.
-		{
+		if this == mousePointer {
 			// HACK
 			var windowSize [2]int
 			if globalWindow != nil {
@@ -8094,7 +8094,11 @@ func main() {
 				try {
 					//sock.send(JSON.stringify(touches.length) + "\n");		// HACK: Should make sure that sock.onopen has happened before calling send...
 					if (touches.length >= 1) {
-						sock.send(touches[0].clientX + " " +touches[0].clientY + "\0")
+						var deltaX = touches[0].clientX - lastTouchX;
+						var deltaY = touches[0].clientY - lastTouchY;
+						sock.send(deltaX + " " + deltaY + "\0");
+						lastTouchX = touches[0].clientX;
+						lastTouchY = touches[0].clientY;
 					}
 				} catch (exc) {
 					//alert("Error: " + exc);
@@ -8141,8 +8145,13 @@ func main() {
 				touches = [ event ];
 			}
 
+			var lastTouchX, lastTouchY;
 			function touchHandler(e) {
 				e.preventDefault();
+				if (touches.length == 0 && e.touches.length >= 1) {
+					lastTouchX = e.touches[0].clientX;
+					lastTouchY = e.touches[0].clientY;
+				}
 				touches = e.touches;
 				//loop();
 				//window.requestAnimationFrame(loop);
@@ -8198,13 +8207,21 @@ func main() {
 					var x, y float64
 					fmt.Sscan(touchPositionString, &x, &y)
 
+					var posX, posY float64
+					if len(websocketPointer.State.Axes) >= 2 {
+						posX = websocketPointer.State.Axes[0]
+						posY = websocketPointer.State.Axes[1]
+					}
+					posX += x
+					posY += y
+
 					inputEvent := InputEvent{
 						Pointer:    websocketPointer,
 						EventTypes: map[events.EventType]bool{events.AXIS_EVENT: true},
 						InputId:    0,
 						Buttons:    nil,
-						Sliders:    nil,
-						Axes:       []float64{x, y},
+						Sliders:    []float64{x, y},
+						Axes:       []float64{posX, posY},
 					}
 					inputEventQueue2 <- inputEvent
 				} else {
