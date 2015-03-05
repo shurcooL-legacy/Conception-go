@@ -54,7 +54,7 @@ import (
 	. "github.com/shurcooL/go/gists/gist6418290"
 	. "github.com/shurcooL/go/gists/gist6418462"
 	. "github.com/shurcooL/go/gists/gist6445065"
-	. "github.com/shurcooL/go/gists/gist6545684"
+	"github.com/shurcooL/go/gists/gist6545684"
 	. "github.com/shurcooL/go/gists/gist7390843"
 	. "github.com/shurcooL/go/gists/gist7480523"
 	. "github.com/shurcooL/go/gists/gist7576154"
@@ -1185,11 +1185,16 @@ func (this *GoCompileErrorsTest) Update() {
 
 type GpcFileWidget struct {
 	Widget
-	p Polygon
+	p gist6545684.Polygon
 }
 
 func NewGpcFileWidget(pos mgl64.Vec2, path string) *GpcFileWidget {
-	return &GpcFileWidget{Widget: NewWidget(pos, mgl64.Vec2{0, 0}), p: ReadGpcFile(path)}
+	p, err := gist6545684.ReadGpcFile(path)
+	if err != nil {
+		log.Fatalln("ReadGpcFile:", err)
+	}
+
+	return &GpcFileWidget{Widget: NewWidget(pos, mgl64.Vec2{0, 0}), p: p}
 }
 
 func (w *GpcFileWidget) Render() {
