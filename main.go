@@ -4066,6 +4066,8 @@ type VfsListingWidget struct {
 	*CompositeWidget
 	flow *FlowLayoutWidget // HACK: Shortcut to CompositeWidget.Widgets[0]
 
+	ExtensionsTest []Widgeter
+
 	DepNode2Manual // SelectionChanged
 }
 
@@ -4090,7 +4092,18 @@ func (w *VfsListingWidget) GetSelectedPath() (selectedPath string) {
 	return selectedPath
 }
 
+func (w *VfsListingWidget) SetKeyboardFocus() {
+	c := w.flow.Widgets[len(w.flow.Widgets)-1]
+
+	// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+	keyboardPointer.OriginMapping = []Widgeter{c, w}
+}
+
 func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
+	for _, extension := range w.ExtensionsTest {
+		extension.ProcessEvent(inputEvent)
+	}
+
 	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyLeft:
@@ -7250,6 +7263,22 @@ func main() {
 		}
 		editor.ExtensionsTest = append(editor.ExtensionsTest, selectPackageListing)
 
+		// TODO: This should be at the canvas-scope rather than editor-scope, I think.
+		selectFolderListing := &CustomWidget{
+			Widget: NewWidget(np, np),
+			ProcessEventFunc: func(inputEvent InputEvent) {
+				if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+					switch glfw.Key(inputEvent.InputId) {
+					case glfw.KeyT:
+						if inputEvent.ModifierKey&glfw.ModSuper != 0 {
+							folderListing.SetKeyboardFocus()
+						}
+					}
+				}
+			},
+		}
+		editor.ExtensionsTest = append(editor.ExtensionsTest, selectFolderListing)
+
 		focusEditor := &CustomWidget{
 			Widget: NewWidget(np, np),
 			ProcessEventFunc: func(inputEvent InputEvent) {
@@ -7268,6 +7297,7 @@ func main() {
 			},
 		}
 		goPackageListing.ExtensionsTest = append(goPackageListing.ExtensionsTest, focusEditor)
+		folderListing.ExtensionsTest = append(folderListing.ExtensionsTest, focusEditor)
 
 		// Output box.
 		{
