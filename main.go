@@ -1045,8 +1045,14 @@ func (this *goSymbolsC) Update() {
 			switch d.Tok {
 			case token.TYPE:
 				for _, spec := range d.Specs {
-					nodeStringer := NewNodeStringer(spec.(*ast.TypeSpec).Name)
-					this.entries = append(this.entries, nodeStringer)
+					ident := spec.(*ast.TypeSpec).Name
+					this.entries = append(this.entries, NewNodeStringer(ident))
+				}
+			case token.CONST, token.VAR:
+				for _, spec := range d.Specs {
+					for _, ident := range spec.(*ast.ValueSpec).Names {
+						this.entries = append(this.entries, NewNodeStringer(ident))
+					}
 				}
 			}
 		}
