@@ -7447,6 +7447,9 @@ func main() {
 				},
 			}
 			editor.ExtensionsTest = append(editor.ExtensionsTest, buildAndRun)
+
+			// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+			keyboardPointer.OriginMapping = []Widgeter{editor}
 		}
 
 		// View sidebar
