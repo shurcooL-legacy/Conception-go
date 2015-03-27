@@ -79,6 +79,7 @@ import (
 	goimports "golang.org/x/tools/imports"
 	"gopkg.in/pipe.v2"
 	"honnef.co/go/importer"
+	"sourcegraph.com/sourcegraph/go-diff/diff"
 	sg_vcs "sourcegraph.com/sourcegraph/go-vcs/vcs"
 	"sourcegraph.com/sourcegraph/vcsstore/vcsclient"
 
@@ -6442,6 +6443,42 @@ func initHttpHandlers() {
 		fmt.Fprintf(w, "%#v\n", widgets)
 	})*/
 	http.Handle("/favicon.ico/", http.NotFoundHandler())
+	http.Handle("/diff/", http.StripPrefix("/diff", u10.MarkdownOptionsHandlerFunc(func(req *http.Request) ([]byte, *u10.Options, error) {
+		var b string
+
+		// TODO: Try to lookup the GoPackage rather than creating a new one.
+		importPath := req.URL.Path[1:]
+		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
+			b += `# import "` + importPath + "\"\n"
+
+			goPackage.UpdateVcs()
+			goPackage.UpdateVcsFields()
+
+			if goPackage.Dir.Repo != nil {
+				// git diff against master.
+				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
+					b += "\n" + "# git diff against master\n"
+
+					fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiffMaster))
+					if err != nil {
+						b += "\n```\n" + err.Error() + "\n```\n"
+					}
+					for _, fileDiff := range fileDiffs {
+						b += "\n" + "## " + fileDiff.NewName[2:] + "\n"
+						b += "\n```diff\n"
+						if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
+							b += string(hunks)
+						}
+						b += "```\n"
+					}
+				}
+			}
+		} else {
+			b += fmt.Sprintf("Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, build.Default.GOPATH)
+		}
+
+		return []byte(b), &u10.Options{TableOfContents: true}, nil
+	})))
 	http.Handle("/status/", http.StripPrefix("/status", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
 		var b string
 
@@ -6474,7 +6511,7 @@ func initHttpHandlers() {
 				b += "Remote: " + goPackage.Dir.Repo.VcsRemote.RemoteRev + "\n"
 				b += "```\n"
 
-				// git diff
+				// git diff.
 				if workingDiff := u6.GoPackageWorkingDiff(goPackage); workingDiff != "" {
 					b += "\n" + Underline("git diff")
 					cmd := exec.Command("git", "diff", "--stat", "HEAD")
@@ -7448,8 +7485,10 @@ func main() {
 			}
 			editor.ExtensionsTest = append(editor.ExtensionsTest, buildAndRun)
 
-			// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
-			keyboardPointer.OriginMapping = []Widgeter{editor}
+			if keyboardPointer != nil {
+				// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
+				keyboardPointer.OriginMapping = []Widgeter{editor}
+			}
 		}
 
 		// View sidebar
