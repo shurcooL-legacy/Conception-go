@@ -6454,24 +6454,28 @@ func initHttpHandlers() {
 			goPackage.UpdateVcs()
 			goPackage.UpdateVcsFields()
 
-			if goPackage.Dir.Repo != nil {
-				// git diff against master.
-				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
-					b += "\n" + "# git diff against master\n"
+			// git diff against master.
+			b += "\n" + "# git diff against master\n"
 
-					fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiffMaster))
-					if err != nil {
+			if goPackage.Dir.Repo != nil {
+				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
+					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiffMaster)); err == nil {
+						for _, fileDiff := range fileDiffs {
+							b += "\n" + "## " + fileDiff.NewName[2:] + "\n"
+							b += "\n```diff\n"
+							if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
+								b += string(hunks)
+							}
+							b += "```\n"
+						}
+					} else {
 						b += "\n```\n" + err.Error() + "\n```\n"
 					}
-					for _, fileDiff := range fileDiffs {
-						b += "\n" + "## " + fileDiff.NewName[2:] + "\n"
-						b += "\n```diff\n"
-						if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
-							b += string(hunks)
-						}
-						b += "```\n"
-					}
+				} else {
+					b += "\n" + "_(no changes)_\n"
 				}
+			} else {
+				b += "\n" + "_(no vcs)_\n"
 			}
 		} else {
 			b += fmt.Sprintf("Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, build.Default.GOPATH)
@@ -6525,11 +6529,14 @@ func initHttpHandlers() {
 				// git diff against master.
 				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
 					b += "\n" + Underline("git diff against master")
+
+					// Stats (lines added/removed).
 					cmd := exec.Command("git", "diff", "--stat", "master")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
 						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
 					}
+
 					b += "\n```diff\n" + workingDiffMaster + "\n```\n"
 				}
 			}
@@ -6607,7 +6614,19 @@ func initHttpHandlers() {
 				fmt.Fprint(buf, "## "+repoImportPathPattern+"\n\n")
 				fmt.Fprint(buf, "```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n\n")
 				if !short {
-					fmt.Fprint(buf, "```diff\n"+u6.GoPackageWorkingDiff(goPackage)+"```\n\n")
+					workingDiff := u6.GoPackageWorkingDiff(goPackage)
+					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiff)); err == nil {
+						for _, fileDiff := range fileDiffs {
+							fmt.Fprint(buf, "\n"+"#### "+fileDiff.NewName[2:]+"\n")
+							fmt.Fprint(buf, "\n```diff\n")
+							if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
+								fmt.Fprint(buf, string(hunks))
+							}
+							fmt.Fprint(buf, "```\n")
+						}
+					} else {
+						fmt.Fprint(buf, "\n```\n"+err.Error()+"\n```\n")
+					}
 				}
 				clean = false
 			}
