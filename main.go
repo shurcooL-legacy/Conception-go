@@ -6432,6 +6432,29 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 
 // ---
 
+// fileDiffName returns the name of a FileDiff.
+func fileDiffName(fileDiff *diff.FileDiff) string {
+	var origName, newName string
+	if strings.HasPrefix(fileDiff.OrigName, "a/") {
+		origName = fileDiff.OrigName[2:]
+	}
+	if strings.HasPrefix(fileDiff.NewName, "b/") {
+		newName = fileDiff.NewName[2:]
+	}
+	switch {
+	case origName != "" && newName != "" && origName == newName: // Modified.
+		return newName
+	case origName != "" && newName != "" && origName != newName: // Renamed.
+		return origName + " -> " + newName
+	case origName == "" && newName != "": // Added.
+		return newName
+	case origName != "" && newName == "": // Removed.
+		return "~~" + origName + "~~"
+	default:
+		panic("unexpected, no names")
+	}
+}
+
 func initHttpHandlers() {
 	http.HandleFunc("/close", func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintln(w, "Closing.")
@@ -6461,7 +6484,7 @@ func initHttpHandlers() {
 				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
 					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiffMaster)); err == nil {
 						for _, fileDiff := range fileDiffs {
-							b += "\n" + "## " + fileDiff.NewName[2:] + "\n"
+							b += "\n" + "## " + fileDiffName(fileDiff) + "\n"
 							b += "\n```diff\n"
 							if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
 								b += string(hunks)
@@ -6617,7 +6640,7 @@ func initHttpHandlers() {
 					workingDiff := u6.GoPackageWorkingDiff(goPackage)
 					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiff)); err == nil {
 						for _, fileDiff := range fileDiffs {
-							fmt.Fprint(buf, "\n"+"#### "+fileDiff.NewName[2:]+"\n")
+							fmt.Fprint(buf, "\n"+"#### "+fileDiffName(fileDiff)+"\n")
 							fmt.Fprint(buf, "\n```diff\n")
 							if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
 								fmt.Fprint(buf, string(hunks))
