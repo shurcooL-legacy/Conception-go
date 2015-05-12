@@ -4,8 +4,9 @@ import (
 	"runtime"
 
 	"github.com/shurcooL/Conception-go/events"
-	"github.com/shurcooL/gogl"
+	//"github.com/shurcooL/gogl"
 	glfw "github.com/shurcooL/goglfw"
+	"golang.org/x/mobile/gl"
 )
 
 var mousePointer *events.Pointer
@@ -15,10 +16,10 @@ func init() {
 	runtime.LockOSThread()
 }
 
-var gl *gogl.Context
+//var gl *gogl.Context
 
 func main() {
-	if err := glfw.Init(); err != nil {
+	if err := glfw.Init(gl.ContextSwitcher); err != nil {
 		panic(err)
 	}
 	defer glfw.Terminate()
@@ -29,7 +30,7 @@ func main() {
 	}
 	window.MakeContextCurrent()
 
-	gl = window.Context
+	//gl = window.Context
 
 	glfw.SwapInterval(1) // Vsync.
 
