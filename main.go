@@ -19,7 +19,6 @@ import (
 	"math"
 	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -80,8 +79,6 @@ import (
 	"gopkg.in/pipe.v2"
 	"honnef.co/go/importer"
 	"sourcegraph.com/sourcegraph/go-diff/diff"
-	sg_vcs "sourcegraph.com/sourcegraph/go-vcs/vcs"
-	"sourcegraph.com/sourcegraph/vcsstore/vcsclient"
 
 	"github.com/shurcooL/Conception-go/caret"
 	"github.com/shurcooL/Conception-go/events"
@@ -6520,7 +6517,7 @@ func initHttpHandlers() {
 			if goPackage.Dir.Repo != nil {
 				// Branches.
 				b += "\n" + Underline("Branches")
-				b += "\n" + u6.Branches(goPackage.Dir.Repo)
+				b += "\n" + u6.Branches(goPackage.Dir.Repo, u6.BranchesOptions{})
 			}
 
 			b += "\n" + Underline("Status")
@@ -7048,7 +7045,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				switch 0 {
 				case 0:
 					fs = vfs.OS("../")
-				case 1:
+					/*case 1:
 					cloneUrl, err := url.Parse("https://github.com/shurcooL/Hover")
 					if err != nil {
 						panic(err)
@@ -7065,7 +7062,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 					fs, err = r.FileSystem(sg_vcs.CommitID("92118397d269b8d3bb480c1cf4e4171060782937"))
 					if err != nil {
 						panic(err)
-					}
+					}*/
 				}
 
 				fs = vfs_util.NewDebugFS(fs)
