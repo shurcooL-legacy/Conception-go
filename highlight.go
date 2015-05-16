@@ -10,7 +10,7 @@ import (
 	"github.com/mb0/diff"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/shurcooL/go/gists/gist7802150"
-	"github.com/shurcooL/go/highlight_go"
+	"github.com/shurcooL/highlight_go"
 	"github.com/sourcegraph/syntaxhighlight"
 
 	"github.com/shurcooL/Conception-go/caret"
