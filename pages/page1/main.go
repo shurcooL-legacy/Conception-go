@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/mathgl/mgl64"
-	glfw "github.com/shurcooL/goglfw"
+	"github.com/goxjs/glfw"
 )
 
 // TODO: Remove these
