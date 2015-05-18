@@ -3,9 +3,9 @@ package main
 import (
 	"runtime"
 
+	"github.com/goxjs/gl"
+	"github.com/goxjs/glfw"
 	"github.com/shurcooL/Conception-go/events"
-	"github.com/shurcooL/gogl"
-	glfw "github.com/shurcooL/goglfw"
 )
 
 var mousePointer *events.Pointer
@@ -15,10 +15,8 @@ func init() {
 	runtime.LockOSThread()
 }
 
-var gl *gogl.Context
-
 func main() {
-	if err := glfw.Init(); err != nil {
+	if err := glfw.Init(gl.ContextSwitcher); err != nil {
 		panic(err)
 	}
 	defer glfw.Terminate()
@@ -28,8 +26,6 @@ func main() {
 		panic(err)
 	}
 	window.MakeContextCurrent()
-
-	gl = window.Context
 
 	glfw.SwapInterval(1) // Vsync.
 

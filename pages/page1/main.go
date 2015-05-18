@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/mathgl/mgl64"
-	glfw "github.com/shurcooL/goglfw"
+	"github.com/goxjs/glfw"
 )
 
 // TODO: Remove these
@@ -21,7 +21,7 @@ func init() {
 }
 
 func main() {
-	if err := glfw.Init(); err != nil {
+	if err := glfw.Init(nil); err != nil {
 		panic(err)
 	}
 	defer glfw.Terminate()
@@ -226,7 +226,7 @@ func (this *Pointer) Render() {
 		defer gl.PopMatrix()
 		gl.Translated(float64(NearInt64(this.State.Axes[0]))+0.5, float64(NearInt64(this.State.Axes[1]))+0.5, 0)
 
-		const size float64 = 12 * 40
+		const size float64 = 12 * 40 / 40
 		gl.Color3d(1, 1, 1)
 		gl.Begin(gl.TRIANGLE_FAN)
 		gl.Vertex2d(0, 0)
