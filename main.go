@@ -6623,7 +6623,7 @@ func initHttpHandlers() {
 		}()
 		outChan := GoReduce(inChan, 8, reduceFunc)
 
-		var buf = bytes.NewBufferString("# GOPATH Workspace diff\n\n")
+		var buf = bytes.NewBufferString("# GOPATH Workspace diff\n")
 
 		var clean = true
 		for out := range outChan {
@@ -6631,8 +6631,8 @@ func initHttpHandlers() {
 			goPackage := repo.GoPackages()[0]
 			if goPackage.Dir.Repo.VcsLocal.Status != "" {
 				repoImportPathPattern := GetRepoImportPathPattern(repo.RootPath(), goPackage.Bpkg.SrcRoot)
-				fmt.Fprint(buf, "## "+repoImportPathPattern+"\n\n")
-				fmt.Fprint(buf, "```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n\n")
+				fmt.Fprint(buf, "\n"+"## "+repoImportPathPattern+"\n")
+				fmt.Fprint(buf, "\n```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n")
 				if !short {
 					workingDiff := u6.GoPackageWorkingDiff(goPackage)
 					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiff)); err == nil {
