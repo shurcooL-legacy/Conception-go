@@ -16,7 +16,7 @@ func init() {
 }
 
 func main() {
-	if err := glfw.Init(gl.ContextSwitcher); err != nil {
+	if err := glfw.Init(gl.ContextWatcher); err != nil {
 		panic(err)
 	}
 	defer glfw.Terminate()
