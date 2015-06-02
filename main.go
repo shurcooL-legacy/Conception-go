@@ -45,7 +45,7 @@ import (
 	. "github.com/shurcooL/go/gists/gist5258650"
 	. "github.com/shurcooL/go/gists/gist5259939"
 	. "github.com/shurcooL/go/gists/gist5423254"
-	. "github.com/shurcooL/go/gists/gist5504644"
+	"github.com/shurcooL/go/gists/gist5504644"
 	. "github.com/shurcooL/go/gists/gist5639599"
 	. "github.com/shurcooL/go/gists/gist5953185"
 	. "github.com/shurcooL/go/gists/gist6003701"
@@ -349,7 +349,7 @@ func (w *Test1Widget) Render() {
 	gl.Color3d(0, 0, 0)
 	//PrintText(w.pos, goon.Sdump(inputEventQueue))
 
-	//x := GetDocPackageAll("gist.github.com/5694308.git")
+	//x := gist5504644.GetDocPackageAll("gist.github.com/5694308.git")
 	//PrintText(w.pos, strings.Join(x.Imports, "\n"))
 
 	/*files, _ := ioutil.ReadDir("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/")
@@ -372,7 +372,7 @@ func (w *Test1Widget) Render() {
 	//PrintText(w.pos.Add(mathgl.Vec2d{0, 16}), GetThisGoSourceDir())
 	//PrintText(w.pos.Add(mathgl.Vec2d{0, 2 * 16}), GetThisGoPackage().ImportPath)
 
-	/*x := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
+	/*x := gist5504644.GetDocPackageAll(gist5504644.BuildPackageFromSrcDir(GetThisGoSourceDir()))
 	for lineIndex, y := range x.Vars {
 		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineIndex)}), SprintAstBare(y.Decl))
 	}*/
@@ -519,7 +519,7 @@ func (t *typeCheckedPackage) Update() {
 	bpkg := goPackageSelecter.GetSelectedGoPackage().Bpkg
 
 	fset := token.NewFileSet()
-	files, err := ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
+	files, err := gist5504644.ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
 	if err != nil {
 		t.fset = nil
 		t.files = nil
@@ -893,13 +893,13 @@ func (this *docPackage) Update() {
 	}
 
 	// TODO: Factor out bpkg into buildPackage DepNode2
-	bpkg, err := BuildPackageFromImportPath(importPath)
+	bpkg, err := gist5504644.BuildPackageFromImportPath(importPath)
 	if err != nil {
 		this.dpkg = nil
 		return
 	}
 
-	dpkg, err := GetDocPackageAll(bpkg, nil)
+	dpkg, err := gist5504644.GetDocPackageAll(bpkg, nil)
 	if err != nil {
 		this.dpkg = nil
 		return
@@ -1712,7 +1712,7 @@ const (
 
 func (mode KatMode) String() string {
 	//fmt.Printf("%T %T\n", AutoAttack, Shunpo)
-	x, _ := GetDocPackageAll(BuildPackageFromSrcDir(GetThisGoSourceDir()))
+	x, _ := gist5504644.GetDocPackageAll(gist5504644.BuildPackageFromSrcDir(GetThisGoSourceDir()))
 	for _, y := range x.Types {
 		if y.Name == "KatMode" {
 			for _, c := range y.Consts {
@@ -4224,8 +4224,8 @@ func (w *VfsListingPureWidget) selectionChangedTest() {
 		path := path.Join(w.path, w.GetSelected().(FileInfoStringer).Name())
 		var newFolder Widgeter
 
-		/*if bpkg, err := BuildPackageFromSrcDir(path); err == nil {
-			dpkg := GetDocPackage(bpkg, err)
+		/*if bpkg, err := gist5504644.BuildPackageFromSrcDir(path); err == nil {
+			dpkg := gist5504644.GetDocPackage(bpkg, err)
 
 			out := Underline(`import "`+dpkg.ImportPath+`"`) + "\n"
 			for _, v := range dpkg.Vars {
