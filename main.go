@@ -6517,7 +6517,7 @@ func initHttpHandlers() {
 			if goPackage.Dir.Repo != nil {
 				// Branches.
 				b += "\n" + Underline("Branches")
-				b += "\n" + u6.Branches(goPackage.Dir.Repo, u6.BranchesOptions{})
+				b += "\n" + u6.Branches(goPackage.Dir.Repo, u6.BranchesOptions{Base: req.URL.Query().Get("base")})
 			}
 
 			b += "\n" + Underline("Status")
