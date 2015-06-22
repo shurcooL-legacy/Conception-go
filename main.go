@@ -48,7 +48,7 @@ import (
 	"github.com/shurcooL/go/gists/gist5504644"
 	. "github.com/shurcooL/go/gists/gist5639599"
 	. "github.com/shurcooL/go/gists/gist5953185"
-	. "github.com/shurcooL/go/gists/gist6003701"
+	"github.com/shurcooL/go/gists/gist6003701"
 	. "github.com/shurcooL/go/gists/gist6096872"
 	. "github.com/shurcooL/go/gists/gist6418290"
 	. "github.com/shurcooL/go/gists/gist6418462"
@@ -2784,7 +2784,7 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	//s := w.window.GetClipboardString()
 	s := "get_clipboard_string"
 	// E.g., get_clipboard_string -> GetClipboardString
-	s += " -> " + UnderscoreSepToCamelCase(s)
+	s += " -> " + gist6003701.UnderscoreSepToCamelCase(s)
 	w.size[0] = float64(8 * len(s))
 	w.size[1] = 16
 
