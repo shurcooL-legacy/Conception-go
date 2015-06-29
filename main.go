@@ -41,7 +41,7 @@ import (
 	"github.com/shurcooL/go/exp/12"
 	"github.com/shurcooL/go/exp/13"
 	"github.com/shurcooL/go/exp/14"
-	. "github.com/shurcooL/go/gists/gist4727543"
+	"github.com/shurcooL/go/gists/gist4727543"
 	. "github.com/shurcooL/go/gists/gist5258650"
 	. "github.com/shurcooL/go/gists/gist5259939"
 	. "github.com/shurcooL/go/gists/gist5423254"
@@ -8057,7 +8057,7 @@ func main() {
 			action := func(params interface{}) string {
 				if strings.TrimSpace(params.(string)) != "" {
 					//started := time.Now(); defer func() { fmt.Println(time.Since(started).Seconds()) }()
-					return GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
+					return gist4727543.GetForcedUseFromImport(strings.TrimSpace(src.Content.Content()))
 				} else {
 					return ""
 				}
