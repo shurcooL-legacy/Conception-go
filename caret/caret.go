@@ -1,3 +1,4 @@
+// Package caret contains functionality related to text caret state and operations.
 package caret
 
 import (

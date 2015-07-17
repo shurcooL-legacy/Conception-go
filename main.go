@@ -6462,7 +6462,7 @@ func initHttpHandlers() {
 		fmt.Fprintln(w)
 		fmt.Fprintf(w, "%#v\n", widgets)
 	})*/
-	http.Handle("/favicon.ico/", http.NotFoundHandler())
+	http.Handle("/favicon.ico", http.NotFoundHandler())
 	http.Handle("/diff/", http.StripPrefix("/diff", u10.MarkdownOptionsHandlerFunc(func(req *http.Request) ([]byte, *u10.Options, error) {
 		var b string
 
@@ -6479,6 +6479,13 @@ func initHttpHandlers() {
 
 			if goPackage.Dir.Repo != nil {
 				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
+					// Stats (lines added/removed).
+					cmd := exec.Command("git", "diff", "--stat", "master")
+					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
+					if stat, err := cmd.CombinedOutput(); err == nil {
+						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
+					}
+
 					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiffMaster)); err == nil {
 						for _, fileDiff := range fileDiffs {
 							b += "\n" + "## " + fileDiffName(fileDiff) + "\n"
