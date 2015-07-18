@@ -7928,7 +7928,7 @@ func main() {
 				//fmt.Print("\x07")
 				godocOrgImporters.content = ""
 				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
-					godocOrgImporters.content = goon.Sdump(u5.GetGodocOrgImporters(goPackage))
+					godocOrgImporters.content = goon.Sdump(u5.GetGodocOrgImporters(goPackage.Bpkg.ImportPath))
 				}
 			}
 			godocOrgImporters.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
