@@ -14,7 +14,7 @@ Screenshot
 
 A screenshot showing off a single aspect of the project that was recently added or improved.
 
-![Early 2015 Overview](https://dl.dropboxusercontent.com/u/8554242/dmitri/projects/Conception/images/Go/early-2015-overview.png)
+![Early 2015 Overview](http://dmitri.shuralyov.com/projects/Conception/images/Go/early-2015-overview.png)
 
 Installation
 ------------
