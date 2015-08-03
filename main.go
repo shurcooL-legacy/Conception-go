@@ -1649,6 +1649,7 @@ func DrawInnerRoundedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl6
 	gl.End()
 }
 
+// Tau is the constant τ, which equals to 6.283185... or 2π.
 const Tau = 2 * math.Pi
 
 func DrawCircle(pos mgl64.Vec2, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
