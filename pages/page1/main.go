@@ -1,12 +1,13 @@
 package main
 
 import (
+	"log"
 	"math"
 	"math/rand"
 	"runtime"
 	"time"
 
-	"github.com/go-gl/gl/all-core/gl"
+	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/goxjs/glfw"
 )
@@ -20,8 +21,13 @@ func init() {
 	runtime.LockOSThread()
 }
 
+type nopContextWatcher struct{}
+
+func (nopContextWatcher) OnMakeCurrent(context interface{}) {}
+func (nopContextWatcher) OnDetach()                         {}
+
 func main() {
-	if err := glfw.Init(nil); err != nil {
+	if err := glfw.Init(nopContextWatcher{}); err != nil {
 		panic(err)
 	}
 	defer glfw.Terminate()
@@ -39,7 +45,7 @@ func main() {
 		panic(err)
 	}
 
-	glfw.SwapInterval(1) // Vsync
+	glfw.SwapInterval(1) // Vsync.
 
 	framebufferSizeCallback := func(w *glfw.Window, framebufferSize0, framebufferSize1 int) {
 		gl.Viewport(0, 0, int32(framebufferSize0), int32(framebufferSize1))
@@ -101,8 +107,17 @@ func main() {
 	var widget3 = newMultitouchTestBoxWidget(mgl64.Vec2{600 + 210, 300}, rand.Intn(6))
 	var widget4 = newMultitouchTestBoxWidget(mgl64.Vec2{600, 300 + 210}, rand.Intn(6))
 
+	go func() {
+		<-time.After(5 * time.Second)
+		log.Println("trigger!")
+		widget.color++ // HACK: Racy.
+
+		glfw.PostEmptyEvent()
+	}()
+
 	for !window.ShouldClose() {
-		glfw.PollEvents()
+		//glfw.PollEvents()
+		glfw.WaitEvents()
 
 		// Process Input.
 		inputEventQueue = ProcessInputEventQueue(inputEventQueue)
@@ -117,6 +132,7 @@ func main() {
 		mousePointer.Render()
 
 		window.SwapBuffers()
+		log.Println("swapped buffers")
 		runtime.Gosched()
 	}
 }

@@ -361,7 +361,7 @@ func (w *Test1Widget) Render() {
 		}
 	}*/
 
-	//PrintText(w.pos, tryReadFile("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/PrintPackageSummary.go"))
+	//PrintText(w.pos, readFileOrEmpty("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/PrintPackageSummary.go"))
 
 	//pkg := GetThisGoPackage()
 	//PrintText(w.pos, pkg.ImportPath+" - "+pkg.Name)
@@ -1635,7 +1635,7 @@ func DrawInnerRoundedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl6
 	gl.Vertex2d(float64(pos[0]-OuterDistance+size[0]), float64(pos[1]))
 	gl.End()
 
-	const InnerDistance = math.Sqrt2 + 0.5
+	const InnerDistance = OuterDistance + (math.Sqrt2 - 1)
 	gl.Begin(gl.POLYGON)
 	gl.Color3dv((*float64)(&backgroundColor[0]))
 	gl.Vertex2d(float64(pos[0]+InnerDistance), float64(pos[1]+1))
@@ -3456,7 +3456,7 @@ func (this *FileOpener) Update() {
 	if path := this.GetSources()[0].(*VfsListingWidget).GetSelectedPath(); strings.HasSuffix(path, ".go") {
 		this.openedFile = NewFileView(path)
 
-		this.openedFile.AddAndSetViewGroup(this.editor, tryReadFile(path))
+		this.openedFile.AddAndSetViewGroup(this.editor, readFileOrEmpty(path))
 
 		if goPackage := this.GetSources()[1].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
 			MakeUpdatedLock.Unlock() // HACK: Needed because UpdateVcs() calls MakeUpdated().
@@ -4593,7 +4593,7 @@ func NewMultilineContentFile(path string) *MultilineContentFile {
 		panic(err)
 	}
 	this.InitViewGroup(this, FileUri("file://"+absPath))
-	this.AddAndSetViewGroup(this.MultilineContent, tryReadFile(this.path))
+	this.AddAndSetViewGroup(this.MultilineContent, readFileOrEmpty(this.path))
 	UniversalClock.AddChangeListener(this)
 	return this
 }
@@ -4607,7 +4607,7 @@ func (this *MultilineContentFile) SetSelf(content string) {
 
 func (this *MultilineContentFile) NotifyChange() {
 	// Check if the file has been changed externally, and if so, override this widget
-	NewContent := tryReadFile(this.path)
+	NewContent := readFileOrEmpty(this.path)
 	if NewContent != this.Content() {
 		SetViewGroupOther(this, NewContent)
 		redraw = true
@@ -4638,7 +4638,7 @@ func NewFileView(path string) *FileView {
 		panic(err)
 	}
 
-	this.lastContentQUICKHACK = tryReadFile(this.path)
+	this.lastContentQUICKHACK = readFileOrEmpty(this.path)
 
 	this.InitViewGroup(this, FileUri("file://"+absPath))
 	UniversalClock.AddChangeListener(this) // TODO: Closing, etc.
@@ -4664,7 +4664,7 @@ func (this *FileView) SetSelf(content string) {
 // TODO: Change detection, closing, etc.
 func (this *FileView) NotifyChange() {
 	// Check if the file has been changed externally, and if so, override this widget
-	NewContent := tryReadFile(this.path)
+	NewContent := readFileOrEmpty(this.path)
 	if NewContent != this.lastContentQUICKHACK {
 		this.lastContentQUICKHACK = NewContent
 		SetViewGroupOther(this, NewContent)
@@ -7033,7 +7033,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			editorContent := NewMultilineContent()
 			w := NewTextBoxWidgetExternalContent(mgl64.Vec2{200, 200}, editorContent, nil)
 			openedFile := NewFileView("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/play/31/main.go")
-			openedFile.AddAndSetViewGroup(editorContent, tryReadFile(openedFile.path))
+			openedFile.AddAndSetViewGroup(editorContent, readFileOrEmpty(openedFile.path))
 			widgets = append(widgets, w)
 		}
 	case 6:
@@ -8831,7 +8831,8 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 
 // =====
 
-func tryReadFile(filename string) string {
+// readFileOrEmpty returns the contents of file. If an error is encountered, an empty string is returned.
+func readFileOrEmpty(filename string) string {
 	b, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return ""
