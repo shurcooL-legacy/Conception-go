@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"runtime"
 
 	"github.com/goxjs/gl"
@@ -57,7 +58,7 @@ func main() {
 	mousePointer = &events.Pointer{VirtualCategory: events.POINTING}
 	keyboardPointer = &events.Pointer{VirtualCategory: events.TYPING}
 
-	mouseMovement := func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
+	window.SetMouseMovementCallback(func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
 		inputEvent := events.InputEvent{
 			Pointer:    mousePointer,
 			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: {}},
@@ -70,8 +71,7 @@ func main() {
 			inputEvent.Axes = []float64{xpos, ypos}
 		}
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
-	}
-	window.SetMouseMovementCallback(mouseMovement)
+	})
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		inputEvent := events.InputEvent{
@@ -139,7 +139,7 @@ func main() {
 		glfw.PollEvents()
 
 		// Process Input.
-		inputEventQueue = events.ProcessInputEventQueue(inputEventQueue)
+		inputEventQueue = processInputEventQueue(inputEventQueue)
 
 		gl.Clear(gl.COLOR_BUFFER_BIT)
 
@@ -148,4 +148,17 @@ func main() {
 		window.SwapBuffers()
 		runtime.Gosched()
 	}
+}
+
+func processInputEventQueue(inputEventQueue []events.InputEvent) []events.InputEvent {
+	for len(inputEventQueue) > 0 {
+		inputEvent := inputEventQueue[0]
+
+		fmt.Println(inputEvent)
+		//spew.Dump(inputEvent)
+
+		inputEventQueue = inputEventQueue[1:]
+	}
+
+	return inputEventQueue
 }

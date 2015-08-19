@@ -6,6 +6,7 @@ import (
 	_ "image/png"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-gl/gl/v2.1/gl"
@@ -164,7 +165,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 const fontWidth, fontHeight = 6, 12
 
 func InitFont() {
-	LoadTexture("./data/Font.png")
+	LoadTexture(filepath.Join("data", "Font.png"))
 
 	oFontBase = gl.GenLists(32 + 96*4)
 	for i := 0; i < 96*4; i++ {
