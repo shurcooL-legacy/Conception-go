@@ -2,8 +2,10 @@
 package events
 
 import (
-	"fmt"
+	"io"
 	"time"
+
+	"github.com/go-gl/mathgl/mgl64"
 )
 
 type VirtualCategory uint8
@@ -18,9 +20,9 @@ const (
 
 type Pointer struct {
 	VirtualCategory VirtualCategory
-	//Mapping         Widgeters // Always reflects current pointer state.
-	//OriginMapping   Widgeters // Updated only when pointer is moved while not active (e.g., where mouse button was first pressed down).
-	State PointerState
+	Mapping         Widgeters // Always reflects current pointer state.
+	OriginMapping   Widgeters // Updated only when pointer is moved while not active (e.g., where mouse button was first pressed down).
+	State           PointerState
 }
 
 func (this *Pointer) Render() {
@@ -103,9 +105,16 @@ const (
 
 //go:generate stringer -type=EventType
 
+type eventTypeSet map[EventType]struct{}
+
+func (s eventTypeSet) Has(et EventType) bool {
+	_, ok := s[et]
+	return ok
+}
+
 type InputEvent struct {
 	Pointer    *Pointer
-	EventTypes map[EventType]struct{}
+	EventTypes eventTypeSet
 	InputId    uint16
 	// TODO: Add pointers to BeforeState and AfterState?
 
@@ -120,18 +129,18 @@ type InputEvent struct {
 	return spew.Sdump(e)
 }*/
 
-func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
+func ProcessInputEventQueue(inputEventQueue []InputEvent, widget Widgeter) []InputEvent {
 	for len(inputEventQueue) > 0 {
-		inputEvent := inputEventQueue[0]
-
-		fmt.Println(inputEvent)
-		//spew.Dump(inputEvent)
-
 		/*inputEvent := inputEventQueue[0]
+
+		//fmt.Println(inputEvent)
+		//spew.Dump(inputEvent)*/
+
+		inputEvent := inputEventQueue[0]
 
 		// TODO: Calculate whether a pointing pointer moved relative to canvas in a better way... what if canvas is moved via keyboard, etc.
 		pointingPointerMovedRelativeToCanvas := inputEvent.Pointer.VirtualCategory == POINTING &&
-			(inputEvent.EventTypes[AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[SLIDER_EVENT] && inputEvent.InputId == 2)
+			(inputEvent.EventTypes.Has(AXIS_EVENT) && inputEvent.InputId == 0 || inputEvent.EventTypes.Has(SLIDER_EVENT) && inputEvent.InputId == 2)
 
 		if pointingPointerMovedRelativeToCanvas {
 			LocalPosition := mgl64.Vec2{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])}
@@ -151,7 +160,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 
 		// Populate OriginMapping (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
 		if pointingPointerMovedRelativeToCanvas &&
-			!inputEvent.EventTypes[POINTER_DEACTIVATION] && !inputEvent.Pointer.State.IsActive() {
+			!inputEvent.EventTypes.Has(POINTER_DEACTIVATION) && !inputEvent.Pointer.State.IsActive() {
 
 			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 			copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
@@ -162,11 +171,11 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent) []InputEvent {
 		}
 
 		// Populate OriginMapping (but only upon pointer deactivation event)
-		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes[POINTER_DEACTIVATION] {
+		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes.Has(POINTER_DEACTIVATION) {
 
 			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 			copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
-		}*/
+		}
 
 		inputEventQueue = inputEventQueue[1:]
 	}
@@ -178,7 +187,7 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 	preStateActive := inputEvent.Pointer.State.IsActive()
 
 	{
-		if _, ok := inputEvent.EventTypes[BUTTON_EVENT]; ok {
+		if inputEvent.EventTypes.Has(BUTTON_EVENT) {
 			// Extend slice if needed.
 			neededSize := int(inputEvent.InputId) + len(inputEvent.Buttons)
 			if neededSize > len(inputEvent.Pointer.State.Buttons) {
@@ -188,7 +197,7 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 			copy(inputEvent.Pointer.State.Buttons[inputEvent.InputId:], inputEvent.Buttons)
 		}
 
-		if _, ok := inputEvent.EventTypes[AXIS_EVENT]; ok {
+		if inputEvent.EventTypes.Has(AXIS_EVENT) {
 			// Extend slice if needed.
 			neededSize := int(inputEvent.InputId) + len(inputEvent.Axes)
 			if neededSize > len(inputEvent.Pointer.State.Axes) {
@@ -221,4 +230,90 @@ func nearInt64(value float64) int64 {
 	} else {
 		return int64(value - 0.5)
 	}
+}
+
+// =====
+
+// ---
+
+type ChangeListener interface {
+	NotifyChange()
+}
+
+type ChangeListenerFunc func()
+
+func (f ChangeListenerFunc) NotifyChange() {
+	f()
+}
+
+// ---
+
+type DepNodeI interface {
+	AddChangeListener(l ChangeListener)
+}
+
+type DepNode struct {
+	changeListeners []ChangeListener
+}
+
+func (this *DepNode) AddChangeListener(l ChangeListener) {
+	this.changeListeners = append(this.changeListeners, l)
+
+	l.NotifyChange() // TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
+}
+
+// Pre-condition: l is a change listener that exists
+func (this *DepNode) RemoveChangeListener(l ChangeListener) {
+	for i := range this.changeListeners {
+		if this.changeListeners[i] == l {
+			// Delete
+			copy(this.changeListeners[i:], this.changeListeners[i+1:])
+			this.changeListeners[len(this.changeListeners)-1] = nil
+			this.changeListeners = this.changeListeners[:len(this.changeListeners)-1]
+			//println("removed ith element of originally this many", i, len(this.changeListeners)+1)
+			return
+		}
+	}
+	panic("RemoveChangeListener: ChangeListener to be deleted wasn't found.")
+}
+
+func (this *DepNode) NotifyAllListeners() {
+	// TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
+	for _, changeListener := range this.changeListeners {
+		changeListener.NotifyChange()
+	}
+}
+
+// ---
+
+type Widgeter interface {
+	PollLogic()
+	io.Closer
+	Layout()
+	LayoutNeeded()
+	Render()
+	Hit(mgl64.Vec2) []Widgeter
+	ProcessEvent(InputEvent)                     // TODO: Upgrade to MatchEventQueue() or so
+	ContainsWidget(widget, target Widgeter) bool // Returns true if target is widget or within it.
+
+	Pos() *mgl64.Vec2
+	Size() *mgl64.Vec2
+	HoverPointers() map[*Pointer]bool
+	Parent() Widgeter
+	SetParent(Widgeter)
+
+	ParentToLocal(mgl64.Vec2) mgl64.Vec2
+
+	//DepNodeI
+}
+
+type Widgeters []Widgeter
+
+func (widgets Widgeters) ContainsWidget(target Widgeter) bool {
+	for _, widget := range widgets {
+		if widget.ContainsWidget(widget, target) {
+			return true
+		}
+	}
+	return false
 }

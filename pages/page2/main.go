@@ -1,14 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"runtime"
 	"time"
 
 	"github.com/go-gl/gl/v2.1/gl"
-	"github.com/go-gl/glfw/v3.1/glfw"
 	"github.com/go-gl/mathgl/mgl64"
+	"github.com/goxjs/glfw"
+	"github.com/shurcooL/Conception-go/events"
 )
 
 var boxUpdated bool
@@ -80,8 +82,13 @@ func init() {
 	runtime.LockOSThread()
 }
 
+type nopContextWatcher struct{}
+
+func (nopContextWatcher) OnMakeCurrent(context interface{}) {}
+func (nopContextWatcher) OnDetach()                         {}
+
 func main() {
-	if err := glfw.Init(); err != nil {
+	if err := glfw.Init(nopContextWatcher{}); err != nil {
 		panic(err)
 	}
 	defer glfw.Terminate()
@@ -123,6 +130,37 @@ func main() {
 	}
 	window.SetFramebufferSizeCallback(framebufferSizeCallback)
 
+	var inputEventQueue []events.InputEvent
+	mousePointer = &events.Pointer{VirtualCategory: events.POINTING}
+
+	window.SetMouseMovementCallback(func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
+		inputEvent := events.InputEvent{
+			Pointer:    mousePointer,
+			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: {}},
+			InputId:    0,
+			Buttons:    nil,
+			Sliders:    []float64{xdelta, ydelta},
+		}
+		if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
+			inputEvent.EventTypes[events.AXIS_EVENT] = struct{}{}
+			inputEvent.Axes = []float64{xpos, ypos}
+		}
+		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+	})
+
+	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
+		inputEvent := events.InputEvent{
+			Pointer:     mousePointer,
+			EventTypes:  map[events.EventType]struct{}{events.BUTTON_EVENT: {}},
+			InputId:     uint16(button),
+			Buttons:     []bool{action != glfw.Release},
+			Sliders:     nil,
+			Axes:        nil,
+			ModifierKey: uint8(mods),
+		}
+		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+	})
+
 	go func() {
 		<-time.After(5 * time.Second)
 		log.Println("trigger!")
@@ -136,11 +174,22 @@ func main() {
 
 	var spinner int
 
+	var widgets []events.Widgeter
+
+	widgets = append(widgets, NewButtonWidget(mgl64.Vec2{50, 200}, func() { fmt.Println("button triggered") }))
+
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
 		glfw.WaitEvents()
 		//glfw.PollEvents()
 
+		// Process Input.
+		inputEventQueue = events.ProcessInputEventQueue(inputEventQueue, widgets[0])
+
 		gl.Clear(gl.COLOR_BUFFER_BIT)
+
+		for _, widget := range widgets {
+			widget.Render()
+		}
 
 		drawSpinner(spinner)
 		spinner++
@@ -151,5 +200,156 @@ func main() {
 		log.Println("swapped buffers")
 
 		//runtime.Gosched()
+	}
+}
+
+// =====
+
+var mousePointer *events.Pointer
+
+// ---
+
+type Widget struct {
+	pos           mgl64.Vec2
+	size          mgl64.Vec2
+	hoverPointers map[*events.Pointer]bool
+	parent        events.Widgeter
+
+	//DepNode
+}
+
+func NewWidget(pos, size mgl64.Vec2) Widget {
+	return Widget{pos: pos, size: size, hoverPointers: map[*events.Pointer]bool{}}
+}
+
+func (_ *Widget) PollLogic()   {}
+func (_ *Widget) Close() error { return nil }
+func (w *Widget) Layout() {
+	if w.parent != nil {
+		w.parent.Layout()
+	}
+}
+func (_ *Widget) LayoutNeeded() {}
+func (_ *Widget) Render()       {}
+func (w *Widget) Hit(ParentPosition mgl64.Vec2) []events.Widgeter {
+	LocalPosition := w.ParentToLocal(ParentPosition)
+
+	Hit := (LocalPosition[0] >= 0 &&
+		LocalPosition[1] >= 0 &&
+		LocalPosition[0] <= w.size[0] &&
+		LocalPosition[1] <= w.size[1])
+
+	if Hit {
+		return []events.Widgeter{w}
+	} else {
+		return nil
+	}
+}
+func (w *Widget) ProcessEvent(inputEvent events.InputEvent) {}
+func (_ *Widget) ContainsWidget(widget, target events.Widgeter) bool {
+	return widget == target
+}
+
+func (w *Widget) Pos() *mgl64.Vec2  { return &w.pos }
+func (w *Widget) Size() *mgl64.Vec2 { return &w.size }
+
+func (w *Widget) HoverPointers() map[*events.Pointer]bool {
+	return w.hoverPointers
+}
+
+func (w *Widget) Parent() events.Widgeter     { return w.parent }
+func (w *Widget) SetParent(p events.Widgeter) { w.parent = p }
+
+func (w *Widget) ParentToLocal(ParentPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
+	return ParentPosition.Sub(w.pos)
+}
+
+type WidgeterS struct{ events.Widgeter }
+
+func (w WidgeterS) GlobalToParent(GlobalPosition mgl64.Vec2) (ParentPosition mgl64.Vec2) {
+	switch w.Parent() {
+	case nil:
+		ParentPosition = GlobalPosition
+	default:
+		ParentPosition = WidgeterS{w.Parent()}.GlobalToLocal(GlobalPosition)
+	}
+	return ParentPosition
+}
+func (w WidgeterS) GlobalToLocal(GlobalPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
+	return w.ParentToLocal(WidgeterS{w}.GlobalToParent(GlobalPosition))
+}
+
+// ---
+
+type ButtonWidget struct {
+	Widget
+	action func()
+}
+
+func NewButtonWidget(pos mgl64.Vec2, action func()) *ButtonWidget {
+	w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{106, 18})}
+	w.setAction(action)
+
+	return w
+}
+
+func (w *ButtonWidget) setAction(action func()) {
+	w.action = action
+}
+
+var (
+	nearlyWhiteColor = mgl64.Vec3{0.975, 0.975, 0.975}
+	grayColor        = mgl64.Vec3{0.75, 0.75, 0.75}
+	highlightColor   = mgl64.Vec3{0.898, 0.765, 0.396} // Yellowish on-hover border color.
+)
+
+func (w *ButtonWidget) Render() {
+	// HACK: Brute-force check the mouse pointer if it contains this widget
+	isOriginHit := false
+	for _, hit := range mousePointer.OriginMapping {
+		if w == hit {
+			isOriginHit = true
+			break
+		}
+	}
+	isHit := len(w.HoverPointers()) > 0
+
+	// HACK: Assumes mousePointer rather than considering all connected pointing pointers
+	if isOriginHit && mousePointer.State.IsActive() && isHit {
+		//DrawGBox(w.pos, w.size)
+		//drawInnerRoundedBox(w.pos, w.size, highlightColor, grayColor)
+		c := mgl64.Vec3{42.0 / 255, 154.0 / 255, 254.0 / 255}
+		drawInnerRoundedBox(w.pos, w.size, c.Mul(201.0/255), c)
+		//} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
+		//	//DrawYBox(w.pos, w.size)
+		//	drawInnerRoundedBox(w.pos, w.size, highlightColor, nearlyWhiteColor)
+	} else {
+		//DrawNBox(w.pos, w.size)
+		//drawInnerRoundedBox(w.pos, w.size, mgl64.Vec3{0.3, 0.3, 0.3}, nearlyWhiteColor)
+		c := mgl64.Vec3{1, 1, 1}
+		drawInnerRoundedBox(w.pos, w.size, c.Mul(201.0/255), c)
+	}
+}
+func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []events.Widgeter {
+	if len(w.Widget.Hit(ParentPosition)) > 0 {
+		return []events.Widgeter{w}
+	} else {
+		return nil
+	}
+}
+
+func (w *ButtonWidget) ProcessEvent(inputEvent events.InputEvent) {
+	//if _, buttonEvent := inputEvent.EventTypes[events.BUTTON_EVENT]; inputEvent.Pointer.VirtualCategory == events.POINTING && buttonEvent && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes.Has(events.BUTTON_EVENT) && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
+		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
+
+		if w.action != nil {
+			w.action()
+			//println(GetSourceAsString(w.action))
+
+			w.Layout()
+			//w.NotifyAllListeners()
+		}
 	}
 }
