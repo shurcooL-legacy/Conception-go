@@ -201,6 +201,15 @@ func main() {
 
 		drawBox()
 
+		gl.LoadIdentity()
+		gl.Color3d(1, 0, 0)
+		NewOpenGlStream(mgl64.Vec2{50, 300}).PrintText(` !"#$%&'()*+,-./
+0123456789:;<=>?
+@ABCDEFGHIJKLMNO
+PQRSTUVWXYZ[\]^_
+` + "`" + `abcdefghijklmno
+pqrstuvwxyz{|}~`)
+
 		window.SwapBuffers()
 		log.Println("swapped buffers")
 
@@ -292,8 +301,8 @@ type ButtonWidget struct {
 }
 
 func NewButtonWidget(pos mgl64.Vec2, action func()) *ButtonWidget {
-	//w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{106, 18})}
-	w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{122, 18})}
+	w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{106, 18})}
+	//w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{122, 18})}
 	w.setAction(action)
 
 	return w

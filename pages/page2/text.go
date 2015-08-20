@@ -59,7 +59,7 @@ func (o *OpenGlStream) SetPos(pos mgl64.Vec2) {
 }
 
 func (o *OpenGlStream) SetPosWithExpandedPosition(pos mgl64.Vec2, x, y uint32) {
-	o.pos = pos.Add(mgl64.Vec2{float64(x * fontWidth), float64(y * fontHeight)})
+	o.pos = pos.Add(mgl64.Vec2{float64(x) * fontWidth, float64(y) * fontHeight})
 	o.lineStartX = pos[0]
 	o.advance = x
 }
@@ -129,7 +129,7 @@ func (o *OpenGlStream) advanceReset() {
 	o.afterAdvance()
 }
 func (o *OpenGlStream) afterAdvance() {
-	o.pos[0] = o.lineStartX + float64(fontWidth*o.advance)
+	o.pos[0] = o.lineStartX + fontWidth*float64(o.advance)
 }
 
 // Shouldn't have tabs nor newlines
@@ -168,39 +168,44 @@ func (o *OpenGlStream) PrintSegment(s string) {
 
 // ---
 
-const fontWidth, fontHeight = 6, 12
+const fontHeight = 13.1
+const fontWidth = fontHeight * (1312.0 / 900) * 6.0 / 16
+
+var shiftXs = [6][17]float64{[17]float64{0, 0.025914634146341462, 0.051067073170731704, 0.09070121951219512, 0.14329268292682926, 0.19588414634146342, 0.29039634146341464, 0.34984756097560976, 0.37652439024390244, 0.4009146341463415, 0.4253048780487805, 0.45884146341463417, 0.5152439024390244, 0.541920731707317, 0.5785060975609756, 0.604420731707317, 0.6364329268292683}, [17]float64{0, 0.052591463414634144, 0.10518292682926829, 0.15777439024390244, 0.21036585365853658, 0.2629573170731707, 0.3155487804878049, 0.36814024390243905, 0.42073170731707316, 0.4725609756097561, 0.5251524390243902, 0.551829268292683, 0.5777439024390244, 0.6349085365853658, 0.6913109756097561, 0.7484756097560976, 0.8010670731707317}, [17]float64{0, 0.07545731707317073, 0.13719512195121952, 0.20121951219512196, 0.2698170731707317, 0.3361280487804878, 0.3940548780487805, 0.4481707317073171, 0.5198170731707317, 0.5884146341463414, 0.6128048780487805, 0.6615853658536586, 0.7248475609756098, 0.7774390243902439, 0.8597560975609756, 0.9283536585365854, 1}, [17]float64{0, 0.06097560975609756, 0.13338414634146342, 0.19817073170731708, 0.25914634146341464, 0.3132621951219512, 0.38185975609756095, 0.43902439024390244, 0.5266768292682927, 0.5846036585365854, 0.645579268292683, 0.7035060975609756, 0.7278963414634146, 0.7591463414634146, 0.7842987804878049, 0.8407012195121951, 0.8879573170731707}, [17]float64{0, 0.021341463414634148, 0.07164634146341463, 0.12804878048780488, 0.17835365853658536, 0.2347560975609756, 0.2850609756097561, 0.3132621951219512, 0.3673780487804878, 0.41996951219512196, 0.4413109756097561, 0.46189024390243905, 0.5114329268292683, 0.5320121951219512, 0.6128048780487805, 0.6653963414634146, 0.7195121951219512}, [17]float64{0, 0.056402439024390245, 0.11204268292682927, 0.14329268292682926, 0.19054878048780488, 0.22027439024390244, 0.2728658536585366, 0.3201219512195122, 0.39176829268292684, 0.4413109756097561, 0.4885670731707317, 0.5335365853658537, 0.5647865853658537, 0.5861280487804879, 0.6173780487804879, 0.6745426829268293, 0.7004573170731707}}
 
 func InitFont() {
-	LoadTexture(filepath.Join("..", "..", "data", "Font.png"))
+	LoadTexture(filepath.FromSlash("/Users/Dmitri/Dropbox/Work/2015/Bitmap Fonts/Helvetica Neue.png"))
 
-	oFontBase = gl.GenLists(32 + 96*4)
-	for i := 0; i < 96*4; i++ {
-		const shiftX, shiftY = float64(1.0 / 16), float64(1.0 / 6 / 4)
+	oFontBase = gl.GenLists(32 + 96)
+	for i := 0; i < 96; i++ {
+		const shiftY = float64(1.0 / 6)
 
 		indexX, indexY := i%16, i/16
 
+		charWidth := shiftXs[indexY][indexX+1] - shiftXs[indexY][indexX]
+
 		gl.NewList(oFontBase+uint32(i+32), gl.COMPILE)
 		gl.Begin(gl.QUADS)
-		gl.TexCoord2d(float64(indexX)*shiftX, float64(indexY)*shiftY)
-		gl.Vertex2i(0, 0)
-		gl.TexCoord2d(float64(indexX+1)*shiftX, float64(indexY)*shiftY)
-		gl.Vertex2i(fontWidth, 0)
-		gl.TexCoord2d(float64(indexX+1)*shiftX, float64(indexY+1)*shiftY)
-		gl.Vertex2i(fontWidth, fontHeight)
-		gl.TexCoord2d(float64(indexX)*shiftX, float64(indexY+1)*shiftY)
-		gl.Vertex2i(0, fontHeight)
+		gl.TexCoord2d(shiftXs[indexY][indexX], float64(indexY)*shiftY)
+		gl.Vertex2d(0, 0)
+		gl.TexCoord2d(shiftXs[indexY][indexX+1], float64(indexY)*shiftY)
+		gl.Vertex2d(fontWidth*charWidth/float64(1.0/16), 0)
+		gl.TexCoord2d(shiftXs[indexY][indexX+1], float64(indexY+1)*shiftY)
+		gl.Vertex2d(fontWidth*charWidth/float64(1.0/16), fontHeight)
+		gl.TexCoord2d(shiftXs[indexY][indexX], float64(indexY+1)*shiftY)
+		gl.Vertex2d(0, fontHeight)
 		gl.End()
-		gl.Translated(fontWidth, 0.0, 0.0)
+		gl.Translated(fontWidth*charWidth/float64(1.0/16), 0.0, 0.0)
 		gl.EndList()
 	}
 
 	oFontBackground = gl.GenLists(1)
 	gl.NewList(oFontBackground, gl.COMPILE)
 	gl.Begin(gl.QUADS)
-	gl.Vertex2i(0, 0)
-	gl.Vertex2i(0, fontHeight)
-	gl.Vertex2i(fontWidth, fontHeight)
-	gl.Vertex2i(fontWidth, 0)
+	gl.Vertex2d(0, 0)
+	gl.Vertex2d(0, fontHeight)
+	gl.Vertex2d(fontWidth, fontHeight)
+	gl.Vertex2d(fontWidth, 0)
 	gl.End()
 	gl.Translated(fontWidth, 0.0, 0.0)
 	gl.EndList()
@@ -209,7 +214,7 @@ func InitFont() {
 }
 
 func DeinitFont() {
-	gl.DeleteLists(oFontBase, 32+96*4)
+	gl.DeleteLists(oFontBase, 32+96)
 	gl.DeleteLists(oFontBackground, 1)
 }
 
