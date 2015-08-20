@@ -18,6 +18,9 @@ import (
 var oFontBase, oFontBackground uint32
 var lodBias float64 = -66.67
 
+var selectedTextColor = mgl64.Vec3{195 / 255.0, 212 / 255.0, 242 / 255.0}
+var selectedTextDarkColor = selectedTextColor.Mul(0.75)
+
 // FontOptions specifies the properties of the font.
 type FontOptions uint8
 
@@ -95,7 +98,7 @@ func (o *OpenGlStream) PrintLine(s string) {
 			backgroundColor = *o.BackgroundColor
 		}
 
-		DrawInnerRoundedBox(o.pos, mgl64.Vec2{fontWidth * float64(expandedLineLength), fontHeight}, *o.BorderColor, backgroundColor)
+		drawInnerRoundedBox(o.pos, mgl64.Vec2{fontWidth * float64(expandedLineLength), fontHeight}, *o.BorderColor, backgroundColor)
 
 		gl.PopAttrib()
 	}
@@ -109,7 +112,7 @@ func (o *OpenGlStream) PrintLine(s string) {
 			o.PrintSegment(strings.Repeat(" ", int(tabSpaces))) // Tab.
 			if o.ShowInvisibles {
 				gl.PushAttrib(gl.CURRENT_BIT)
-				DrawBorderlessBox(o.pos.Add(mgl64.Vec2{1, fontHeight/2 - 1}), mgl64.Vec2{fontWidth*float64(tabSpaces) - 2, 2}, selectedTextDarkColor)
+				drawBorderlessBox(o.pos.Add(mgl64.Vec2{1, fontHeight/2 - 1}), mgl64.Vec2{fontWidth*float64(tabSpaces) - 2, 2}, selectedTextDarkColor)
 				gl.PopAttrib()
 			}
 			o.advanceBy(tabSpaces)
@@ -168,7 +171,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 const fontWidth, fontHeight = 6, 12
 
 func InitFont() {
-	LoadTexture(filepath.Join("data", "Font.png"))
+	LoadTexture(filepath.Join("..", "..", "data", "Font.png"))
 
 	oFontBase = gl.GenLists(32 + 96*4)
 	for i := 0; i < 96*4; i++ {
@@ -249,4 +252,18 @@ func LoadTexture(path string) {
 	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, -0.5)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(bounds.Dx()), int32(bounds.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(pixPointer))
 	CheckGLError()
+}
+
+// =====
+
+func drawBorderlessBox(pos, size mgl64.Vec2, backgroundColor mgl64.Vec3) {
+	gl.Color3dv((*float64)(&backgroundColor[0]))
+	gl.Rectd(float64(pos[0]), float64(pos[1]), float64(pos.Add(size)[0]), float64(pos.Add(size)[1]))
+}
+
+func CheckGLError() {
+	errorCode := gl.GetError()
+	if errorCode != 0 {
+		log.Panicln("GL Error:", errorCode)
+	}
 }

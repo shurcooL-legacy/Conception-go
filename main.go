@@ -88,7 +88,6 @@ var modeFlag = flag.Int("mode", 1, "Mode.")
 var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
 var keepRunning = true
-var oFontBase, oFontBackground uint32
 var redraw bool = true
 var windowPointer *Pointer
 var mousePointer *Pointer
@@ -100,8 +99,6 @@ var goCompileErrorsTest GoCompileErrorsTest
 var goCompileErrorsManagerTest GoCompileErrorsManagerTest
 
 var booVcs *exp12.Directory
-
-var lodBias float64 = -66.67
 
 var windowFocusedEvent DepNode2ManualI = &DepNode2Manual{} // TEST.
 
@@ -6792,7 +6789,7 @@ func main() {
 			width, height := window.GetSize()
 			window.SetPos((vm.Width-width)/2, (vm.Height-height)/2)
 		}
-		glfw.SwapInterval(1) // Vsync
+		glfw.SwapInterval(1) // Vsync.
 
 		InitFont()
 		defer DeinitFont()

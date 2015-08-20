@@ -105,11 +105,14 @@ func main() {
 		panic(err)
 	}
 
-	glfw.SwapInterval(1)
+	glfw.SwapInterval(1) // Vsync.
 	//window.SetPos(50, 600)
 	//window.SetPos(1600, 600)
 	//window.SetPos(1275, 300)
 	//window.SetPos(1200, 300)
+
+	InitFont()
+	defer DeinitFont()
 
 	framebufferSizeCallback := func(w *glfw.Window, framebufferSize0, framebufferSize1 int) {
 		gl.Viewport(0, 0, int32(framebufferSize0), int32(framebufferSize1))
@@ -168,6 +171,8 @@ func main() {
 
 		glfw.PostEmptyEvent()
 	}()
+
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA) // For font.
 
 	//gl.ClearColor(0.8, 0.3, 0.01, 1)
 	gl.ClearColor(247.0/255, 247.0/255, 247.0/255, 1)
@@ -287,7 +292,8 @@ type ButtonWidget struct {
 }
 
 func NewButtonWidget(pos mgl64.Vec2, action func()) *ButtonWidget {
-	w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{106, 18})}
+	//w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{106, 18})}
+	w := &ButtonWidget{Widget: NewWidget(pos, mgl64.Vec2{122, 18})}
 	w.setAction(action)
 
 	return w
@@ -320,6 +326,7 @@ func (w *ButtonWidget) Render() {
 		//drawInnerRoundedBox(w.pos, w.size, highlightColor, grayColor)
 		c := mgl64.Vec3{42.0 / 255, 154.0 / 255, 254.0 / 255}
 		drawInnerRoundedBox(w.pos, w.size, c.Mul(201.0/255), c)
+		gl.Color3d(1, 1, 1)
 		//} else if (isHit && !mousePointer.State.IsActive()) || isOriginHit {
 		//	//DrawYBox(w.pos, w.size)
 		//	drawInnerRoundedBox(w.pos, w.size, highlightColor, nearlyWhiteColor)
@@ -328,7 +335,10 @@ func (w *ButtonWidget) Render() {
 		//drawInnerRoundedBox(w.pos, w.size, mgl64.Vec3{0.3, 0.3, 0.3}, nearlyWhiteColor)
 		c := mgl64.Vec3{1, 1, 1}
 		drawInnerRoundedBox(w.pos, w.size, c.Mul(201.0/255), c)
+		gl.Color3d(0, 0, 0)
 	}
+
+	NewOpenGlStream(w.pos.Add(mgl64.Vec2{8, 3})).PrintText("Software Update...")
 }
 func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []events.Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
