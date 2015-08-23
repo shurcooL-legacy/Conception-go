@@ -16,8 +16,7 @@ import (
 var boxUpdated bool
 
 func drawBox() {
-	gl.LoadIdentity()
-	/*gl.Translatef(50, 100, 0)
+	/*gl.Translated(50, 100, 0)
 	gl.Color3d(201.0/255, 201.0/255, 201.0/255)
 	gl.Recti(0, 0, 106, 18)
 	if !boxUpdated {
@@ -39,6 +38,51 @@ func drawBox() {
 }
 
 func drawInnerRoundedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
+	if size[0] == 0 || size[1] == 0 {
+		return
+	}
+
+	const totalSlices = 4 * 16
+	const borderWidth = 1
+	const radius = 2.5 + borderWidth
+	var x = float64(totalSlices)
+
+	gl.Color3dv((*float64)(&backgroundColor[0]))
+	gl.Begin(gl.TRIANGLE_STRIP)
+	for i := 0; i <= totalSlices/4; i++ {
+		gl.Vertex2d(pos[0]+size[0]-radius+math.Sin(Tau*float64(i)/x)*(radius-borderWidth), pos[1]+radius-math.Cos(Tau*float64(i)/x)*(radius-borderWidth))
+		gl.Vertex2d(pos[0]+radius+math.Sin(Tau*float64(totalSlices-i)/x)*(radius-borderWidth), pos[1]+radius-math.Cos(Tau*float64(totalSlices-i)/x)*(radius-borderWidth))
+	}
+	for i := totalSlices / 4; i <= totalSlices/2; i++ {
+		gl.Vertex2d(pos[0]+size[0]-radius+math.Sin(Tau*float64(i)/x)*(radius-borderWidth), pos[1]+size[1]-radius-math.Cos(Tau*float64(i)/x)*(radius-borderWidth))
+		gl.Vertex2d(pos[0]+radius+math.Sin(Tau*float64(totalSlices-i)/x)*(radius-borderWidth), pos[1]+size[1]-radius-math.Cos(Tau*float64(totalSlices-i)/x)*(radius-borderWidth))
+	}
+	gl.End()
+
+	gl.Color3dv((*float64)(&borderColor[0]))
+	gl.Begin(gl.TRIANGLE_STRIP)
+	gl.Vertex2d(pos[0]+radius, pos[1])
+	gl.Vertex2d(pos[0]+radius, pos[1]+borderWidth)
+	for i := 0; i <= totalSlices/4; i++ {
+		gl.Vertex2d(pos[0]+size[0]-radius+math.Sin(Tau*float64(i)/x)*radius, pos[1]+radius-math.Cos(Tau*float64(i)/x)*radius)
+		gl.Vertex2d(pos[0]+size[0]-radius+math.Sin(Tau*float64(i)/x)*(radius-borderWidth), pos[1]+radius-math.Cos(Tau*float64(i)/x)*(radius-borderWidth))
+	}
+	for i := totalSlices / 4; i <= totalSlices/2; i++ {
+		gl.Vertex2d(pos[0]+size[0]-radius+math.Sin(Tau*float64(i)/x)*radius, pos[1]+size[1]-radius-math.Cos(Tau*float64(i)/x)*radius)
+		gl.Vertex2d(pos[0]+size[0]-radius+math.Sin(Tau*float64(i)/x)*(radius-borderWidth), pos[1]+size[1]-radius-math.Cos(Tau*float64(i)/x)*(radius-borderWidth))
+	}
+	for i := totalSlices / 2; i <= totalSlices*3/4; i++ {
+		gl.Vertex2d(pos[0]+radius+math.Sin(Tau*float64(i)/x)*radius, pos[1]+size[1]-radius-math.Cos(Tau*float64(i)/x)*radius)
+		gl.Vertex2d(pos[0]+radius+math.Sin(Tau*float64(i)/x)*(radius-borderWidth), pos[1]+size[1]-radius-math.Cos(Tau*float64(i)/x)*(radius-borderWidth))
+	}
+	for i := totalSlices * 3 / 4; i <= totalSlices; i++ {
+		gl.Vertex2d(pos[0]+radius+math.Sin(Tau*float64(i)/x)*radius, pos[1]+radius-math.Cos(Tau*float64(i)/x)*radius)
+		gl.Vertex2d(pos[0]+radius+math.Sin(Tau*float64(i)/x)*(radius-borderWidth), pos[1]+radius-math.Cos(Tau*float64(i)/x)*(radius-borderWidth))
+	}
+	gl.End()
+}
+
+func drawInnerSlicedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
 	if size[0] == 0 || size[1] == 0 {
 		return
 	}
@@ -70,12 +114,17 @@ func drawInnerRoundedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl6
 	gl.End()
 }
 
+// Tau is the constant τ, which equals to 6.283185... or 2π.
+// Reference: https://oeis.org/A019692
+const Tau = 2 * math.Pi
+
 func drawSpinner(spinner int) {
-	gl.LoadIdentity()
-	gl.Translatef(30.5, 30.5, 0)
-	gl.Rotatef(float32(spinner), 0, 0, 1)
+	gl.PushMatrix()
+	gl.Translated(30.5, 30.5, 0)
+	gl.Rotated(float64(spinner), 0, 0, 1)
 	gl.Color3d(0, 0, 0)
 	gl.Rectd(-0.5, -10.5, 0.5, 10.5)
+	gl.PopMatrix()
 }
 
 func init() {
@@ -106,10 +155,6 @@ func main() {
 	}
 
 	glfw.SwapInterval(1) // Vsync.
-	//window.SetPos(50, 600)
-	//window.SetPos(1600, 600)
-	//window.SetPos(1275, 300)
-	//window.SetPos(1200, 300)
 
 	InitFont()
 	defer DeinitFont()
@@ -174,7 +219,6 @@ func main() {
 
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA) // For font.
 
-	//gl.ClearColor(0.8, 0.3, 0.01, 1)
 	gl.ClearColor(247.0/255, 247.0/255, 247.0/255, 1)
 
 	var spinner int
@@ -185,12 +229,12 @@ func main() {
 
 	for !window.ShouldClose() && glfw.Press != window.GetKey(glfw.KeyEscape) {
 		glfw.WaitEvents()
-		//glfw.PollEvents()
 
 		// Process Input.
 		inputEventQueue = events.ProcessInputEventQueue(inputEventQueue, widgets[0])
 
 		gl.Clear(gl.COLOR_BUFFER_BIT)
+		gl.LoadIdentity()
 
 		for _, widget := range widgets {
 			widget.Render()
@@ -201,7 +245,6 @@ func main() {
 
 		drawBox()
 
-		gl.LoadIdentity()
 		gl.Color3d(1, 0, 0)
 		NewOpenGlStream(mgl64.Vec2{50, 300}).PrintText(` !"#$%&'()*+,-./
 0123456789:;<=>?

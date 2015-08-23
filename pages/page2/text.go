@@ -98,7 +98,7 @@ func (o *OpenGlStream) PrintLine(s string) {
 			backgroundColor = *o.BackgroundColor
 		}
 
-		drawInnerRoundedBox(o.pos, mgl64.Vec2{fontWidth * float64(expandedLineLength), fontHeight}, *o.BorderColor, backgroundColor)
+		drawInnerSlicedBox(o.pos, mgl64.Vec2{fontWidth * float64(expandedLineLength), fontHeight}, *o.BorderColor, backgroundColor)
 
 		gl.PopAttrib()
 	}
