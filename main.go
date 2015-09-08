@@ -6482,7 +6482,7 @@ func initHttpHandlers() {
 			if goPackage.Dir.Repo != nil {
 				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
 					// Stats (lines added/removed).
-					cmd := exec.Command("git", "diff", "--stat", "master")
+					cmd := exec.Command("git", "diff", "--stat", "--find-renames", "master")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
 						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
@@ -6547,7 +6547,7 @@ func initHttpHandlers() {
 				// git diff.
 				if workingDiff := u6.GoPackageWorkingDiff(goPackage); workingDiff != "" {
 					b += "\n" + Underline("git diff")
-					cmd := exec.Command("git", "diff", "--stat", "HEAD")
+					cmd := exec.Command("git", "diff", "--stat", "--find-renames", "HEAD")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
 						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
@@ -6560,7 +6560,7 @@ func initHttpHandlers() {
 					b += "\n" + Underline("git diff against master")
 
 					// Stats (lines added/removed).
-					cmd := exec.Command("git", "diff", "--stat", "master")
+					cmd := exec.Command("git", "diff", "--stat", "--find-renames", "master")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
 						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
