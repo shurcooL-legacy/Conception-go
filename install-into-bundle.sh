@@ -1,3 +1,3 @@
 #!/bin/bash
 
-go build -o "$HOME/Dropbox/Applications/Conception.app/Contents/MacOS/Conception-go" .
+GOBIN="$HOME/Dropbox/Applications/Conception.app/Contents/MacOS" go install -v .
