@@ -6509,13 +6509,13 @@ func initHttpHandlers() {
 
 		return []byte(b), &u10.Options{TableOfContents: true}, nil
 	})))
-	http.Handle("/status/", http.StripPrefix("/status", markdown_http.MarkdownHandlerFunc(func(req *http.Request) ([]byte, error) {
+	http.Handle("/status/", http.StripPrefix("/status", u10.MarkdownOptionsHandlerFunc(func(req *http.Request) ([]byte, *u10.Options, error) {
 		var b string
 
 		// TODO: Try to lookup the GoPackage rather than creating a new one.
 		importPath := req.URL.Path[1:]
 		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
-			b += Underline(`import "` + importPath + `"`)
+			b += `# import "` + importPath + "\"\n"
 
 			goPackage.UpdateVcs()
 			goPackage.UpdateVcsFields()
@@ -6570,7 +6570,7 @@ func initHttpHandlers() {
 			b += fmt.Sprintf("Package %q not found in %q (are you sure it's a valid Go package; maybe its subdir).\n", importPath, build.Default.GOPATH)
 		}
 
-		return []byte(b), nil
+		return []byte(b), &u10.Options{TableOfContents: true}, nil
 	})))
 	http.Handle("/status", u10.MarkdownOptionsHandlerFunc(func(req *http.Request) ([]byte, *u10.Options, error) {
 		started := time.Now()
