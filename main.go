@@ -6709,6 +6709,10 @@ func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
+func init() {
+	u5.UserAgent = "Conception-go (https://github.com/shurcooL/Conception-go)"
+}
+
 func main() {
 	//defer profile.Start(profile.CPUProfile).Stop()
 	//defer profile.Start(profile.MemProfile).Stop()
