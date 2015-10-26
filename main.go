@@ -37,6 +37,7 @@ import (
 	intmath "github.com/pkg/math"
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go-goon/bypass"
+	"github.com/shurcooL/go/analysis"
 	"github.com/shurcooL/go/exp/11"
 	"github.com/shurcooL/go/exp/12"
 	"github.com/shurcooL/go/exp/13"
@@ -6428,7 +6429,7 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 
 // ---
 
-// fileDiffName returns the name of a FileDiff.
+// fileDiffName returns the name of a FileDiff as Markdown.
 func fileDiffName(fileDiff *diff.FileDiff) string {
 	var origName, newName string
 	if strings.HasPrefix(fileDiff.OrigName, "a/") {
@@ -6451,6 +6452,29 @@ func fileDiffName(fileDiff *diff.FileDiff) string {
 	}
 }
 
+// fileDiffNameRaw returns a name of a FileDiff in raw form.
+func fileDiffNameRaw(fileDiff *diff.FileDiff) string {
+	var origName, newName string
+	if strings.HasPrefix(fileDiff.OrigName, "a/") {
+		origName = fileDiff.OrigName[2:]
+	}
+	if strings.HasPrefix(fileDiff.NewName, "b/") {
+		newName = fileDiff.NewName[2:]
+	}
+	switch {
+	case origName != "" && newName != "" && origName == newName: // Modified.
+		return newName
+	case origName != "" && newName != "" && origName != newName: // Renamed.
+		return newName
+	case origName == "" && newName != "": // Added.
+		return newName
+	case origName != "" && newName == "": // Removed.
+		return origName
+	default:
+		panic("unexpected, no names")
+	}
+}
+
 func initHttpHandlers() {
 	http.HandleFunc("/close", func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintln(w, "Closing.")
@@ -6467,6 +6491,7 @@ func initHttpHandlers() {
 
 		// TODO: Try to lookup the GoPackage rather than creating a new one.
 		importPath := req.URL.Path[1:]
+		_, skipGenerated := req.URL.Query()["skip-generated"]
 		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
 			b += `# import "` + importPath + "\"\n"
 
@@ -6478,15 +6503,22 @@ func initHttpHandlers() {
 
 			if goPackage.Dir.Repo != nil {
 				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
-					// Stats (lines added/removed).
-					cmd := exec.Command("git", "diff", "--stat", "--find-renames", "master")
-					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
-					if stat, err := cmd.CombinedOutput(); err == nil {
-						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
+					if !skipGenerated {
+						// Stats (lines added/removed).
+						cmd := exec.Command("git", "diff", "--stat", "--find-renames", "master")
+						cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
+						if stat, err := cmd.CombinedOutput(); err == nil {
+							b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
+						}
 					}
 
 					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiffMaster)); err == nil {
 						for _, fileDiff := range fileDiffs {
+							if skipGenerated {
+								if generated, err := analysis.IsFileGenerated(goPackage.Dir.Repo.Vcs.RootPath(), fileDiffNameRaw(fileDiff)); err == nil && generated {
+									continue
+								}
+							}
 							b += "\n" + "## " + fileDiffName(fileDiff) + "\n"
 							b += "\n```diff\n"
 							if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
