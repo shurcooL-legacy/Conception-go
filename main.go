@@ -6805,7 +6805,6 @@ func main() {
 		globalWindow = window
 		windowPointer = &Pointer{VirtualCategory: events.WINDOWING}
 
-		window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
 		window.MakeContextCurrent()
 
 		if err := gl.Init(); nil != err {
@@ -8775,6 +8774,11 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		// Give the canvas initial keyboard focus
 		// TODO: Request pointer mapping in a kinder way (rather than forcing it - what if it's active and shouldn't be changed)
 		keyboardPointer.OriginMapping = []Widgeter{widget}
+	}
+
+	if !*headlessFlag {
+		// Hide the system cursor at the end of loading.
+		window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
 	}
 
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
