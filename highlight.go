@@ -194,7 +194,7 @@ var highlightGoStyle = map[syntaxhighlight.Kind]highlightSegment{
 	syntaxhighlight.Keyword:   {color: mgl64.Vec3{0.004, 0, 0.694}, fontOptions: Bold},
 	syntaxhighlight.Decimal:   {color: mgl64.Vec3{0.804, 0, 0}},
 	syntaxhighlight.String:    {color: mgl64.Vec3{0.804, 0, 0}},
-	syntaxhighlight.Literal:   {color: mgl64.Vec3{0.008, 0.024, 1}, fontOptions: Italic},
+	syntaxhighlight.Literal:   {color: mgl64.Vec3{0.008, 0.024, 1}},
 	syntaxhighlight.Comment:   {color: mgl64.Vec3{0, 0.506, 0.094}},
 	syntaxhighlight.Plaintext: {color: mgl64.Vec3{0, 0, 0}},
 }
