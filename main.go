@@ -6738,7 +6738,6 @@ func init() {
 
 func init() {
 	runtime.LockOSThread()
-	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
 func init() {
