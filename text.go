@@ -168,7 +168,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 const fontWidth, fontHeight = 6, 12
 
 func InitFont() {
-	LoadTexture(filepath.Join("data", "Font.png"))
+	LoadTexture(filepath.Join("data", "fonts", "Menlo.png"))
 
 	oFontBase = gl.GenLists(32 + 96*4)
 	for i := 0; i < 96*4; i++ {
@@ -230,14 +230,20 @@ func LoadTexture(path string) {
 	bounds := img.Bounds()
 	//fmt.Printf("Loaded %vx%v texture.\n", bounds.Dx(), bounds.Dy())
 
+	var format int
 	var pixPointer *uint8
 	switch img := img.(type) {
 	case *image.RGBA:
+		format = gl.RGBA
 		pixPointer = &img.Pix[0]
 	case *image.NRGBA:
+		format = gl.RGBA
+		pixPointer = &img.Pix[0]
+	case *image.Gray:
+		format = gl.ALPHA
 		pixPointer = &img.Pix[0]
 	default:
-		panic("Unsupported type.")
+		log.Fatalf("LoadTexture: Unsupported type %T.\n", img)
 	}
 
 	var texture uint32
@@ -247,6 +253,6 @@ func LoadTexture(path string) {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, -0.5)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(bounds.Dx()), int32(bounds.Dy()), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(pixPointer))
+	gl.TexImage2D(gl.TEXTURE_2D, 0, int32(format), int32(bounds.Dx()), int32(bounds.Dy()), 0, uint32(format), gl.UNSIGNED_BYTE, gl.Ptr(pixPointer))
 	CheckGLError()
 }
