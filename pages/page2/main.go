@@ -13,7 +13,11 @@ import (
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/goxjs/glfw"
 	"github.com/shurcooL/Conception-go/events"
+	"github.com/shurcooL/go-goon"
 )
+
+// HACK: Play with various offsets for font rendering.
+var softwareUpdateTextOffset mgl64.Vec2
 
 var boxUpdated bool
 
@@ -234,6 +238,23 @@ func main() {
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
 	})
 
+	// HACK: Play with various offsets for font rendering.
+	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+		switch {
+		case key == glfw.KeyLeft && action != glfw.Release:
+			softwareUpdateTextOffset[0] -= 0.01
+		case key == glfw.KeyRight && action != glfw.Release:
+			softwareUpdateTextOffset[0] += 0.01
+		case key == glfw.KeyUp && action != glfw.Release:
+			softwareUpdateTextOffset[1] -= 0.01
+		case key == glfw.KeyDown && action != glfw.Release:
+			softwareUpdateTextOffset[1] += 0.01
+		}
+	})
+	defer func() {
+		goon.DumpExpr(softwareUpdateTextOffset)
+	}()
+
 	go func() {
 		<-time.After(5 * time.Second)
 		log.Println("trigger!")
@@ -415,7 +436,7 @@ func (w *ButtonWidget) Render() {
 		gl.Color3d(0, 0, 0)
 	}
 
-	NewOpenGlStream(w.pos.Add(mgl64.Vec2{8, 3})).PrintText("Software Update...")
+	NewOpenGlStream(w.pos.Add(mgl64.Vec2{8, 3}).Add(softwareUpdateTextOffset)).PrintText("Software Update...")
 }
 func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []events.Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
