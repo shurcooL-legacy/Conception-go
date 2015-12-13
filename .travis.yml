@@ -1,13 +1,21 @@
+sudo: false
+addons:
+  apt_packages:
+    - libgl1-mesa-dev
+    - libgles2-mesa-dev
+    - xorg-dev
 language: go
 go:
-  - 1.5
-before_install:
-  - sudo apt-get update
-  - sudo apt-get install -qq libgl1-mesa-dev libgles2-mesa-dev xorg-dev
+  - 1.5.2
+  - tip
+matrix:
+  allow_failures:
+    - go: tip
+  fast_finish: true
 install:
   - go get golang.org/x/tools/cmd/vet
 script:
   - go get -t -v ./...
-  - diff -u <(echo -n) <(gofmt -d ./)
-  - go tool vet -composites=false ./
+  - diff -u <(echo -n) <(gofmt -d -s .)
+  - go tool vet .
   - go test -v -race ./...
