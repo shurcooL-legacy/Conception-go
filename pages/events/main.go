@@ -9,8 +9,8 @@ import (
 	"github.com/shurcooL/Conception-go/events"
 )
 
-var mousePointer *events.Pointer
-var keyboardPointer *events.Pointer
+var mousePointer = &events.Pointer{VirtualCategory: events.POINTING}
+var keyboardPointer = &events.Pointer{VirtualCategory: events.TYPING}
 
 func init() {
 	runtime.LockOSThread()
@@ -55,8 +55,6 @@ func main() {
 	window.SetFramebufferSizeCallback(framebufferSizeCallback)
 
 	var inputEventQueue []events.InputEvent
-	mousePointer = &events.Pointer{VirtualCategory: events.POINTING}
-	keyboardPointer = &events.Pointer{VirtualCategory: events.TYPING}
 
 	window.SetMouseMovementCallback(func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
 		inputEvent := events.InputEvent{

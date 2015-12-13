@@ -89,10 +89,10 @@ var modeFlag = flag.Int("mode", 1, "Mode.")
 var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
 var keepRunning = true
-var redraw bool = true
-var windowPointer *Pointer
-var mousePointer *Pointer
-var keyboardPointer *Pointer
+var redraw = true
+var windowPointer = &Pointer{VirtualCategory: events.WINDOWING}
+var mousePointer = &Pointer{VirtualCategory: events.POINTING}
+var keyboardPointer = &Pointer{VirtualCategory: events.TYPING}
 var websocketPointer *Pointer // TEST
 
 var buildOutput caret.MultilineContentI
@@ -6802,7 +6802,6 @@ func main() {
 			panic(err)
 		}
 		globalWindow = window
-		windowPointer = &Pointer{VirtualCategory: events.WINDOWING}
 
 		window.MakeContextCurrent()
 
@@ -6880,9 +6879,6 @@ func main() {
 			redraw = true
 		}
 		window.SetFocusCallback(focusCallback)
-
-		mousePointer = &Pointer{VirtualCategory: events.POINTING}
-		keyboardPointer = &Pointer{VirtualCategory: events.TYPING}
 
 		var lastMousePos mgl64.Vec2
 		lastMousePos[0], lastMousePos[1] = window.GetCursorPos()
