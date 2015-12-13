@@ -1,3 +1,4 @@
+// events is a test program for printing basic events.
 package main
 
 import (

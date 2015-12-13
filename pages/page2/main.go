@@ -1,3 +1,4 @@
+// page2 is an experimental page for trying out different fonts and small UI widgets.
 package main
 
 import (

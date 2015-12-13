@@ -1,3 +1,4 @@
+// page1 is an experimental page for trying out a gesture recognition system.
 package main
 
 import (
