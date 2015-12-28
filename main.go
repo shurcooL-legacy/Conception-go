@@ -71,7 +71,6 @@ import (
 	"github.com/shurcooL/go/u/u6"
 	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/go/vfs_util"
-	"github.com/shurcooL/gostatus/status"
 	"github.com/shurcooL/markdownfmt/markdown"
 	"golang.org/x/net/websocket"
 	"golang.org/x/tools/go/types"
@@ -6559,7 +6558,7 @@ func initHttpHandlers() {
 			}
 
 			b += "\n" + Underline("Status")
-			b += "\n```\n" + status.PorcelainPresenter(goPackage) + "\n```\n"
+			b += "\n```\n" + "`status.PorcelainPresenter(goPackage)`" + "\n```\n"
 
 			if goPackage.Dir.Repo != nil {
 				b += "\n```\n"
