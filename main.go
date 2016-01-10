@@ -8770,11 +8770,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		keyboardPointer.OriginMapping = []Widgeter{widget}
 	}
 
-	if !*headlessFlag {
-		// Hide the system cursor at the end of loading.
-		window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
-	}
-
 	fmt.Printf("Loaded in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 
 	// ---
@@ -8849,6 +8844,11 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		}
 
 		if firstFrame {
+			if !*headlessFlag {
+				// Hide the system cursor when main render loop is underway.
+				window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
+			}
+
 			fmt.Printf("First frame in %v ms.\n", time.Since(startedProcess).Seconds()*1000)
 			firstFrame = false
 		}
