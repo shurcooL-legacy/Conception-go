@@ -17,6 +17,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -61,7 +62,6 @@ import (
 	. "github.com/shurcooL/go/gists/gist7576804"
 	. "github.com/shurcooL/go/gists/gist7651991"
 	. "github.com/shurcooL/go/gists/gist7802150"
-	"github.com/shurcooL/go/gists/gist8065433"
 	"github.com/shurcooL/go/markdown_http"
 	"github.com/shurcooL/go/pipe_util"
 	"github.com/shurcooL/go/trim"
@@ -3394,11 +3394,37 @@ func NewHttpServerTestWidget(pos mgl64.Vec2) *HttpServerTestWidget {
 		[]Widgeter{
 			NewTriButtonExternalStateWidget(np, func() bool { return w.started }, action),
 		}, nil)
-	if publicIps, err := gist8065433.GetPublicIps(); err == nil && len(publicIps) >= 1 {
+	if publicIps, err := getPublicIps(); err == nil && len(publicIps) >= 1 {
 		w.FlowLayoutWidget.AddWidget(NewTextLabelWidgetString(np, "http://"+publicIps[0]+httpServerAddr))
 	}
 
 	return w
+}
+
+// getPublicIps returns a string slice of non-loopback IPs.
+func getPublicIps() (publicIps []string, err error) {
+	ifis, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	for _, ifi := range ifis {
+		addrs, err := ifi.Addrs()
+		if err != nil {
+			return nil, err
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ip4 := ipNet.IP.To4()
+			if ip4 == nil || ip4.IsLoopback() {
+				continue
+			}
+			publicIps = append(publicIps, ipNet.IP.String())
+		}
+	}
+	return publicIps, nil
 }
 
 // ---
