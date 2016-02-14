@@ -44,7 +44,6 @@ import (
 	"github.com/shurcooL/go/exp/13"
 	"github.com/shurcooL/go/exp/14"
 	"github.com/shurcooL/go/gists/gist4727543"
-	. "github.com/shurcooL/go/gists/gist5258650"
 	. "github.com/shurcooL/go/gists/gist5259939"
 	. "github.com/shurcooL/go/gists/gist5423254"
 	"github.com/shurcooL/go/gists/gist5504644"
@@ -4586,7 +4585,7 @@ func (mc *MultilineContent) SetSelf(content string) {
 }
 
 func (w *MultilineContent) updateLines() {
-	lines := GetLines(w.content)
+	lines := strings.Split(w.content, "\n")
 	w.lines = make([]contentLine, len(lines))
 	w.longestLine = 0
 	for lineIndex, line := range lines {
