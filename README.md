@@ -36,7 +36,7 @@ $GOPATH/bin/Conception-go
 ```bash
 # Install latest Go (if you don't already have it).
 sudo apt-get install --yes curl
-curl -L https://golang.org/dl/go1.5.3.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
+curl -L https://golang.org/dl/go1.6.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
 export PATH=$PATH:/usr/local/go/bin
 export GOPATH=$HOME/MyGoWorkspace # Set your GOPATH as described at https://golang.org/doc/code.html#GOPATH (if you didn't already).
 
