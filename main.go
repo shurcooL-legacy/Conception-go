@@ -44,7 +44,6 @@ import (
 	"github.com/shurcooL/go/exp/13"
 	"github.com/shurcooL/go/exp/14"
 	"github.com/shurcooL/go/gists/gist4727543"
-	. "github.com/shurcooL/go/gists/gist5259939"
 	. "github.com/shurcooL/go/gists/gist5423254"
 	"github.com/shurcooL/go/gists/gist5504644"
 	. "github.com/shurcooL/go/gists/gist5639599"
@@ -1710,7 +1709,7 @@ const (
 
 func (mode KatMode) String() string {
 	//fmt.Printf("%T %T\n", AutoAttack, Shunpo)
-	x, _ := gist5504644.GetDocPackageAll(gist5504644.BuildPackageFromSrcDir(GetThisGoSourceDir()))
+	x, _ := gist5504644.GetDocPackageAll(gist5504644.BuildPackageFromSrcDir(thisGoSourceDir()))
 	for _, y := range x.Types {
 		if y.Name == "KatMode" {
 			for _, c := range y.Consts {
@@ -1720,6 +1719,13 @@ func (mode KatMode) String() string {
 		}
 	}
 	panic(0)
+}
+
+// thisGoSourceDir returns the parent directory of the Go source file where this function was called from.
+func thisGoSourceDir() string {
+	_, file, _, _ := runtime.Caller(1)
+	dir, _ := filepath.Split(file)
+	return dir
 }
 
 func NewKatWidget(pos mgl64.Vec2) *KatWidget {
