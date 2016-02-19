@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	text_scanner "text/scanner"
+	"text/tabwriter"
 	"time"
 
 	"github.com/bradfitz/iter"
@@ -7985,10 +7986,23 @@ func main() {
 			godocOrgImporters := &DepStringerFunc{}
 			godocOrgImporters.UpdateFunc = func(this DepNode2I) {
 				//fmt.Print("\x07")
-				godocOrgImporters.content = ""
-				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
-					godocOrgImporters.content = goon.Sdump(u5.GetGodocOrgImporters(goPackage.Bpkg.ImportPath))
+				goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage()
+				if goPackage == nil {
+					godocOrgImporters.content = ""
+					return
 				}
+				importers, err := u5.GetGodocOrgImporters(goPackage.Bpkg.ImportPath)
+				if err != nil {
+					godocOrgImporters.content = err.Error()
+					return
+				}
+				var buf bytes.Buffer
+				w := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', 0)
+				for _, i := range importers.Results {
+					fmt.Fprintf(w, "%s\t%s\n", i.Path, i.Synopsis)
+				}
+				w.Flush()
+				godocOrgImporters.content = buf.String()
 			}
 			godocOrgImporters.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 
