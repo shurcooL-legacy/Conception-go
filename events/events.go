@@ -143,7 +143,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent, widget Widgeter) []Inp
 			(inputEvent.EventTypes.Has(AXIS_EVENT) && inputEvent.InputId == 0 || inputEvent.EventTypes.Has(SLIDER_EVENT) && inputEvent.InputId == 2)
 
 		if pointingPointerMovedRelativeToCanvas {
-			LocalPosition := mgl64.Vec2{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])}
+			LocalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 
 			// Clear previously hit widgets
 			for _, widget := range inputEvent.Pointer.Mapping {

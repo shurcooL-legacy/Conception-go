@@ -54,7 +54,7 @@ func drawInnerRoundedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl6
 	const radius = 2.5 + borderWidth
 	var x = float64(totalSlices)
 
-	gl.Color3dv((*float64)(&backgroundColor[0]))
+	gl.Color3dv(&backgroundColor[0])
 	gl.Begin(gl.TRIANGLE_STRIP)
 	for i := 0; i <= totalSlices/4; i++ {
 		gl.Vertex2d(pos[0]+size[0]-radius+math.Sin(Tau*float64(i)/x)*(radius-borderWidth), pos[1]+radius-math.Cos(Tau*float64(i)/x)*(radius-borderWidth))
@@ -66,7 +66,7 @@ func drawInnerRoundedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl6
 	}
 	gl.End()
 
-	gl.Color3dv((*float64)(&borderColor[0]))
+	gl.Color3dv(&borderColor[0])
 	gl.Begin(gl.TRIANGLE_STRIP)
 	gl.Vertex2d(pos[0]+radius, pos[1])
 	gl.Vertex2d(pos[0]+radius, pos[1]+borderWidth)
@@ -96,28 +96,28 @@ func drawInnerSlicedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64
 
 	const OuterDistance = 2.5
 	gl.Begin(gl.POLYGON)
-	gl.Color3dv((*float64)(&borderColor[0]))
-	gl.Vertex2d(float64(pos[0]+OuterDistance), float64(pos[1]))
-	gl.Vertex2d(float64(pos[0]), float64(pos[1]+OuterDistance))
-	gl.Vertex2d(float64(pos[0]), float64(pos[1]-OuterDistance+size[1]))
-	gl.Vertex2d(float64(pos[0]+OuterDistance), float64(pos[1]+size[1]))
-	gl.Vertex2d(float64(pos[0]-OuterDistance+size[0]), float64(pos[1]+size[1]))
-	gl.Vertex2d(float64(pos[0]+size[0]), float64(pos[1]-OuterDistance+size[1]))
-	gl.Vertex2d(float64(pos[0]+size[0]), float64(pos[1]+OuterDistance))
-	gl.Vertex2d(float64(pos[0]-OuterDistance+size[0]), float64(pos[1]))
+	gl.Color3dv(&borderColor[0])
+	gl.Vertex2d(pos[0]+OuterDistance, pos[1])
+	gl.Vertex2d(pos[0], pos[1]+OuterDistance)
+	gl.Vertex2d(pos[0], pos[1]-OuterDistance+size[1])
+	gl.Vertex2d(pos[0]+OuterDistance, pos[1]+size[1])
+	gl.Vertex2d(pos[0]-OuterDistance+size[0], pos[1]+size[1])
+	gl.Vertex2d(pos[0]+size[0], pos[1]-OuterDistance+size[1])
+	gl.Vertex2d(pos[0]+size[0], pos[1]+OuterDistance)
+	gl.Vertex2d(pos[0]-OuterDistance+size[0], pos[1])
 	gl.End()
 
 	const InnerDistance = OuterDistance + (math.Sqrt2 - 1)
 	gl.Begin(gl.POLYGON)
-	gl.Color3dv((*float64)(&backgroundColor[0]))
-	gl.Vertex2d(float64(pos[0]+InnerDistance), float64(pos[1]+1))
-	gl.Vertex2d(float64(pos[0]+1), float64(pos[1]+InnerDistance))
-	gl.Vertex2d(float64(pos[0]+1), float64(pos[1]-InnerDistance+size[1]))
-	gl.Vertex2d(float64(pos[0]+InnerDistance), float64(pos[1]-1+size[1]))
-	gl.Vertex2d(float64(pos[0]-InnerDistance+size[0]), float64(pos[1]-1+size[1]))
-	gl.Vertex2d(float64(pos[0]-1+size[0]), float64(pos[1]-InnerDistance+size[1]))
-	gl.Vertex2d(float64(pos[0]-1+size[0]), float64(pos[1]+InnerDistance))
-	gl.Vertex2d(float64(pos[0]-InnerDistance+size[0]), float64(pos[1]+1))
+	gl.Color3dv(&backgroundColor[0])
+	gl.Vertex2d(pos[0]+InnerDistance, pos[1]+1)
+	gl.Vertex2d(pos[0]+1, pos[1]+InnerDistance)
+	gl.Vertex2d(pos[0]+1, pos[1]-InnerDistance+size[1])
+	gl.Vertex2d(pos[0]+InnerDistance, pos[1]-1+size[1])
+	gl.Vertex2d(pos[0]-InnerDistance+size[0], pos[1]-1+size[1])
+	gl.Vertex2d(pos[0]-1+size[0], pos[1]-InnerDistance+size[1])
+	gl.Vertex2d(pos[0]-1+size[0], pos[1]+InnerDistance)
+	gl.Vertex2d(pos[0]-InnerDistance+size[0], pos[1]+1)
 	gl.End()
 }
 

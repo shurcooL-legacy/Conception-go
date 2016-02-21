@@ -1200,13 +1200,13 @@ func NewGpcFileWidget(pos mgl64.Vec2, path string) *GpcFileWidget {
 func (w *GpcFileWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1], 0)
 
 	gl.Color3d(0, 0, 0)
 	for _, contour := range w.p.Contours {
 		gl.Begin(gl.LINE_LOOP)
 		for _, vertex := range contour.Vertices {
-			gl.Vertex2dv((*float64)(&vertex[0]))
+			gl.Vertex2dv(&vertex[0])
 		}
 		gl.End()
 	}
@@ -1350,18 +1350,18 @@ func (w *TriButtonWidget) setAction(action func()) {
 }
 
 func (w *TriButtonWidget) Render() {
-	gl.Color3dv((*float64)(&darkColor[0]))
+	gl.Color3dv(&darkColor[0])
 	if !w.state {
 		gl.Begin(gl.TRIANGLES)
-		gl.Vertex2d(float64(w.pos[0]+w.size[0]*0.25), float64(w.pos[1]+w.size[0]*0.15))
-		gl.Vertex2d(float64(w.pos[0]+w.size[0]*0.95), float64(w.pos[1]+w.size[1]*0.5))
-		gl.Vertex2d(float64(w.pos[0]+w.size[0]*0.25), float64(w.pos[1]+w.size[1]*0.85))
+		gl.Vertex2d(w.pos[0]+w.size[0]*0.25, w.pos[1]+w.size[0]*0.15)
+		gl.Vertex2d(w.pos[0]+w.size[0]*0.95, w.pos[1]+w.size[1]*0.5)
+		gl.Vertex2d(w.pos[0]+w.size[0]*0.25, w.pos[1]+w.size[1]*0.85)
 		gl.End()
 	} else {
 		gl.Begin(gl.TRIANGLES)
-		gl.Vertex2d(float64(w.pos[0]+w.size[0]*0.15), float64(w.pos[1]+w.size[0]*0.25))
-		gl.Vertex2d(float64(w.pos[0]+w.size[0]*0.85), float64(w.pos[1]+w.size[1]*0.25))
-		gl.Vertex2d(float64(w.pos[0]+w.size[0]*0.5), float64(w.pos[1]+w.size[1]*0.95))
+		gl.Vertex2d(w.pos[0]+w.size[0]*0.15, w.pos[1]+w.size[0]*0.25)
+		gl.Vertex2d(w.pos[0]+w.size[0]*0.85, w.pos[1]+w.size[1]*0.25)
+		gl.Vertex2d(w.pos[0]+w.size[0]*0.5, w.pos[1]+w.size[1]*0.95)
 		gl.End()
 	}
 }
@@ -1523,11 +1523,11 @@ func (w *WindowWidget) Render() {
 	DrawGradientBox(w.pos, mgl64.Vec2{w.size[0], fontHeight}, mgl64.Vec3{0.3, 0.3, 0.3}, nearlyWhiteColor, lightColor)
 
 	// Title
-	gl.Color3dv((*float64)(&nearlyBlackColor[0]))
+	gl.Color3dv(&nearlyBlackColor[0])
 	NewOpenGlStream(w.pos.Add(mgl64.Vec2{60})).PrintLine(w.Name)
 
 	gl.PushMatrix()
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1], 0)
 	w.chrome.Render()
 	gl.Translated(float64(0), float64(fontHeight+1), 0)
 	w.child.Render()
@@ -1575,18 +1575,18 @@ func (widgets Widgeters) ContainsWidget(target Widgeter) bool {
 // ---
 
 func DrawBorderlessBox(pos, size mgl64.Vec2, backgroundColor mgl64.Vec3) {
-	gl.Color3dv((*float64)(&backgroundColor[0]))
-	gl.Rectd(float64(pos[0]), float64(pos[1]), float64(pos.Add(size)[0]), float64(pos.Add(size)[1]))
+	gl.Color3dv(&backgroundColor[0])
+	gl.Rectd(pos[0], pos[1], pos.Add(size)[0], pos.Add(size)[1])
 }
 
 func DrawBorderlessGradientBox(pos, size mgl64.Vec2, topColor, bottomColor mgl64.Vec3) {
 	gl.Begin(gl.TRIANGLE_STRIP)
-	gl.Color3dv((*float64)(&topColor[0]))
-	gl.Vertex2d(float64(pos[0]), float64(pos[1]))
-	gl.Vertex2d(float64(pos.Add(size)[0]), float64(pos[1]))
-	gl.Color3dv((*float64)(&bottomColor[0]))
-	gl.Vertex2d(float64(pos[0]), float64(pos.Add(size)[1]))
-	gl.Vertex2d(float64(pos.Add(size)[0]), float64(pos.Add(size)[1]))
+	gl.Color3dv(&topColor[0])
+	gl.Vertex2d(pos[0], pos[1])
+	gl.Vertex2d(pos.Add(size)[0], pos[1])
+	gl.Color3dv(&bottomColor[0])
+	gl.Vertex2d(pos[0], pos.Add(size)[1])
+	gl.Vertex2d(pos.Add(size)[0], pos.Add(size)[1])
 	gl.End()
 }
 
@@ -1608,8 +1608,8 @@ func DrawLGBox(pos, size mgl64.Vec2) {
 }
 
 func DrawGradientBox(pos, size mgl64.Vec2, borderColor, topColor, bottomColor mgl64.Vec3) {
-	gl.Color3dv((*float64)(&borderColor[0]))
-	gl.Rectd(float64(pos[0]-1), float64(pos[1]-1), float64(pos.Add(size)[0]+1), float64(pos.Add(size)[1]+1))
+	gl.Color3dv(&borderColor[0])
+	gl.Rectd(pos[0]-1, pos[1]-1, pos.Add(size)[0]+1, pos.Add(size)[1]+1)
 	DrawBorderlessGradientBox(pos, size, topColor, bottomColor)
 }
 
@@ -1620,28 +1620,28 @@ func DrawInnerRoundedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl6
 
 	const OuterDistance = 1.5
 	gl.Begin(gl.POLYGON)
-	gl.Color3dv((*float64)(&borderColor[0]))
-	gl.Vertex2d(float64(pos[0]+OuterDistance), float64(pos[1]))
-	gl.Vertex2d(float64(pos[0]), float64(pos[1]+OuterDistance))
-	gl.Vertex2d(float64(pos[0]), float64(pos[1]-OuterDistance+size[1]))
-	gl.Vertex2d(float64(pos[0]+OuterDistance), float64(pos[1]+size[1]))
-	gl.Vertex2d(float64(pos[0]-OuterDistance+size[0]), float64(pos[1]+size[1]))
-	gl.Vertex2d(float64(pos[0]+size[0]), float64(pos[1]-OuterDistance+size[1]))
-	gl.Vertex2d(float64(pos[0]+size[0]), float64(pos[1]+OuterDistance))
-	gl.Vertex2d(float64(pos[0]-OuterDistance+size[0]), float64(pos[1]))
+	gl.Color3dv(&borderColor[0])
+	gl.Vertex2d(pos[0]+OuterDistance, pos[1])
+	gl.Vertex2d(pos[0], pos[1]+OuterDistance)
+	gl.Vertex2d(pos[0], pos[1]-OuterDistance+size[1])
+	gl.Vertex2d(pos[0]+OuterDistance, pos[1]+size[1])
+	gl.Vertex2d(pos[0]-OuterDistance+size[0], pos[1]+size[1])
+	gl.Vertex2d(pos[0]+size[0], pos[1]-OuterDistance+size[1])
+	gl.Vertex2d(pos[0]+size[0], pos[1]+OuterDistance)
+	gl.Vertex2d(pos[0]-OuterDistance+size[0], pos[1])
 	gl.End()
 
 	const InnerDistance = OuterDistance + (math.Sqrt2 - 1)
 	gl.Begin(gl.POLYGON)
-	gl.Color3dv((*float64)(&backgroundColor[0]))
-	gl.Vertex2d(float64(pos[0]+InnerDistance), float64(pos[1]+1))
-	gl.Vertex2d(float64(pos[0]+1), float64(pos[1]+InnerDistance))
-	gl.Vertex2d(float64(pos[0]+1), float64(pos[1]-InnerDistance+size[1]))
-	gl.Vertex2d(float64(pos[0]+InnerDistance), float64(pos[1]-1+size[1]))
-	gl.Vertex2d(float64(pos[0]-InnerDistance+size[0]), float64(pos[1]-1+size[1]))
-	gl.Vertex2d(float64(pos[0]-1+size[0]), float64(pos[1]-InnerDistance+size[1]))
-	gl.Vertex2d(float64(pos[0]-1+size[0]), float64(pos[1]+InnerDistance))
-	gl.Vertex2d(float64(pos[0]-InnerDistance+size[0]), float64(pos[1]+1))
+	gl.Color3dv(&backgroundColor[0])
+	gl.Vertex2d(pos[0]+InnerDistance, pos[1]+1)
+	gl.Vertex2d(pos[0]+1, pos[1]+InnerDistance)
+	gl.Vertex2d(pos[0]+1, pos[1]-InnerDistance+size[1])
+	gl.Vertex2d(pos[0]+InnerDistance, pos[1]-1+size[1])
+	gl.Vertex2d(pos[0]-InnerDistance+size[0], pos[1]-1+size[1])
+	gl.Vertex2d(pos[0]-1+size[0], pos[1]-InnerDistance+size[1])
+	gl.Vertex2d(pos[0]-1+size[0], pos[1]+InnerDistance)
+	gl.Vertex2d(pos[0]-InnerDistance+size[0], pos[1]+1)
 	gl.End()
 }
 
@@ -1652,19 +1652,19 @@ const Tau = 2 * math.Pi
 func DrawCircle(pos mgl64.Vec2, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {
 	const x = 64
 
-	gl.Color3dv((*float64)(&borderColor[0]))
+	gl.Color3dv(&borderColor[0])
 	gl.Begin(gl.TRIANGLE_FAN)
-	gl.Vertex2d(float64(pos[0]), float64(pos[1]))
+	gl.Vertex2d(pos[0], pos[1])
 	for i := 0; i <= x; i++ {
-		gl.Vertex2d(float64(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), float64(pos[1]+math.Cos(Tau*float64(i)/x)*size[1]/2))
+		gl.Vertex2d(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2, pos[1]+math.Cos(Tau*float64(i)/x)*size[1]/2)
 	}
 	gl.End()
 
-	gl.Color3dv((*float64)(&backgroundColor[0]))
+	gl.Color3dv(&backgroundColor[0])
 	gl.Begin(gl.TRIANGLE_FAN)
-	gl.Vertex2d(float64(pos[0]), float64(pos[1]))
+	gl.Vertex2d(pos[0], pos[1])
 	for i := 0; i <= x; i++ {
-		gl.Vertex2d(float64(pos[0]+math.Sin(Tau*float64(i)/x)*(size[0]/2-1)), float64(pos[1]+math.Cos(Tau*float64(i)/x)*(size[1]/2-1)))
+		gl.Vertex2d(pos[0]+math.Sin(Tau*float64(i)/x)*(size[0]/2-1), pos[1]+math.Cos(Tau*float64(i)/x)*(size[1]/2-1))
 	}
 	gl.End()
 }
@@ -1676,11 +1676,11 @@ func DrawCircleBorder(pos mgl64.Vec2, size mgl64.Vec2, borderColor mgl64.Vec3) {
 func DrawCircleBorderCustom(pos mgl64.Vec2, size mgl64.Vec2, borderColor mgl64.Vec3, borderWidth float64, totalSlices, startSlice, endSlice int32) {
 	var x = float64(totalSlices)
 
-	gl.Color3dv((*float64)(&borderColor[0]))
+	gl.Color3dv(&borderColor[0])
 	gl.Begin(gl.TRIANGLE_STRIP)
 	for i := startSlice; i <= endSlice; i++ {
-		gl.Vertex2d(float64(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), float64(pos[1]-math.Cos(Tau*float64(i)/x)*size[1]/2))
-		gl.Vertex2d(float64(pos[0]+math.Sin(Tau*float64(i)/x)*(size[0]/2-borderWidth)), float64(pos[1]-math.Cos(Tau*float64(i)/x)*(size[1]/2-borderWidth)))
+		gl.Vertex2d(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2, pos[1]-math.Cos(Tau*float64(i)/x)*size[1]/2)
+		gl.Vertex2d(pos[0]+math.Sin(Tau*float64(i)/x)*(size[0]/2-borderWidth), pos[1]-math.Cos(Tau*float64(i)/x)*(size[1]/2-borderWidth))
 	}
 	gl.End()
 }
@@ -1750,7 +1750,7 @@ func (w *KatWidget) Render() {
 	// Shadow
 	{
 		gl.PushMatrix()
-		gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+		gl.Translated(w.pos[0], w.pos[1], 0)
 
 		gl.Enable(gl.BLEND)
 		gl.Begin(gl.TRIANGLE_FAN)
@@ -1762,7 +1762,7 @@ func (w *KatWidget) Render() {
 			PLAYER_HALF_WIDTH := 7.74597
 			dShadowRadius := PLAYER_HALF_WIDTH * 1.75
 			for nSlice := 0; nSlice <= nSlices; nSlice++ {
-				gl.Vertex2d(float64(math.Cos(Tau*float64(nSlice)/float64(nSlices))*dShadowRadius), float64(math.Sin(Tau*float64(nSlice)/float64(nSlices))*dShadowRadius))
+				gl.Vertex2d(math.Cos(Tau*float64(nSlice)/float64(nSlices))*dShadowRadius, math.Sin(Tau*float64(nSlice)/float64(nSlices))*dShadowRadius)
 			}
 		}
 		gl.End()
@@ -1774,8 +1774,8 @@ func (w *KatWidget) Render() {
 	// eX0 Player
 	{
 		gl.PushMatrix()
-		gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
-		gl.Rotated(float64(w.rotation), 0, 0, 1)
+		gl.Translated(w.pos[0], w.pos[1], 0)
+		gl.Rotated(w.rotation, 0, 0, 1)
 
 		DrawCircleBorderCustom(np, mgl64.Vec2{16, 16}, mgl64.Vec3{1, 0, 0}, 2, 12, 1, 11)
 
@@ -1979,8 +1979,8 @@ func (w *CompositeWidget) LayoutNeeded() {
 	}
 }
 func (w *CompositeWidget) Render() {
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
-	defer gl.Translated(float64(-w.pos[0]), float64(-w.pos[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1], 0)
+	defer gl.Translated(-w.pos[0], -w.pos[1], 0)
 
 	for _, widget := range w.Widgets {
 		widget.Render()
@@ -2196,7 +2196,7 @@ func (w *CanvasWidget) Render() {
 
 	if w.PopupTest != nil {
 		gl.PushMatrix()
-		gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+		gl.Translated(w.pos[0], w.pos[1], 0)
 		w.PopupTest.Render()
 		gl.PopMatrix()
 	}
@@ -2406,7 +2406,7 @@ func (w *CollapsibleWidget) LayoutNeeded() {
 func (w *CollapsibleWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1], 0)
 
 	w.state.Render()
 	w.label.Render()
@@ -2474,7 +2474,7 @@ func (w *BackgroundWidget) Render() {
 
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]+float64(w.border)), float64(w.pos[1]+float64(w.border)), 0)
+	gl.Translated(w.pos[0]+float64(w.border), w.pos[1]+float64(w.border), 0)
 
 	w.child.Render()
 }
@@ -2607,22 +2607,22 @@ func SetScissor(pos, size mgl64.Vec2) {
 	gl.GetIntegerv(gl.VIEWPORT, &Viewport[0])
 
 	p0 := mgl64.Project(mgl64.Vec3{pos[0], pos[1] + size[1] /* Inverted y coordinate. */, 0},
-		mgl64.Mat4{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
-		mgl64.Mat4{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+		mgl64.Mat4{ModelMatrix[0], ModelMatrix[1], ModelMatrix[2], ModelMatrix[3], ModelMatrix[4], ModelMatrix[5], ModelMatrix[6], ModelMatrix[7], ModelMatrix[8], ModelMatrix[9], ModelMatrix[10], ModelMatrix[11], ModelMatrix[12], ModelMatrix[13], ModelMatrix[14], ModelMatrix[15]},
+		mgl64.Mat4{ProjectionMatrix[0], ProjectionMatrix[1], ProjectionMatrix[2], ProjectionMatrix[3], ProjectionMatrix[4], ProjectionMatrix[5], ProjectionMatrix[6], ProjectionMatrix[7], ProjectionMatrix[8], ProjectionMatrix[9], ProjectionMatrix[10], ProjectionMatrix[11], ProjectionMatrix[12], ProjectionMatrix[13], ProjectionMatrix[14], ProjectionMatrix[15]},
 		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
 	p1 := mgl64.Project(mgl64.Vec3{size[0], size[1], 0},
-		mgl64.Mat4{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
-		mgl64.Mat4{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+		mgl64.Mat4{ModelMatrix[0], ModelMatrix[1], ModelMatrix[2], ModelMatrix[3], ModelMatrix[4], ModelMatrix[5], ModelMatrix[6], ModelMatrix[7], ModelMatrix[8], ModelMatrix[9], ModelMatrix[10], ModelMatrix[11], ModelMatrix[12], ModelMatrix[13], ModelMatrix[14], ModelMatrix[15]},
+		mgl64.Mat4{ProjectionMatrix[0], ProjectionMatrix[1], ProjectionMatrix[2], ProjectionMatrix[3], ProjectionMatrix[4], ProjectionMatrix[5], ProjectionMatrix[6], ProjectionMatrix[7], ProjectionMatrix[8], ProjectionMatrix[9], ProjectionMatrix[10], ProjectionMatrix[11], ProjectionMatrix[12], ProjectionMatrix[13], ProjectionMatrix[14], ProjectionMatrix[15]},
 		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
 	p2 := mgl64.Project(mgl64.Vec3{0, 0, 0},
-		mgl64.Mat4{float64(ModelMatrix[0]), float64(ModelMatrix[1]), float64(ModelMatrix[2]), float64(ModelMatrix[3]), float64(ModelMatrix[4]), float64(ModelMatrix[5]), float64(ModelMatrix[6]), float64(ModelMatrix[7]), float64(ModelMatrix[8]), float64(ModelMatrix[9]), float64(ModelMatrix[10]), float64(ModelMatrix[11]), float64(ModelMatrix[12]), float64(ModelMatrix[13]), float64(ModelMatrix[14]), float64(ModelMatrix[15])},
-		mgl64.Mat4{float64(ProjectionMatrix[0]), float64(ProjectionMatrix[1]), float64(ProjectionMatrix[2]), float64(ProjectionMatrix[3]), float64(ProjectionMatrix[4]), float64(ProjectionMatrix[5]), float64(ProjectionMatrix[6]), float64(ProjectionMatrix[7]), float64(ProjectionMatrix[8]), float64(ProjectionMatrix[9]), float64(ProjectionMatrix[10]), float64(ProjectionMatrix[11]), float64(ProjectionMatrix[12]), float64(ProjectionMatrix[13]), float64(ProjectionMatrix[14]), float64(ProjectionMatrix[15])},
+		mgl64.Mat4{ModelMatrix[0], ModelMatrix[1], ModelMatrix[2], ModelMatrix[3], ModelMatrix[4], ModelMatrix[5], ModelMatrix[6], ModelMatrix[7], ModelMatrix[8], ModelMatrix[9], ModelMatrix[10], ModelMatrix[11], ModelMatrix[12], ModelMatrix[13], ModelMatrix[14], ModelMatrix[15]},
+		mgl64.Mat4{ProjectionMatrix[0], ProjectionMatrix[1], ProjectionMatrix[2], ProjectionMatrix[3], ProjectionMatrix[4], ProjectionMatrix[5], ProjectionMatrix[6], ProjectionMatrix[7], ProjectionMatrix[8], ProjectionMatrix[9], ProjectionMatrix[10], ProjectionMatrix[11], ProjectionMatrix[12], ProjectionMatrix[13], ProjectionMatrix[14], ProjectionMatrix[15]},
 		int(Viewport[0]), int(Viewport[1]), int(Viewport[2]), int(Viewport[3]))
 
-	pos0 := NearInt64(float64(p0[0]))
-	pos1 := NearInt64(float64(p0[1]))
-	size0 := NearInt64(float64(p1[0] - p2[0]))
-	size1 := NearInt64(float64(p2[1] - p1[1]))
+	pos0 := NearInt64(p0[0])
+	pos1 := NearInt64(p0[1])
+	size0 := NearInt64(p1[0] - p2[0])
+	size1 := NearInt64(p2[1] - p1[1])
 
 	// Crop the scissor box by the parent scissor box
 	// TODO
@@ -2637,7 +2637,7 @@ func (w *ScrollPaneWidget) LayoutNeeded() {
 func (w *ScrollPaneWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1], 0)
 
 	SetScissor(mgl64.Vec2{-1, -1}, w.size.Add(mgl64.Vec2{2, 2}))
 	gl.Enable(gl.SCISSOR_TEST)
@@ -2757,7 +2757,7 @@ func (w *SpacerWidget) LayoutNeeded() {
 func (w *SpacerWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]+float64(w.border)), float64(w.pos[1]+float64(w.border)), 0)
+	gl.Translated(w.pos[0]+float64(w.border), w.pos[1]+float64(w.border), 0)
 
 	w.child.Render()
 }
@@ -2784,7 +2784,7 @@ type UnderscoreSepToCamelCaseWidget struct {
 func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1], 0)
 
 	//s := w.window.GetClipboardString()
 	s := "get_clipboard_string"
@@ -2794,9 +2794,9 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	w.size[1] = 16
 
 	gl.Color3d(0.3, 0.3, 0.3)
-	gl.Rectd(0-1, 0-1, float64(w.size[0]+1), float64(w.size[1]+1))
+	gl.Rectd(0-1, 0-1, w.size[0]+1, w.size[1]+1)
 	gl.Color3d(1, 1, 1)
-	gl.Rectd(0, 0, float64(w.size[0]), float64(w.size[1]))
+	gl.Rectd(0, 0, w.size[0], w.size[1])
 
 	gl.Color3d(0, 0, 0)
 	NewOpenGlStream(mgl64.Vec2{0, 0}).PrintText(s)
@@ -2943,7 +2943,7 @@ func (w *FooWidget) Render() {
 
 		// Draw caret
 		gl.PushMatrix()
-		gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+		gl.Translated(w.pos[0], w.pos[1], 0)
 		gl.Color3d(0, 0, 0)
 		gl.Recti(int32(expandedCaretPosition*fontWidth-1), int32(caretLine*fontHeight), int32(expandedCaretPosition*fontWidth+1), int32(caretLine*fontHeight)+fontHeight)
 		gl.PopMatrix()
@@ -3348,7 +3348,7 @@ func (w *ConnectionWidget) Render() {
 	if isOriginHit && mousePointer.State.IsActive() {
 		gl.PushMatrix()
 		defer gl.PopMatrix()
-		gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+		gl.Translated(w.pos[0], w.pos[1], 0)
 
 		globalPosition := mgl64.Vec2{mousePointer.State.Axes[0], mousePointer.State.Axes[1]}
 		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
@@ -3356,7 +3356,7 @@ func (w *ConnectionWidget) Render() {
 		gl.Color3d(0, 0, 0)
 		gl.Begin(gl.LINES)
 		gl.Vertex2d(float64(0), float64(0))
-		gl.Vertex2d(float64(localPosition[0]), float64(localPosition[1]))
+		gl.Vertex2d(localPosition[0], localPosition[1])
 		gl.End()
 	}
 }
@@ -3522,7 +3522,7 @@ func (w *SpinnerWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
 	gl.Color3d(0, 0, 0)
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1], 0)
 	//gl.Rotated(float64(spinner), 0, 0, 1)
 	gl.Rotated(float64(w.Spinner), 0, 0, 1)
 	gl.Begin(gl.LINES)
@@ -3552,7 +3552,7 @@ func NewFpsWidget(pos mgl64.Vec2) *FpsWidget {
 func (w *FpsWidget) Render() {
 	gl.PushMatrix()
 	defer gl.PopMatrix()
-	gl.Translated(float64(w.pos[0]), float64(w.pos[1]+w.size[1]), 0)
+	gl.Translated(w.pos[0], w.pos[1]+w.size[1], 0)
 	gl.Begin(gl.LINES)
 	gl.Color3d(1, 0, 0)
 	gl.Vertex2d(float64(0), float64(-1000.0/60))
@@ -3768,21 +3768,21 @@ func (this *FilterableSliceStringer) Print(filteredIndex uint64, pos mgl64.Vec2,
 
 	glt := NewOpenGlStream(pos)
 	if !selected {
-		gl.Color3dv((*float64)(&veryDarkColor[0]))
+		gl.Color3dv(&veryDarkColor[0])
 		glt.PrintText(entry[:index])
 		gl.Color3d(0, 0, 0)
 		glt.FontOptions = Bold
 		glt.PrintText(entry[index : index+len(filter.Content())])
-		gl.Color3dv((*float64)(&veryDarkColor[0]))
+		gl.Color3dv(&veryDarkColor[0])
 		glt.FontOptions = Regular
 		glt.PrintText(entry[index+len(filter.Content()):])
 	} else {
-		gl.Color3dv((*float64)(&veryLightColor[0]))
+		gl.Color3dv(&veryLightColor[0])
 		glt.PrintText(entry[:index])
 		gl.Color3d(1, 1, 1)
 		glt.FontOptions = Bold
 		glt.PrintText(entry[index : index+len(filter.Content())])
-		gl.Color3dv((*float64)(&veryLightColor[0]))
+		gl.Color3dv(&veryLightColor[0])
 		glt.FontOptions = Regular
 		glt.PrintText(entry[index+len(filter.Content()):])
 	}
@@ -4007,8 +4007,8 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 			var newSelected uint64
 			if localPosition[1] < 0 {
 				newSelected = 0
-			} else if uint64(localPosition[1]/fontHeight) > uint64(w.entries.Len()-1) {
-				newSelected = uint64(w.entries.Len() - 1)
+			} else if uint64(localPosition[1]/fontHeight) > w.entries.Len()-1 {
+				newSelected = w.entries.Len() - 1
 			} else {
 				newSelected = uint64(localPosition[1] / fontHeight)
 			}
@@ -4041,12 +4041,12 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyDown:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if w.entries.Len() > 0 && firstSelected < uint64(w.entries.Len()-1) {
-					w.selected = map[uint64]struct{}{uint64(w.entries.Len() - 1): {}}
+				if w.entries.Len() > 0 && firstSelected < w.entries.Len()-1 {
+					w.selected = map[uint64]struct{}{w.entries.Len() - 1: {}}
 					w.selectionChangedTest()
 				}
 			} else if inputEvent.ModifierKey == 0 {
-				if w.entries.Len() > 0 && firstSelected < uint64(w.entries.Len()-1) {
+				if w.entries.Len() > 0 && firstSelected < w.entries.Len()-1 {
 					w.selected = map[uint64]struct{}{firstSelected + 1: {}}
 					w.selectionChangedTest()
 				}
@@ -5302,7 +5302,7 @@ func (this *FindResults) Segment(index uint32) highlightSegment {
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments)) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+		return highlightSegment{offset: this.segments[len(this.segments)-1].offset}
 	} else {
 		return this.segments[index]
 	}
@@ -5678,8 +5678,8 @@ func (w *TextBoxWidget) Render() {
 
 		// Highlight line
 		gl.PushMatrix()
-		gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
-		gl.Color3dv((*float64)(&veryLightColor[0]))
+		gl.Translated(w.pos[0], w.pos[1], 0)
+		gl.Color3dv(&veryLightColor[0])
 		gl.Recti(int32(0), int32(caretLine*fontHeight), int32(w.size[0]), int32(caretLine*fontHeight)+fontHeight)
 		gl.PopMatrix()
 	}
@@ -5764,7 +5764,7 @@ func (w *TextBoxWidget) Render() {
 
 		// Draw caret
 		gl.PushMatrix()
-		gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+		gl.Translated(w.pos[0], w.pos[1], 0)
 		gl.Color3d(0, 0, 0)
 		gl.Recti(int32(expandedCaretPosition*fontWidth-1), int32(caretLine*fontHeight), int32(expandedCaretPosition*fontWidth+1), int32(caretLine*fontHeight)+fontHeight)
 		gl.PopMatrix()
@@ -5774,7 +5774,7 @@ func (w *TextBoxWidget) Render() {
 		gl.PushMatrix()
 		// HACK: Not general at all
 		if _, insideScrollPane := w.Parent().(*ScrollPaneWidget); !insideScrollPane {
-			gl.Translated(float64(w.pos[0]), float64(w.pos[1]), 0)
+			gl.Translated(w.pos[0], w.pos[1], 0)
 		}
 		widget.Render()
 		gl.PopMatrix()
@@ -6376,7 +6376,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 				(inputEvent.EventTypes[events.AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[events.SLIDER_EVENT] && inputEvent.InputId == 2)
 
 			if pointingPointerMovedRelativeToCanvas {
-				LocalPosition := mgl64.Vec2{float64(inputEvent.Pointer.State.Axes[0]), float64(inputEvent.Pointer.State.Axes[1])}
+				LocalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 
 				// Clear previously hit widgets
 				for _, widget := range inputEvent.Pointer.Mapping {

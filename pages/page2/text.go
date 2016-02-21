@@ -140,9 +140,9 @@ func (o *OpenGlStream) PrintSegment(s string) {
 
 	if o.BackgroundColor != nil && o.BorderColor == nil {
 		gl.PushAttrib(gl.CURRENT_BIT)
-		gl.Color3dv((*float64)(&o.BackgroundColor[0]))
+		gl.Color3dv(&o.BackgroundColor[0])
 		gl.PushMatrix()
-		gl.Translated(float64(o.pos[0]), float64(o.pos[1]), 0)
+		gl.Translated(o.pos[0], o.pos[1], 0)
 		for range s {
 			gl.CallList(oFontBackground)
 		}
@@ -158,7 +158,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 	defer gl.Disable(gl.TEXTURE_2D)
 
 	gl.PushMatrix()
-	gl.Translated(float64(o.pos[0]), float64(o.pos[1]), 0)
+	gl.Translated(o.pos[0], o.pos[1], 0)
 	gl.ListBase(oFontBase + uint32(o.FontOptions)*96)
 	gl.CallLists(int32(len(s)), gl.UNSIGNED_BYTE, gl.Ptr(&[]byte(s)[0]))
 	gl.PopMatrix()
@@ -269,8 +269,8 @@ func LoadTexture(path string) {
 // =====
 
 func drawBorderlessBox(pos, size mgl64.Vec2, backgroundColor mgl64.Vec3) {
-	gl.Color3dv((*float64)(&backgroundColor[0]))
-	gl.Rectd(float64(pos[0]), float64(pos[1]), float64(pos.Add(size)[0]), float64(pos.Add(size)[1]))
+	gl.Color3dv(&backgroundColor[0])
+	gl.Rectd(pos[0], pos[1], pos.Add(size)[0], pos.Add(size)[1])
 }
 
 func CheckGLError() {

@@ -196,7 +196,7 @@ func (w *MultitouchTestBoxWidget) Render() {
 
 func DrawBorderlessBox(pos, size mgl64.Vec2, backgroundColor mgl64.Vec3) {
 	gl.Color3dv(&backgroundColor[0])
-	gl.Rectd(float64(pos[0]), float64(pos[1]), float64(pos.Add(size)[0]), float64(pos.Add(size)[1]))
+	gl.Rectd(pos[0], pos[1], pos.Add(size)[0], pos.Add(size)[1])
 }
 
 func DrawBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64.Vec3) {

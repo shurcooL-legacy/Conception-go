@@ -34,7 +34,7 @@ func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
 	}
 	if textStyle.TextColor != nil {
 		textColor := *textStyle.TextColor
-		gl.Color3dv((*float64)(&textColor[0]))
+		gl.Color3dv(&textColor[0])
 	}
 	if textStyle.BorderColor != nil {
 		borderColor := *textStyle.BorderColor
@@ -235,7 +235,7 @@ func (this *highlightedGoContent) Segment(index uint32) highlightSegment {
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments)) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+		return highlightSegment{offset: this.segments[len(this.segments)-1].offset}
 	} else {
 		return this.segments[index]
 	}
@@ -344,7 +344,7 @@ func (this *highlightedDiff) segment(index uint32, side int) highlightSegment {
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments[side])) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return highlightSegment{offset: uint32(this.segments[side][len(this.segments[side])-1].offset)}
+		return highlightSegment{offset: this.segments[side][len(this.segments[side])-1].offset}
 	} else {
 		return this.segments[side][index]
 	}
@@ -413,7 +413,7 @@ func (this *tokenizedGoContent) Segment(index uint32) tokLit {
 		return tokLit{offset: 0}
 	} else if index >= uint32(len(this.segments)) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return tokLit{offset: uint32(this.segments[len(this.segments)-1].offset)}
+		return tokLit{offset: this.segments[len(this.segments)-1].offset}
 	} else {
 		return this.segments[index]
 	}
@@ -481,7 +481,7 @@ func (this *tokenizedDiff) Segment(index uint32) highlightSegment {
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments)) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+		return highlightSegment{offset: this.segments[len(this.segments)-1].offset}
 	} else {
 		return this.segments[index]
 	}
@@ -620,7 +620,7 @@ func (this *lineDiff) segment(index uint32, side int) highlightSegment {
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments[side])) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return highlightSegment{offset: uint32(this.segments[side][len(this.segments[side])-1].offset)}
+		return highlightSegment{offset: this.segments[side][len(this.segments[side])-1].offset}
 	} else {
 		return this.segments[side][index]
 	}
@@ -731,7 +731,7 @@ func (this *diffHighlighter) Segment(index uint32) highlightSegment {
 		return highlightSegment{offset: 0}
 	} else if index >= uint32(len(this.segments)) {
 		//fmt.Println("warning: Segment index >= max") // TODO: Fix this.
-		return highlightSegment{offset: uint32(this.segments[len(this.segments)-1].offset)}
+		return highlightSegment{offset: this.segments[len(this.segments)-1].offset}
 	} else {
 		return this.segments[index]
 	}
