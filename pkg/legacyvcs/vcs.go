@@ -1,5 +1,10 @@
 // Package vcs allows getting status of a repo under vcs.
-package vcs
+//
+// This package has been superseded by a better version at
+// github.com/shurcooL/vcsstate. That package should be used.
+// This legacy version is copied into Conception-go repo so that
+// it can continue to build without doing the work of refactoring.
+package legacyvcs
 
 import "os/exec"
 

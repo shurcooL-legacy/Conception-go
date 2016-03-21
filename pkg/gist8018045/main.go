@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/shurcooL/Conception-go/pkg/gist7480523"
 	"github.com/shurcooL/go/gists/gist5504644"
-	"github.com/shurcooL/go/gists/gist7480523"
 )
 
 // GetGoPackages gets all local Go packages (from GOROOT and all GOPATH workspaces).

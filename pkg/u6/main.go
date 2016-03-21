@@ -7,11 +7,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/shurcooL/go/exp/13"
-	"github.com/shurcooL/go/gists/gist7480523"
+	"github.com/shurcooL/Conception-go/pkg/exp13"
+	"github.com/shurcooL/Conception-go/pkg/gist7480523"
+	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
 	"github.com/shurcooL/go/pipe_util"
 	"github.com/shurcooL/go/trim"
-	"github.com/shurcooL/go/vcs"
 	"gopkg.in/pipe.v2"
 )
 
@@ -22,7 +22,7 @@ func GoPackageWorkingDiff(goPackage *gist7480523.GoPackage) string {
 	// git diff
 	if goPackage.Dir.Repo.VcsLocal.Status != "" {
 		switch goPackage.Dir.Repo.Vcs.Type() {
-		case vcs.Git:
+		case legacyvcs.Git:
 			newFileDiff := func(line []byte) []byte {
 				cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
 				cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
@@ -61,7 +61,7 @@ func GoPackageWorkingDiff(goPackage *gist7480523.GoPackage) string {
 func GoPackageWorkingDiffMaster(goPackage *gist7480523.GoPackage) string {
 	if goPackage.Dir.Repo.VcsLocal.Status != "" || goPackage.Dir.Repo.VcsLocal.LocalBranch != goPackage.Dir.Repo.Vcs.GetDefaultBranch() {
 		switch goPackage.Dir.Repo.Vcs.Type() {
-		case vcs.Git:
+		case legacyvcs.Git:
 			newFileDiff := func(line []byte) []byte {
 				cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
 				cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
@@ -110,7 +110,7 @@ func (bo *BranchesOptions) defaults() {
 func Branches(repo *exp13.VcsState, opt BranchesOptions) string {
 	opt.defaults()
 	switch repo.Vcs.Type() {
-	case vcs.Git:
+	case legacyvcs.Git:
 		branchInfo := func(line []byte) []byte {
 			branch := trim.LastNewline(string(line))
 			branchDisplay := branch
@@ -186,7 +186,7 @@ func branchRemoteInfo(repo *exp13.VcsState) func(line []byte) []byte {
 // BranchesRemote returns a Markdown table of branches with ahead/behind information relative to remote.
 func BranchesRemote(repo *exp13.VcsState) string {
 	switch repo.Vcs.Type() {
-	case vcs.Git:
+	case legacyvcs.Git:
 		p := pipe.Script(
 			pipe.Println("Branch | Remote | Behind | Ahead"),
 			pipe.Println("-------|--------|-------:|:-----"),
@@ -209,7 +209,7 @@ func BranchesRemote(repo *exp13.VcsState) string {
 // BranchesRemoteCustom returns a Markdown table of branches with ahead/behind information relative to the specified remote.
 func BranchesRemoteCustom(repo *exp13.VcsState, remote string) string {
 	switch repo.Vcs.Type() {
-	case vcs.Git:
+	case legacyvcs.Git:
 		p := pipe.Script(
 			pipe.Println("Branch | Remote | Behind | Ahead"),
 			pipe.Println("-------|--------|-------:|:-----"),

@@ -37,13 +37,16 @@ import (
 	"github.com/go-gl/glfw/v3.1/glfw"
 	"github.com/go-gl/mathgl/mgl64"
 	intmath "github.com/pkg/math"
+	"github.com/shurcooL/Conception-go/pkg/exp12"
+	"github.com/shurcooL/Conception-go/pkg/exp13"
+	"github.com/shurcooL/Conception-go/pkg/exp14"
+	. "github.com/shurcooL/Conception-go/pkg/gist7480523"
+	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
+	"github.com/shurcooL/Conception-go/pkg/u6"
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/analysis"
 	"github.com/shurcooL/go/exp/11"
-	"github.com/shurcooL/go/exp/12"
-	"github.com/shurcooL/go/exp/13"
-	"github.com/shurcooL/go/exp/14"
 	"github.com/shurcooL/go/gists/gist4727543"
 	. "github.com/shurcooL/go/gists/gist5423254"
 	"github.com/shurcooL/go/gists/gist5504644"
@@ -56,7 +59,6 @@ import (
 	. "github.com/shurcooL/go/gists/gist6445065"
 	"github.com/shurcooL/go/gists/gist6545684"
 	. "github.com/shurcooL/go/gists/gist7390843"
-	. "github.com/shurcooL/go/gists/gist7480523"
 	. "github.com/shurcooL/go/gists/gist7576154"
 	. "github.com/shurcooL/go/gists/gist7576804"
 	. "github.com/shurcooL/go/gists/gist7651991"
@@ -67,8 +69,6 @@ import (
 	"github.com/shurcooL/go/u/u10"
 	"github.com/shurcooL/go/u/u4"
 	"github.com/shurcooL/go/u/u5"
-	"github.com/shurcooL/go/u/u6"
-	"github.com/shurcooL/go/vcs"
 	"github.com/shurcooL/go/vfs_util"
 	"github.com/shurcooL/markdownfmt/markdown"
 	"golang.org/x/net/websocket"
@@ -7617,7 +7617,7 @@ func main() {
 					}
 
 					dir, file := filepath.Split(path)
-					if goPackage.Dir.Repo == nil || goPackage.Dir.Repo.Vcs.Type() != vcs.Git {
+					if goPackage.Dir.Repo == nil || goPackage.Dir.Repo.Vcs.Type() != legacyvcs.Git {
 						return
 					}
 
@@ -7755,7 +7755,7 @@ func main() {
 					}
 
 					dir, file := filepath.Split(path)
-					if goPackage.Dir.Repo == nil || goPackage.Dir.Repo.Vcs.Type() != vcs.Git {
+					if goPackage.Dir.Repo == nil || goPackage.Dir.Repo.Vcs.Type() != legacyvcs.Git {
 						return
 					}
 

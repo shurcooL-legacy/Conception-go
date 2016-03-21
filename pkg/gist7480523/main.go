@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/shurcooL/go/exp/12"
+	"github.com/shurcooL/Conception-go/pkg/exp12"
 	"golang.org/x/tools/go/vcs"
 
 	"github.com/shurcooL/go/gists/gist5504644"

@@ -4,9 +4,9 @@ package exp12
 import (
 	"sync"
 
-	"github.com/shurcooL/go/exp/13"
+	"github.com/shurcooL/Conception-go/pkg/exp13"
+	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
 	"github.com/shurcooL/go/gists/gist7802150"
-	"github.com/shurcooL/go/vcs"
 )
 
 // rootPath -> *VcsState
@@ -26,7 +26,7 @@ type Directory struct {
 }
 
 func (this *Directory) Update() {
-	if vcs := vcs.New(this.path); vcs != nil {
+	if vcs := legacyvcs.New(this.path); vcs != nil {
 		reposLock.Lock()
 		if repo, ok := repos[vcs.RootPath()]; ok {
 			this.Repo = repo

@@ -2,13 +2,13 @@
 package exp13
 
 import (
+	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
 	"github.com/shurcooL/go/gists/gist7802150"
-	"github.com/shurcooL/go/vcs"
 	go_vcs "golang.org/x/tools/go/vcs"
 )
 
 type VcsState struct {
-	Vcs vcs.Vcs
+	Vcs legacyvcs.Vcs
 
 	VcsLocal  *VcsLocal
 	VcsRemote *VcsRemote
@@ -21,7 +21,7 @@ type VcsState struct {
 	gist7802150.DepNode2Manual
 }
 
-func NewVcsState(vcs vcs.Vcs) *VcsState {
+func NewVcsState(vcs legacyvcs.Vcs) *VcsState {
 	this := &VcsState{
 		Vcs: vcs,
 	}

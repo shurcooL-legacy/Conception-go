@@ -3,7 +3,7 @@ package gist7480523_test
 import (
 	"fmt"
 
-	"github.com/shurcooL/go/gists/gist7480523"
+	"github.com/shurcooL/Conception-go/pkg/gist7480523"
 )
 
 func ExampleGetRepoImportPathPattern() {
