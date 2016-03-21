@@ -69,7 +69,6 @@ import (
 	"github.com/shurcooL/go/u/u10"
 	"github.com/shurcooL/go/u/u4"
 	"github.com/shurcooL/go/u/u5"
-	"github.com/shurcooL/go/vfs_util"
 	"github.com/shurcooL/markdownfmt/markdown"
 	"golang.org/x/net/websocket"
 	"golang.org/x/tools/go/types"
@@ -7131,8 +7130,6 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 						panic(err)
 					}*/
 				}
-
-				fs = vfs_util.NewDebugFS(fs)
 
 				/*w0 := NewVfsListing0Widget(mgl64.Vec2{200, 400}, fs, "/")
 				widgets = append(widgets, w0)*/
