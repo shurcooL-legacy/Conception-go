@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-gl/mathgl/mgl64"
 	intmath "github.com/pkg/math"
-	"github.com/shurcooL/go/gists/gist7802150"
+	"github.com/shurcooL/Conception-go/pkg/gist7802150"
 )
 
 type ContentLine interface {

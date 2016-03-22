@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/shurcooL/Conception-go/pkg/exp13"
+	"github.com/shurcooL/Conception-go/pkg/gist7802150"
 	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
-	"github.com/shurcooL/go/gists/gist7802150"
 )
 
 // rootPath -> *VcsState

@@ -3,7 +3,7 @@ package gist7802150_test
 import (
 	"fmt"
 
-	"github.com/shurcooL/go/gists/gist7802150"
+	"github.com/shurcooL/Conception-go/pkg/gist7802150"
 )
 
 func ExampleFileUri_Path() {

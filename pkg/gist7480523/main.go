@@ -13,8 +13,8 @@ import (
 	"github.com/shurcooL/Conception-go/pkg/exp12"
 	"golang.org/x/tools/go/vcs"
 
+	"github.com/shurcooL/Conception-go/pkg/gist7802150"
 	"github.com/shurcooL/go/gists/gist5504644"
-	"github.com/shurcooL/go/gists/gist7802150"
 )
 
 type GoPackageStringer func(*GoPackage) string
