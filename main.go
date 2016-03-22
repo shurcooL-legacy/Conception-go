@@ -53,7 +53,6 @@ import (
 	. "github.com/shurcooL/go/gists/gist5639599"
 	. "github.com/shurcooL/go/gists/gist5953185"
 	"github.com/shurcooL/go/gists/gist6003701"
-	. "github.com/shurcooL/go/gists/gist6096872"
 	. "github.com/shurcooL/go/gists/gist6418290"
 	. "github.com/shurcooL/go/gists/gist6418462"
 	. "github.com/shurcooL/go/gists/gist6445065"
