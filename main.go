@@ -50,7 +50,6 @@ import (
 	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/analysis"
 	"github.com/shurcooL/go/gists/gist4727543"
-	. "github.com/shurcooL/go/gists/gist5423254"
 	"github.com/shurcooL/go/gists/gist5504644"
 	. "github.com/shurcooL/go/gists/gist5639599"
 	. "github.com/shurcooL/go/gists/gist5953185"
@@ -4774,12 +4773,21 @@ func NewReverseMultilineContent() *ReverseMultilineContent {
 	return rmc
 }
 
-func (c *ReverseMultilineContent) Content() string { return Reverse(c.content) }
+func (c *ReverseMultilineContent) Content() string { return reverse(c.content) }
 
 /*func (c *ReverseMultilineContent) SetSelf(content string) {
-	c.content = Reverse(content)
+	c.content = reverse(content)
 	c.updateLines()
 }*/
+
+// reverse returns a reversed s.
+func reverse(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
 
 // ---
 
