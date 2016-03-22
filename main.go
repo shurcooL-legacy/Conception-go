@@ -64,7 +64,7 @@ import (
 	. "github.com/shurcooL/go/gists/gist7651991"
 	. "github.com/shurcooL/go/gists/gist7802150"
 	"github.com/shurcooL/go/markdown_http"
-	"github.com/shurcooL/go/pipe_util"
+	"github.com/shurcooL/go/pipeutil"
 	"github.com/shurcooL/go/trim"
 	"github.com/shurcooL/go/u/u10"
 	"github.com/shurcooL/go/u/u4"
@@ -7471,7 +7471,7 @@ func main() {
 						template3.Template = NewPipeTemplate(pipe.Script(
 							pipe.Println(fmt.Sprintf("Building %q.", goPackage.Bpkg.ImportPath)),
 							pipe.Line(
-								pipe_util.ExecCombinedOutput("go", "build", "-o", con2RunBinPath, goPackage.Bpkg.ImportPath),
+								pipeutil.ExecCombinedOutput("go", "build", "-o", con2RunBinPath, goPackage.Bpkg.ImportPath),
 								pipe.TaskFunc(func(s *pipe.State) error {
 									var b bytes.Buffer
 									io.Copy(&b, s.Stdin)
@@ -7849,7 +7849,7 @@ func main() {
 
 				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
 					template2.Template = NewPipeTemplate(pipe.Line(
-						pipe_util.ExecCombinedOutput("go", "build", "-o", "/dev/null", goPackage.Bpkg.ImportPath),
+						pipeutil.ExecCombinedOutput("go", "build", "-o", "/dev/null", goPackage.Bpkg.ImportPath),
 						pipe.TaskFunc(func(s *pipe.State) error {
 							var b bytes.Buffer
 							io.Copy(&b, s.Stdin)
@@ -7878,7 +7878,7 @@ func main() {
 					template3.Template = NewPipeTemplate(pipe.Script(
 						pipe.Println(fmt.Sprintf("Building %q.", goPackage.Bpkg.ImportPath)),
 						pipe.Line(
-							pipe_util.ExecCombinedOutput("go", "build", "-o", con2RunBinPath, goPackage.Bpkg.ImportPath),
+							pipeutil.ExecCombinedOutput("go", "build", "-o", con2RunBinPath, goPackage.Bpkg.ImportPath),
 							pipe.TaskFunc(func(s *pipe.State) error {
 								var b bytes.Buffer
 								io.Copy(&b, s.Stdin)
@@ -7908,7 +7908,7 @@ func main() {
 				template4.Template = NewPipeTemplate(pipe.Exec("echo", "-n", "Nothing to go test."))
 				if goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage(); goPackage != nil {
 					template4.Template = NewPipeTemplate(pipe.Script(
-						pipe_util.ExecCombinedOutput("go", "test", goPackage.Bpkg.ImportPath),
+						pipeutil.ExecCombinedOutput("go", "test", goPackage.Bpkg.ImportPath),
 					))
 				}
 			}

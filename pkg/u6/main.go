@@ -10,7 +10,7 @@ import (
 	"github.com/shurcooL/Conception-go/pkg/exp13"
 	"github.com/shurcooL/Conception-go/pkg/gist7480523"
 	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
-	"github.com/shurcooL/go/pipe_util"
+	"github.com/shurcooL/go/pipeutil"
 	"github.com/shurcooL/go/trim"
 	"gopkg.in/pipe.v2"
 )
@@ -46,7 +46,7 @@ func GoPackageWorkingDiff(goPackage *gist7480523.GoPackage) string {
 				),
 			)
 
-			out, err := pipe_util.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
+			out, err := pipeutil.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
 			if err != nil {
 				return err.Error()
 			}
@@ -85,7 +85,7 @@ func GoPackageWorkingDiffMaster(goPackage *gist7480523.GoPackage) string {
 				),
 			)
 
-			out, err := pipe_util.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
+			out, err := pipeutil.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
 			if err != nil {
 				return err.Error()
 			}
@@ -139,7 +139,7 @@ func Branches(repo *exp13.VcsState, opt BranchesOptions) string {
 			),
 		)
 
-		out, err := pipe_util.OutputDir(p, repo.Vcs.RootPath())
+		out, err := pipeutil.OutputDir(p, repo.Vcs.RootPath())
 		if err != nil {
 			return err.Error()
 		}
@@ -196,7 +196,7 @@ func BranchesRemote(repo *exp13.VcsState) string {
 			),
 		)
 
-		out, err := pipe_util.OutputDir(p, repo.Vcs.RootPath())
+		out, err := pipeutil.OutputDir(p, repo.Vcs.RootPath())
 		if err != nil {
 			return err.Error()
 		}
@@ -219,7 +219,7 @@ func BranchesRemoteCustom(repo *exp13.VcsState, remote string) string {
 			),
 		)
 
-		out, err := pipe_util.OutputDir(p, repo.Vcs.RootPath())
+		out, err := pipeutil.OutputDir(p, repo.Vcs.RootPath())
 		if err != nil {
 			return err.Error()
 		}
