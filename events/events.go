@@ -145,20 +145,20 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent, widget Widgeter) []Inp
 		if pointingPointerMovedRelativeToCanvas {
 			LocalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 
-			// Clear previously hit widgets
+			// Clear previously hit widgets.
 			for _, widget := range inputEvent.Pointer.Mapping {
 				delete(widget.HoverPointers(), inputEvent.Pointer)
 			}
 			inputEvent.Pointer.Mapping = []Widgeter{}
 
-			// Recalculate currently hit widgets
+			// Recalculate currently hit widgets.
 			inputEvent.Pointer.Mapping = append(inputEvent.Pointer.Mapping, widget.Hit(LocalPosition)...)
 			for _, widget := range inputEvent.Pointer.Mapping {
 				widget.HoverPointers()[inputEvent.Pointer] = true
 			}
 		}
 
-		// Populate OriginMapping (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
+		// Populate OriginMapping (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below).
 		if pointingPointerMovedRelativeToCanvas &&
 			!inputEvent.EventTypes.Has(POINTER_DEACTIVATION) && !inputEvent.Pointer.State.IsActive() {
 
@@ -170,7 +170,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent, widget Widgeter) []Inp
 			widget.ProcessEvent(inputEvent)
 		}
 
-		// Populate OriginMapping (but only upon pointer deactivation event)
+		// Populate OriginMapping (but only upon pointer deactivation event).
 		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes.Has(POINTER_DEACTIVATION) {
 
 			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
@@ -242,9 +242,7 @@ type ChangeListener interface {
 
 type ChangeListenerFunc func()
 
-func (f ChangeListenerFunc) NotifyChange() {
-	f()
-}
+func (f ChangeListenerFunc) NotifyChange() { f() }
 
 // ---
 
@@ -259,14 +257,14 @@ type DepNode struct {
 func (this *DepNode) AddChangeListener(l ChangeListener) {
 	this.changeListeners = append(this.changeListeners, l)
 
-	l.NotifyChange() // TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
+	l.NotifyChange() // TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run.
 }
 
 // Pre-condition: l is a change listener that exists
 func (this *DepNode) RemoveChangeListener(l ChangeListener) {
 	for i := range this.changeListeners {
 		if this.changeListeners[i] == l {
-			// Delete
+			// Delete.
 			copy(this.changeListeners[i:], this.changeListeners[i+1:])
 			this.changeListeners[len(this.changeListeners)-1] = nil
 			this.changeListeners = this.changeListeners[:len(this.changeListeners)-1]
@@ -278,7 +276,7 @@ func (this *DepNode) RemoveChangeListener(l ChangeListener) {
 }
 
 func (this *DepNode) NotifyAllListeners() {
-	// TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run
+	// TODO: In future, don't literally NotifyChange() right away, as this can lead to duplicate work; instead mark as "need to update" for next run.
 	for _, changeListener := range this.changeListeners {
 		changeListener.NotifyChange()
 	}
@@ -293,7 +291,7 @@ type Widgeter interface {
 	LayoutNeeded()
 	Render()
 	Hit(mgl64.Vec2) []Widgeter
-	ProcessEvent(InputEvent)                     // TODO: Upgrade to MatchEventQueue() or so
+	ProcessEvent(InputEvent)                     // TODO: Upgrade to MatchEventQueue() or so.
 	ContainsWidget(widget, target Widgeter) bool // Returns true if target is widget or within it.
 
 	Pos() *mgl64.Vec2
