@@ -60,8 +60,8 @@ import (
 	. "github.com/shurcooL/go/gists/gist6418462"
 	. "github.com/shurcooL/go/gists/gist6445065"
 	"github.com/shurcooL/go/gists/gist6545684"
-	. "github.com/shurcooL/go/gists/gist7390843"
 	. "github.com/shurcooL/go/gists/gist7576804"
+	"github.com/shurcooL/go/httpstoppable"
 	"github.com/shurcooL/go/pipeutil"
 	"github.com/shurcooL/go/trim"
 	"github.com/shurcooL/go/u/u10"
@@ -3381,7 +3381,7 @@ func NewHttpServerTestWidget(pos mgl64.Vec2) *HttpServerTestWidget {
 	action := func() {
 		if !w.started {
 			go func() {
-				err := ListenAndServeStoppable(httpServerAddr, nil, w.stopServerChan)
+				err := httpstoppable.ListenAndServe(httpServerAddr, nil, w.stopServerChan)
 				if err != nil {
 					log.Println("HttpServerTestWidget:", err)
 					w.started = false
