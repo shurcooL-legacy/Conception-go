@@ -36,6 +36,7 @@ import (
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
 	"github.com/go-gl/mathgl/mgl64"
+	"github.com/mattn/go-runewidth"
 	intmath "github.com/pkg/math"
 	"github.com/shurcooL/Conception-go/pkg/exp11"
 	"github.com/shurcooL/Conception-go/pkg/exp12"
@@ -54,7 +55,6 @@ import (
 	"github.com/shurcooL/go/analysis"
 	"github.com/shurcooL/go/gists/gist5504644"
 	. "github.com/shurcooL/go/gists/gist5639599"
-	. "github.com/shurcooL/go/gists/gist5953185"
 	"github.com/shurcooL/go/gists/gist6003701"
 	. "github.com/shurcooL/go/gists/gist6418290"
 	. "github.com/shurcooL/go/gists/gist6418462"
@@ -4255,7 +4255,7 @@ func (w *VfsListingPureWidget) selectionChangedTest() {
 		/*if bpkg, err := gist5504644.BuildPackageFromSrcDir(path); err == nil {
 			dpkg := gist5504644.GetDocPackage(bpkg, err)
 
-			out := Underline(`import "`+dpkg.ImportPath+`"`) + "\n"
+			out := underline(`import "`+dpkg.ImportPath+`"`) + "\n"
 			for _, v := range dpkg.Vars {
 				out += SprintAstBare(v.Decl) + "\n"
 			}
@@ -6596,11 +6596,11 @@ func initHttpHandlers() {
 
 			if goPackage.Dir.Repo != nil {
 				// Branches.
-				b += "\n" + Underline("Branches")
+				b += "\n" + underline("Branches")
 				b += "\n" + u6.Branches(goPackage.Dir.Repo, u6.BranchesOptions{Base: req.URL.Query().Get("base")})
 			}
 
-			b += "\n" + Underline("Status")
+			b += "\n" + underline("Status")
 			b += "\n```\n" + "`status.PorcelainPresenter(goPackage)`" + "\n```\n"
 
 			if goPackage.Dir.Repo != nil {
@@ -6617,7 +6617,7 @@ func initHttpHandlers() {
 
 				// git diff.
 				if workingDiff := u6.GoPackageWorkingDiff(goPackage); workingDiff != "" {
-					b += "\n" + Underline("git diff")
+					b += "\n" + underline("git diff")
 					cmd := exec.Command("git", "diff", "--stat", "--find-renames", "HEAD")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
@@ -6628,7 +6628,7 @@ func initHttpHandlers() {
 
 				// git diff against master.
 				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
-					b += "\n" + Underline("git diff against master")
+					b += "\n" + underline("git diff against master")
 
 					// Stats (lines added/removed).
 					cmd := exec.Command("git", "diff", "--stat", "--find-renames", "master")
@@ -6751,6 +6751,11 @@ func initHttpHandlers() {
 
 		return buf.Bytes(), nil
 	})))
+}
+
+// underline returns an underlined s.
+func underline(s string) string {
+	return s + "\n" + strings.Repeat("-", runewidth.StringWidth(s)) + "\n"
 }
 
 func getRootPath(goPackage *GoPackage) (rootPath string) {

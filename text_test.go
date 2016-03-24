@@ -27,3 +27,13 @@ func Example_reverse() {
 	// "321"
 	// "界世 ,olleH"
 }
+
+func Example_underline() {
+	fmt.Print(underline("Underline Test") + "\nstuff that goes here")
+
+	// Output:
+	// Underline Test
+	// --------------
+	//
+	// stuff that goes here
+}
