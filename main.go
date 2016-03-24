@@ -6485,7 +6485,7 @@ func fileDiffName(fileDiff *diff.FileDiff) string {
 	case origName != "" && newName == "": // Removed.
 		return "~~" + origName + "~~"
 	default:
-		panic("unexpected, no names")
+		panic("unexpected *diff.FileDiff, no names")
 	}
 }
 
@@ -6508,7 +6508,7 @@ func fileDiffNameRaw(fileDiff *diff.FileDiff) string {
 	case origName != "" && newName == "": // Removed.
 		return origName
 	default:
-		panic("unexpected, no names")
+		panic("unexpected *diff.FileDiff, no names")
 	}
 }
 
@@ -6551,6 +6551,11 @@ func initHttpHandlers() {
 
 					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiffMaster)); err == nil {
 						for _, fileDiff := range fileDiffs {
+							// Skip binary files for now; they have empty filenames until https://github.com/sourcegraph/go-diff/issues/10 is resolved.
+							if fileDiff.OrigName == "" && fileDiff.NewName == "" {
+								b += "\n" + "### (binary file skipped)" + "\n"
+								continue
+							}
 							if skipGenerated {
 								if generated, err := analysis.IsFileGenerated(goPackage.Dir.Repo.Vcs.RootPath(), fileDiffNameRaw(fileDiff)); err == nil && generated {
 									continue
