@@ -59,7 +59,6 @@ import (
 	. "github.com/shurcooL/go/gists/gist6418290"
 	. "github.com/shurcooL/go/gists/gist6418462"
 	. "github.com/shurcooL/go/gists/gist6445065"
-	. "github.com/shurcooL/go/gists/gist7576804"
 	"github.com/shurcooL/go/httpstoppable"
 	"github.com/shurcooL/go/pipeutil"
 	"github.com/shurcooL/go/trim"
@@ -670,7 +669,7 @@ func NewTest4Widget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source 
 			Test4WidgetIdent = ident // HACK
 
 			if obj := findTypesObject(info, ident); obj != nil {
-				out += ">>> " + TypeChainString(obj.Type())
+				out += ">>> " + typeChainString(obj.Type())
 				if constObj, ok := obj.(*types.Const); ok {
 					out += fmt.Sprintf(" = %v", constObj.Val())
 				}
@@ -758,7 +757,7 @@ func NewTypeUnderCaretWidget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter
 			Test4WidgetIdent = ident // HACK
 
 			if obj := findTypesObject(info, ident); obj != nil {
-				out += TypeChainString(obj.Type())
+				out += typeChainString(obj.Type())
 				if constObj, ok := obj.(*types.Const); ok {
 					out += fmt.Sprintf(" = %v", constObj.Val())
 				}
@@ -784,6 +783,20 @@ func findTypesObject(info *types.Info, ident *ast.Ident) (obj types.Object) {
 		}
 	}
 	return obj
+}
+
+// typeChainString returns the full type chain as a string.
+func typeChainString(t types.Type) string {
+	out := fmt.Sprintf("%s", t)
+	for {
+		if t == t.Underlying() {
+			break
+		} else {
+			t = t.Underlying()
+		}
+		out += fmt.Sprintf(" -> %s", t)
+	}
+	return out
 }
 
 // ---
