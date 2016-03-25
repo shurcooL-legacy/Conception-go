@@ -59,7 +59,6 @@ import (
 	. "github.com/shurcooL/go/gists/gist6418290"
 	. "github.com/shurcooL/go/gists/gist6418462"
 	. "github.com/shurcooL/go/gists/gist6445065"
-	"github.com/shurcooL/go/gists/gist6545684"
 	. "github.com/shurcooL/go/gists/gist7576804"
 	"github.com/shurcooL/go/httpstoppable"
 	"github.com/shurcooL/go/pipeutil"
@@ -1175,37 +1174,6 @@ func (this *GoCompileErrorsTest) Update() {
 	this.Out = nil
 	for out := range outChan {
 		this.Out = append(this.Out, out.(GoCompilerError))
-	}
-}
-
-// ---
-
-type GpcFileWidget struct {
-	Widget
-	p gist6545684.Polygon
-}
-
-func NewGpcFileWidget(pos mgl64.Vec2, path string) *GpcFileWidget {
-	p, err := gist6545684.ReadGpcFile(path)
-	if err != nil {
-		log.Fatalln("ReadGpcFile:", err)
-	}
-
-	return &GpcFileWidget{Widget: NewWidget(pos, mgl64.Vec2{0, 0}), p: p}
-}
-
-func (w *GpcFileWidget) Render() {
-	gl.PushMatrix()
-	defer gl.PopMatrix()
-	gl.Translated(w.pos[0], w.pos[1], 0)
-
-	gl.Color3d(0, 0, 0)
-	for _, contour := range w.p.Contours {
-		gl.Begin(gl.LINE_LOOP)
-		for _, vertex := range contour.Vertices {
-			gl.Vertex2dv(&vertex[0])
-		}
-		gl.End()
 	}
 }
 
@@ -7353,10 +7321,6 @@ func main() {
 		widgets = append(widgets, NewButtonLabelWidget(mgl64.Vec2{640, 400}, "Previous", nil))
 
 		//widgets = append(widgets, NewFolderListingWidget(mgl64.Vec2{350, 30}, "../../../")) // Hopefully the "$GOPATH/src/" folder
-
-	case 2:
-		widgets = append(widgets, NewGpcFileWidget(mgl64.Vec2{1100, 500}, "/Users/Dmitri/Dropbox/Work/2013/eX0 Project/eX0 Client/levels/test3.wwl"))
-		widgets = append(widgets, NewKatWidget(mgl64.Vec2{370, 20}))
 
 	case 1:
 
