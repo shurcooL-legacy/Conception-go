@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/shurcooL/go/gists/gist5504644"
+	"github.com/shurcooL/Conception-go/pkg/gist5504644"
 	"github.com/shurcooL/go/gists/gist5639599"
 )
 
