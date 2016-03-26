@@ -54,13 +54,13 @@ import (
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/analysis"
-	. "github.com/shurcooL/go/gists/gist5639599"
 	"github.com/shurcooL/go/gists/gist6003701"
 	. "github.com/shurcooL/go/gists/gist6418290"
 	. "github.com/shurcooL/go/gists/gist6418462"
-	. "github.com/shurcooL/go/gists/gist6445065"
 	"github.com/shurcooL/go/httpstoppable"
 	"github.com/shurcooL/go/pipeutil"
+	"github.com/shurcooL/go/printerutil"
+	"github.com/shurcooL/go/reflectfind"
 	"github.com/shurcooL/go/trim"
 	"github.com/shurcooL/go/u/u10"
 	"github.com/shurcooL/go/u/u4"
@@ -365,7 +365,7 @@ func (w *Test1Widget) Render() {
 
 	/*x := gist5504644.GetDocPackageAll(gist5504644.BuildPackageFromSrcDir(GetThisGoSourceDir()))
 	for lineIndex, y := range x.Vars {
-		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineIndex)}), SprintAstBare(y.Decl))
+		PrintText(w.pos.Add(mathgl.Vec2d{0, float64(16 * lineIndex)}), printerutil.SprintAstBare(y.Decl))
 	}*/
 
 	/*kat := widgets[len(widgets)-2].(*KatWidget)
@@ -448,7 +448,7 @@ func NewTest3Widget(pos mgl64.Vec2, source *TextBoxWidget) (*LiveGoroutineExpeWi
 			}
 			return false
 		}
-		found := FindAll(fileAst, query)
+		found := reflectfind.All(fileAst, query)
 
 		if len(found) == 0 {
 			return ""
@@ -464,7 +464,7 @@ func NewTest3Widget(pos mgl64.Vec2, source *TextBoxWidget) (*LiveGoroutineExpeWi
 		}
 		out := fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
 		out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
-		out += SprintAst(fset, smallestV) + "\n\n"
+		out += printerutil.SprintAst(fset, smallestV) + "\n\n"
 
 		// This is can be huge if ran on root AST node of large Go files, so don't
 		if _, huge := smallestV.(*ast.File); !huge {
@@ -616,7 +616,7 @@ func NewTest4Widget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source 
 				}
 				return false
 			}
-			found := FindAll(fileAst, query)
+			found := reflectfind.All(fileAst, query)
 
 			foundDiff := false
 			if len(found) != len(found2) {
@@ -646,7 +646,7 @@ func NewTest4Widget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source 
 				out += "\n"
 				out += fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
 				out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
-				out += SprintAst(fset, smallestV) + "\n\n"
+				out += printerutil.SprintAst(fset, smallestV) + "\n\n"
 			}
 		}
 
@@ -663,7 +663,7 @@ func NewTest4Widget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source 
 
 		out += fmt.Sprintf("%d-%d, %p, %T\n\n", smallestV.Pos()-1, smallestV.End()-1, (interface{})(smallestV), smallestV)
 
-		out += SprintAst(fset, smallestV) + "\n\n"
+		out += printerutil.SprintAst(fset, smallestV) + "\n\n"
 
 		if ident, ok := smallestV.(*ast.Ident); ok {
 			Test4WidgetIdent = ident // HACK
@@ -926,7 +926,7 @@ type nodeStringer struct {
 }
 
 func NewNodeStringer(node ast.Node) NodeStringer {
-	return nodeStringer{Node: node, str: SprintAstBare(node)}
+	return nodeStringer{Node: node, str: printerutil.SprintAstBare(node)}
 }
 
 func (this nodeStringer) String() string { return this.str }
@@ -1013,7 +1013,7 @@ func (this *goSymbolsB) Update() {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
 				funcDeclSignature := &ast.FuncDecl{Recv: d.Recv, Name: d.Name, Type: d.Type}
-				nodeStringer := nodeStringer{Node: d, str: SprintAstBare(funcDeclSignature)}
+				nodeStringer := nodeStringer{Node: d, str: printerutil.SprintAstBare(funcDeclSignature)}
 				this.entries = append(this.entries, nodeStringer)
 			}
 		}
@@ -1039,7 +1039,7 @@ func (this *goSymbolsC) Update() {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
 			if d.Recv != nil {
-				name := "(" + SprintAstBare(d.Recv.List[0].Type) + ") " + d.Name.String()
+				name := "(" + printerutil.SprintAstBare(d.Recv.List[0].Type) + ") " + d.Name.String()
 				this.entries = append(this.entries, NewTwoNodeStringer(d.Recv, d.Name, name))
 			} else {
 				this.entries = append(this.entries, NewNodeStringer(d.Name))
@@ -4238,20 +4238,20 @@ func (w *VfsListingPureWidget) selectionChangedTest() {
 
 			out := underline(`import "`+dpkg.ImportPath+`"`) + "\n"
 			for _, v := range dpkg.Vars {
-				out += SprintAstBare(v.Decl) + "\n"
+				out += printerutil.SprintAstBare(v.Decl) + "\n"
 			}
 			out += "\n"
 			for _, f := range dpkg.Funcs {
-				out += SprintAstBare(f.Decl) + "\n"
+				out += printerutil.SprintAstBare(f.Decl) + "\n"
 			}
 			out += "\n"
 			for _, c := range dpkg.Consts {
-				out += SprintAstBare(c.Decl) + "\n"
+				out += printerutil.SprintAstBare(c.Decl) + "\n"
 			}
 			out += "\n"
 			for _, t := range dpkg.Types {
 				out += fmt.Sprint(t.Name) + "\n"
-				//PrintlnAstBare(t.Decl)
+				//printerutil.PrintlnAstBare(t.Decl)
 			}
 
 			newFolder = NewTextLabelWidgetString(np, out)
@@ -7297,7 +7297,7 @@ func main() {
 			dumpButton := NewButtonWidget(mgl64.Vec2{600 - 20, 296}, func() {
 				goon.DumpExpr(x)
 				goon.DumpExpr(someString)
-				SetViewGroup(output.Content, SprintAstBare(fileAst))
+				SetViewGroup(output.Content, printerutil.SprintAstBare(fileAst))
 			})
 			widgets = append(widgets, dumpButton)
 		}

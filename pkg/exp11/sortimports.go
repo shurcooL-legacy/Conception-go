@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shurcooL/go/gists/gist5639599"
+	"github.com/shurcooL/go/printerutil"
 	"golang.org/x/tools/go/ast/astutil"
 )
 
@@ -46,7 +46,7 @@ func sortImports2(fset *token.FileSet, f *ast.File) (fset2 *token.FileSet, f2 *a
 	// Because I don't see an API that'd let me modify (insert a newline) the FileSet directly.
 	// We really need a go/ast v2, which is as friendly to parsing/printing/formatting as current, but
 	// also friendly towards direct AST modification... To avoid all these horrible hacks.
-	out := []byte(gist5639599.SprintAst(fset, f))
+	out := []byte(printerutil.SprintAst(fset, f))
 	if len(spacesBefore) > 0 {
 		out = addImportSpaces(bytes.NewReader(out), spacesBefore)
 	}

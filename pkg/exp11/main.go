@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/shurcooL/go/gists/gist5639599"
+	"github.com/shurcooL/go/printerutil"
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/imports"
 )
@@ -92,7 +92,7 @@ func InlineDotImports(w io.Writer, importPath string) {
 func WriteMergedPackage(w io.Writer, fset *token.FileSet, merged *ast.File) {
 	switch 3 {
 	case 1:
-		fmt.Fprintln(w, "package "+gist5639599.SprintAst(fset, merged.Name))
+		fmt.Fprintln(w, "package "+printerutil.SprintAst(fset, merged.Name))
 		fmt.Fprintln(w)
 		fmt.Fprintln(w, `import (`)
 		// TODO: SortImports (ala goimports).
@@ -100,7 +100,7 @@ func WriteMergedPackage(w io.Writer, fset *token.FileSet, merged *ast.File) {
 			if importSpec.Name != nil && importSpec.Name.Name == "." {
 				continue
 			}
-			fmt.Fprintln(w, "\t"+gist5639599.SprintAst(fset, importSpec))
+			fmt.Fprintln(w, "\t"+printerutil.SprintAst(fset, importSpec))
 		}
 		fmt.Fprintln(w, `)`)
 		fmt.Fprintln(w)
@@ -110,7 +110,7 @@ func WriteMergedPackage(w io.Writer, fset *token.FileSet, merged *ast.File) {
 				continue
 			}
 
-			fmt.Fprintln(w, gist5639599.SprintAst(fset, decl))
+			fmt.Fprintln(w, printerutil.SprintAst(fset, decl))
 			fmt.Fprintln(w)
 		}
 	case 2:
@@ -121,18 +121,18 @@ func WriteMergedPackage(w io.Writer, fset *token.FileSet, merged *ast.File) {
 		//ast.SortImports(fset, merged)
 		sortImports2(fset, merged)
 
-		fmt.Fprintln(w, gist5639599.SprintAst(fset, merged))
+		fmt.Fprintln(w, printerutil.SprintAst(fset, merged))
 	case 3:
 		sortDecls(merged)
 
 		// TODO: Clean up this mess...
 		fset2, f2 := sortImports2(token.NewFileSet(), merged)
 
-		fmt.Fprintln(w, "package "+gist5639599.SprintAst(fset, merged.Name))
+		fmt.Fprintln(w, "package "+printerutil.SprintAst(fset, merged.Name))
 		for _, decl := range f2.Decls {
 			if x, ok := decl.(*ast.GenDecl); ok && x.Tok == token.IMPORT {
 				fmt.Fprintln(w)
-				fmt.Fprintln(w, gist5639599.SprintAst(fset2, decl))
+				fmt.Fprintln(w, printerutil.SprintAst(fset2, decl))
 			}
 		}
 		for _, decl := range merged.Decls {
@@ -141,12 +141,12 @@ func WriteMergedPackage(w io.Writer, fset *token.FileSet, merged *ast.File) {
 			}
 
 			fmt.Fprintln(w)
-			fmt.Fprintln(w, gist5639599.SprintAst(fset, decl))
+			fmt.Fprintln(w, printerutil.SprintAst(fset, decl))
 		}
 	case 4:
 		sortDecls(merged)
 
-		src := []byte(gist5639599.SprintAst(fset, merged))
+		src := []byte(printerutil.SprintAst(fset, merged))
 
 		out, err := imports.Process("", src, nil)
 		if err != nil {

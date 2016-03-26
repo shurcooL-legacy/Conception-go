@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/shurcooL/Conception-go/pkg/gist5504644"
-	"github.com/shurcooL/go/gists/gist5639599"
+	"github.com/shurcooL/go/printerutil"
 )
 
 type sectionWriter struct {
@@ -43,7 +43,7 @@ func FprintPackageFullSummary(wr io.Writer, dpkg *doc.Package) {
 			spec.(*ast.ValueSpec).Doc = nil
 			spec.(*ast.ValueSpec).Comment = nil
 		}
-		fmt.Fprintln(w, gist5639599.SprintAstBare(v.Decl))
+		fmt.Fprintln(w, printerutil.SprintAstBare(v.Decl))
 	}
 	for _, t := range dpkg.Types {
 		for _, v := range t.Vars {
@@ -51,19 +51,19 @@ func FprintPackageFullSummary(wr io.Writer, dpkg *doc.Package) {
 				spec.(*ast.ValueSpec).Doc = nil
 				spec.(*ast.ValueSpec).Comment = nil
 			}
-			fmt.Fprintln(w, gist5639599.SprintAstBare(v.Decl))
+			fmt.Fprintln(w, printerutil.SprintAstBare(v.Decl))
 		}
 	}
 	w.WriteBreak()
 	for _, f := range dpkg.Funcs {
-		fmt.Fprintln(w, gist5639599.SprintAstBare(f.Decl))
+		fmt.Fprintln(w, printerutil.SprintAstBare(f.Decl))
 	}
 	for _, t := range dpkg.Types {
 		for _, f := range t.Funcs {
-			fmt.Fprintln(w, gist5639599.SprintAstBare(f.Decl))
+			fmt.Fprintln(w, printerutil.SprintAstBare(f.Decl))
 		}
 		for _, m := range t.Methods {
-			fmt.Fprintln(w, gist5639599.SprintAstBare(m.Decl))
+			fmt.Fprintln(w, printerutil.SprintAstBare(m.Decl))
 		}
 	}
 	w.WriteBreak()
@@ -73,7 +73,7 @@ func FprintPackageFullSummary(wr io.Writer, dpkg *doc.Package) {
 			spec.(*ast.ValueSpec).Doc = nil
 			spec.(*ast.ValueSpec).Comment = nil
 		}
-		fmt.Fprintln(w, gist5639599.SprintAstBare(c.Decl))
+		fmt.Fprintln(w, printerutil.SprintAstBare(c.Decl))
 		//fmt.Fprintln(w, "const", strings.Join(c.Names, "\n"))
 	}
 	for _, t := range dpkg.Types {
@@ -83,7 +83,7 @@ func FprintPackageFullSummary(wr io.Writer, dpkg *doc.Package) {
 				spec.(*ast.ValueSpec).Doc = nil
 				spec.(*ast.ValueSpec).Comment = nil
 			}
-			fmt.Fprintln(w, gist5639599.SprintAstBare(c.Decl))
+			fmt.Fprintln(w, printerutil.SprintAstBare(c.Decl))
 			//fmt.Fprintln(w, "const", strings.Join(c.Names, "\n"))
 		}
 	}
@@ -98,12 +98,12 @@ func printPackageSummary(dpkg *doc.Package) {
 	fmt.Println(`import "` + dpkg.ImportPath + `"`)
 	for _, f := range dpkg.Funcs {
 		fmt.Print("\t")
-		gist5639599.PrintlnAstBare(f.Decl)
+		printerutil.PrintlnAstBare(f.Decl)
 	}
 	for _, t := range dpkg.Types {
 		for _, f := range t.Funcs {
 			fmt.Print("\t")
-			gist5639599.PrintlnAstBare(f.Decl)
+			printerutil.PrintlnAstBare(f.Decl)
 		}
 		// THINK: Do I want to include methods?
 		/*for _, m := range t.Methods {
