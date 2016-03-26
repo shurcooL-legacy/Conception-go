@@ -55,12 +55,11 @@ import (
 	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/analysis"
 	"github.com/shurcooL/go/gists/gist6003701"
-	. "github.com/shurcooL/go/gists/gist6418290"
-	. "github.com/shurcooL/go/gists/gist6418462"
 	"github.com/shurcooL/go/httpstoppable"
 	"github.com/shurcooL/go/pipeutil"
 	"github.com/shurcooL/go/printerutil"
 	"github.com/shurcooL/go/reflectfind"
+	"github.com/shurcooL/go/reflectsource"
 	"github.com/shurcooL/go/trim"
 	"github.com/shurcooL/go/u/u10"
 	"github.com/shurcooL/go/u/u4"
@@ -1247,7 +1246,7 @@ func (w *ButtonWidget) setAction(action func()) {
 
 	if action != nil {
 		// HACK: This isn't thread-safe in any way
-		//go func() { w.tooltip = NewTextLabelWidgetString(np, GetSourceAsString(action)) }()
+		//go func() { w.tooltip = NewTextLabelWidgetString(np, reflectsource.GetSourceAsString(action)) }()
 	}
 }
 
@@ -1297,7 +1296,7 @@ func (w *ButtonWidget) ProcessEvent(inputEvent InputEvent) {
 
 		if w.action != nil {
 			w.action()
-			//println(GetSourceAsString(w.action))
+			//println(reflectsource.GetSourceAsString(w.action))
 
 			w.Layout()
 			//w.NotifyAllListeners()
@@ -1395,7 +1394,7 @@ type BoxWidget struct {
 	Name string
 }
 
-var boxWidgetTooltip = NewTextLabelWidgetString(np, GetSourceAsString((*BoxWidget).ProcessEvent))
+var boxWidgetTooltip = NewTextLabelWidgetString(np, reflectsource.GetSourceAsString((*BoxWidget).ProcessEvent))
 
 func (w *BoxWidget) Render() {
 	// HACK: Brute-force check the mouse pointer if it contains this widget
@@ -4324,7 +4323,7 @@ type GoonWidget struct {
 }
 
 func NewGoonWidget(pos mgl64.Vec2, a interface{}) Widgeter {
-	title := GetParentArgExprAsString(1)
+	title := reflectsource.GetParentArgExprAsString(1)
 	if !strings.HasPrefix(title, "&") {
 		log.Println("NewGoonWidget: Need to pass address of value.")
 		title = "&<unknown>"
