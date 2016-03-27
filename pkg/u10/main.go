@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/shurcooL/github_flavored_markdown"
-	"github.com/shurcooL/go/u/u1"
+	"github.com/shurcooL/go/gfmutil"
 
 	// An experiment in making the frontend resources available.
 	// This tries to ensure "/table-of-contents.go.js" and "/table-of-contents.css" will be available...
@@ -28,10 +28,10 @@ type Options struct {
 // MarkdownOptionsHandlerFunc is an http.Handler that serves rendered Markdown.
 type MarkdownOptionsHandlerFunc func(req *http.Request) (markdown []byte, opt *Options, err error)
 
-func (this MarkdownOptionsHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	markdown, opt, err := this(req)
+func (f MarkdownOptionsHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	markdown, opt, err := f(req)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -47,9 +47,9 @@ func (this MarkdownOptionsHandlerFunc) ServeHTTP(w http.ResponseWriter, req *htt
 		started := time.Now()
 		switch opt.TableOfContents {
 		case false:
-			u1.WriteGitHubFlavoredMarkdownViaGitHub(w, markdown)
+			gfmutil.WriteGitHubFlavoredMarkdownViaGitHub(w, markdown)
 		case true:
-			http.Error(w, "not implemented", 500)
+			http.Error(w, "not implemented", http.StatusInternalServerError)
 			panic("not implemented")
 		}
 		fmt.Println("rendered GFM via GitHub, took", time.Since(started))
@@ -58,7 +58,7 @@ func (this MarkdownOptionsHandlerFunc) ServeHTTP(w http.ResponseWriter, req *htt
 		started := time.Now()
 		switch opt.TableOfContents {
 		case false:
-			u1.WriteGitHubFlavoredMarkdownViaLocal(w, markdown)
+			gfmutil.WriteGitHubFlavoredMarkdownViaLocal(w, markdown)
 		case true:
 			writeGitHubFlavoredMarkdownViaLocalWithToc(w, markdown)
 		}

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/shurcooL/go/u/u1"
+	"github.com/shurcooL/go/gfmutil"
 )
 
 // MarkdownHandlerFunc is an http.Handler that serves rendered Markdown.
@@ -25,12 +25,12 @@ func (this MarkdownHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Reque
 	} else if _, github := req.URL.Query()["github"]; github {
 		w.Header().Set("Content-Type", "text/html")
 		started := time.Now()
-		u1.WriteGitHubFlavoredMarkdownViaGitHub(w, markdown)
+		gfmutil.WriteGitHubFlavoredMarkdownViaGitHub(w, markdown)
 		fmt.Println("rendered GFM via GitHub, took", time.Since(started))
 	} else {
 		w.Header().Set("Content-Type", "text/html")
 		started := time.Now()
-		u1.WriteGitHubFlavoredMarkdownViaLocal(w, markdown)
+		gfmutil.WriteGitHubFlavoredMarkdownViaLocal(w, markdown)
 		fmt.Println("rendered GFM locally, took", time.Since(started))
 	}
 }

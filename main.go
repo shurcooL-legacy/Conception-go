@@ -56,14 +56,14 @@ import (
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/analysis"
+	"github.com/shurcooL/go/gddo"
 	"github.com/shurcooL/go/httpstoppable"
+	"github.com/shurcooL/go/open"
 	"github.com/shurcooL/go/pipeutil"
 	"github.com/shurcooL/go/printerutil"
 	"github.com/shurcooL/go/reflectfind"
 	"github.com/shurcooL/go/reflectsource"
 	"github.com/shurcooL/go/trim"
-	"github.com/shurcooL/go/u/u4"
-	"github.com/shurcooL/go/u/u5"
 	"github.com/shurcooL/markdownfmt/markdown"
 	"golang.org/x/net/websocket"
 	"golang.org/x/tools/go/types"
@@ -820,7 +820,7 @@ func NewSliceStringerAllGoPackages(path string) *SliceStringerS {
 	}
 	defer f.Close()
 
-	var importers u5.Importers
+	var importers gddo.Importers
 	if err := json.NewDecoder(f).Decode(&importers); err != nil {
 		panic(err)
 	}
@@ -5931,7 +5931,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			if inputEvent.ModifierKey == glfw.ModSuper {
 				if fileUri, ok := w.Content.GetUriForProtocol("file://"); ok {
 					// Open in external editor.
-					u4.Open(fileUri.Path())
+					open.Open(fileUri.Path())
 				}
 			} else if inputEvent.ModifierKey & ^glfw.ModShift == glfw.ModControl {
 				// Go to end of line.
@@ -6767,8 +6767,8 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func init() {
-	u5.UserAgent = "Conception-go (https://github.com/shurcooL/Conception-go)"
+var gddoClient = gddo.Client{
+	UserAgent: "Conception-go (https://github.com/shurcooL/Conception-go)",
 }
 
 func main() {
@@ -7981,7 +7981,7 @@ func main() {
 					godocOrgImporters.content = ""
 					return
 				}
-				importers, err := u5.GetGodocOrgImporters(goPackage.Bpkg.ImportPath)
+				importers, err := gddoClient.GetImporters(goPackage.Bpkg.ImportPath)
 				if err != nil {
 					godocOrgImporters.content = err.Error()
 					return
