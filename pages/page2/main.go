@@ -138,8 +138,19 @@ func init() {
 	runtime.LockOSThread()
 }
 
+// Set the working directory to the root of Conception-go package, so that its assets can be accessed.
 func init() {
-	// Set the working directory to the root of Conception-go package, so that its assets can be accessed.
+	// importPathToDir resolves the absolute path from importPath.
+	// There doesn't need to be a valid Go package inside that import path,
+	// but the directory must exist.
+	importPathToDir := func(importPath string) (string, error) {
+		p, err := build.Import(importPath, "", build.FindOnly)
+		if err != nil {
+			return "", err
+		}
+		return p.Dir, nil
+	}
+
 	dir, err := importPathToDir("github.com/shurcooL/Conception-go")
 	if err != nil {
 		log.Fatalln("Unable to find github.com/shurcooL/Conception-go package in your GOPATH, it's needed to load assets:", err)
@@ -148,17 +159,6 @@ func init() {
 	if err != nil {
 		log.Panicln("os.Chdir:", err)
 	}
-}
-
-// importPathToDir resolves the absolute path from importPath.
-// There doesn't need to be a valid Go package inside that import path,
-// but the directory must exist.
-func importPathToDir(importPath string) (string, error) {
-	p, err := build.Import(importPath, "", build.FindOnly)
-	if err != nil {
-		return "", err
-	}
-	return p.Dir, nil
 }
 
 type nopContextWatcher struct{}
