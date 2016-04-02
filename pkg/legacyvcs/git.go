@@ -108,6 +108,7 @@ func (this *gitVcs) IsContained(rev string) bool {
 // ---
 
 func getGitRepoRoot(path string) (isGitRepo bool, rootPath string) {
+	// TODO: Consider `git rev-parse --show-cdup`?
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	cmd.Dir = path
 

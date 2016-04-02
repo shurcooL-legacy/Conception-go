@@ -605,54 +605,11 @@ func NewTest4Widget(pos mgl64.Vec2, goPackageSelecter GoPackageSelecter, source 
 			}
 			return false
 		})
-
-		out := ""
-		// TODO: Remove after some time, to ensure ast.Inspect() returns same results...
-		{
-			query := func(i interface{}) bool {
-				if f, ok := i.(ast.Node); ok && (f.Pos() <= caretPos && caretPos <= f.End()) {
-					return true
-				}
-				return false
-			}
-			found := reflectfind.All(fileAst, query)
-
-			foundDiff := false
-			if len(found) != len(found2) {
-				fmt.Printf("%+v\n%+v\n", found, found2)
-				foundDiff = true
-				//panic("found vs. found2 diff")
-			}
-			for _, v := range found2 {
-				if _, ok := found[v]; !ok {
-					fmt.Printf("%+v\n%+v\n", found, found2)
-					foundDiff = true
-					//panic("found vs. found2 diff")
-				}
-			}
-			if foundDiff {
-				smallest := uint64(math.MaxUint64)
-				var smallestV interface{}
-				for v := range found {
-					size := uint64(v.(ast.Node).End() - v.(ast.Node).Pos())
-					if size < smallest {
-						smallestV = v
-						smallest = size
-					}
-
-					out += fmt.Sprintf("%T %d-%d [%d]\n", v, v.(ast.Node).Pos()-1, v.(ast.Node).End()-1, size)
-				}
-				out += "\n"
-				out += fmt.Sprintf("%d-%d, ", smallestV.(ast.Node).Pos()-1, smallestV.(ast.Node).End()-1)
-				out += fmt.Sprintf("%p, %T\n", smallestV, smallestV)
-				out += printerutil.SprintAst(fset, smallestV) + "\n\n"
-			}
-		}
-
 		if len(found2) == 0 {
 			return ""
 		}
-		//out := ""
+
+		out := ""
 		smallestV := found2[len(found2)-1]
 		for _, v := range found2 {
 			size := v.End() - v.Pos()
