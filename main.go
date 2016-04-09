@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"go/ast"
 	"go/build"
+	"go/importer"
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"go/types"
 	"io"
 	"io/ioutil"
 	"log"
@@ -66,11 +68,9 @@ import (
 	"github.com/shurcooL/go/trim"
 	"github.com/shurcooL/markdownfmt/markdown"
 	"golang.org/x/net/websocket"
-	"golang.org/x/tools/go/types"
 	"golang.org/x/tools/godoc/vfs"
 	goimports "golang.org/x/tools/imports"
 	"gopkg.in/pipe.v2"
-	"honnef.co/go/importer"
 	"sourcegraph.com/sourcegraph/go-diff/diff"
 
 	"github.com/shurcooL/Conception-go/caret"
@@ -521,9 +521,7 @@ func (t *typeCheckedPackage) Update() {
 	t.fset = fset
 	t.files = files
 
-	imp := importer.New()
-	imp.Config.UseGcFallback = true
-	cfg := &types.Config{Import: imp.Import}
+	cfg := &types.Config{Importer: importer.Default()}
 	info := &types.Info{
 		Types:      make(map[ast.Expr]types.TypeAndValue),
 		Defs:       make(map[*ast.Ident]types.Object),
@@ -537,6 +535,11 @@ func (t *typeCheckedPackage) Update() {
 		t.tpkg = tpkg
 		t.info = info
 	} else {
+		if strings.Contains(err.Error(), "could not import C") {
+			// To add support, can use the same strategy as honnef.co/go/importer did
+			// and fallback to a gcimporter.
+			log.Println("type checking Cgo packages currently unsupported")
+		}
 		t.tpkg = nil
 		t.info = nil
 	}
