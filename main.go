@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/build"
-	"go/importer"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -68,6 +67,7 @@ import (
 	"github.com/shurcooL/go/trim"
 	"github.com/shurcooL/markdownfmt/markdown"
 	"golang.org/x/net/websocket"
+	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/godoc/vfs"
 	goimports "golang.org/x/tools/imports"
 	"gopkg.in/pipe.v2"
@@ -508,8 +508,9 @@ func (t *typeCheckedPackage) Update() {
 
 	bpkg := goPackageSelecter.GetSelectedGoPackage().Bpkg
 
-	fset := token.NewFileSet()
-	files, err := gist5504644.ParseFiles(fset, bpkg.Dir, append(bpkg.GoFiles, bpkg.CgoFiles...)...)
+	var conf loader.Config
+	conf.Import(bpkg.ImportPath)
+	prog, err := conf.Load()
 	if err != nil {
 		t.fset = nil
 		t.files = nil
@@ -517,32 +518,10 @@ func (t *typeCheckedPackage) Update() {
 		t.info = nil
 		return
 	}
-
-	t.fset = fset
-	t.files = files
-
-	cfg := &types.Config{Importer: importer.Default()}
-	info := &types.Info{
-		Types:      make(map[ast.Expr]types.TypeAndValue),
-		Defs:       make(map[*ast.Ident]types.Object),
-		Uses:       make(map[*ast.Ident]types.Object),
-		Implicits:  make(map[ast.Node]types.Object),
-		Selections: make(map[*ast.SelectorExpr]*types.Selection),
-		Scopes:     make(map[ast.Node]*types.Scope),
-	}
-	tpkg, err := cfg.Check(bpkg.ImportPath, fset, files, info)
-	if err == nil {
-		t.tpkg = tpkg
-		t.info = info
-	} else {
-		if strings.Contains(err.Error(), "could not import C") {
-			// To add support, can use the same strategy as honnef.co/go/importer did
-			// and fallback to a gcimporter.
-			log.Println("type checking Cgo packages currently unsupported")
-		}
-		t.tpkg = nil
-		t.info = nil
-	}
+	t.fset = prog.Fset
+	t.files = prog.Imported[bpkg.ImportPath].Files
+	t.tpkg = prog.Imported[bpkg.ImportPath].Pkg
+	t.info = &prog.Imported[bpkg.ImportPath].Info
 }
 
 // HACK
