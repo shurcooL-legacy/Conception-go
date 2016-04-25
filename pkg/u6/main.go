@@ -17,121 +17,128 @@ import (
 
 // GoPackageWorkingDiff shows the difference between the working directory and the most recent commit.
 // Precondition is that goPackage.Dir.Repo is not nil, and VcsLocal is updated.
-// TODO: Support for non-git.
 func GoPackageWorkingDiff(goPackage *gist7480523.GoPackage) string {
-	// git diff
-	if goPackage.Dir.Repo.VcsLocal.Status != "" {
-		switch goPackage.Dir.Repo.Vcs.Type() {
-		case legacyvcs.Git:
-			newFileDiff := func(line []byte) []byte {
-				cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
-				cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
-				out, err := cmd.Output()
-				if len(out) > 0 {
-					// diff exits with a non-zero status when the files don't match.
-					// Ignore that failure as long as we get output.
-					err = nil
-				}
-				if err != nil {
-					return []byte(err.Error())
-				}
-				return out
-			}
-
-			p := pipe.Script(
-				pipe.Exec("git", "diff", "--no-ext-diff", "--find-renames", "HEAD"),
-				pipe.Line(
-					pipe.Exec("git", "ls-files", "--others", "--exclude-standard"),
-					pipe.Replace(newFileDiff),
-				),
-			)
-
-			out, err := pipeutil.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
-			if err != nil {
-				return err.Error()
-			}
-			return string(out)
-		}
+	if goPackage.Dir.Repo.VcsLocal.Status == "" {
+		return ""
 	}
-	return ""
+
+	switch goPackage.Dir.Repo.Vcs.Type() {
+	case legacyvcs.Git:
+		newFileDiff := func(line []byte) []byte {
+			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
+			cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
+			out, err := cmd.Output()
+			if len(out) > 0 {
+				// diff exits with a non-zero status when the files don't match.
+				// Ignore that failure as long as we get output.
+				err = nil
+			}
+			if err != nil {
+				return []byte(err.Error())
+			}
+			return out
+		}
+
+		p := pipe.Script(
+			pipe.Exec("git", "diff", "--no-ext-diff", "--find-renames", "HEAD"),
+			pipe.Line(
+				pipe.Exec("git", "ls-files", "--others", "--exclude-standard"),
+				pipe.Replace(newFileDiff),
+			),
+		)
+
+		out, err := pipeutil.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
+		if err != nil {
+			return err.Error()
+		}
+		return string(out)
+	default:
+		return ""
+	}
 }
 
 // GoPackageWorkingDiffMaster shows the difference between the working directory and master branch.
 // Precondition is that goPackage.Dir.Repo is not nil, and VcsLocal is updated.
 func GoPackageWorkingDiffMaster(goPackage *gist7480523.GoPackage) string {
-	if goPackage.Dir.Repo.VcsLocal.Status != "" || goPackage.Dir.Repo.VcsLocal.LocalBranch != goPackage.Dir.Repo.Vcs.GetDefaultBranch() {
-		switch goPackage.Dir.Repo.Vcs.Type() {
-		case legacyvcs.Git:
-			newFileDiff := func(line []byte) []byte {
-				cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
-				cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
-				out, err := cmd.Output()
-				if len(out) > 0 {
-					// diff exits with a non-zero status when the files don't match.
-					// Ignore that failure as long as we get output.
-					err = nil
-				}
-				if err != nil {
-					return []byte(err.Error())
-				}
-				return out
-			}
-
-			p := pipe.Script(
-				pipe.Exec("git", "diff", "--no-ext-diff", "--find-renames", "master"),
-				pipe.Line(
-					pipe.Exec("git", "ls-files", "--others", "--exclude-standard"),
-					pipe.Replace(newFileDiff),
-				),
-			)
-
-			out, err := pipeutil.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
-			if err != nil {
-				return err.Error()
-			}
-			return string(out)
-		}
+	if goPackage.Dir.Repo.VcsLocal.Status == "" && goPackage.Dir.Repo.VcsLocal.LocalBranch == goPackage.Dir.Repo.Vcs.GetDefaultBranch() {
+		return ""
 	}
-	return ""
+
+	switch goPackage.Dir.Repo.Vcs.Type() {
+	case legacyvcs.Git:
+		newFileDiff := func(line []byte) []byte {
+			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
+			cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
+			out, err := cmd.Output()
+			if len(out) > 0 {
+				// diff exits with a non-zero status when the files don't match.
+				// Ignore that failure as long as we get output.
+				err = nil
+			}
+			if err != nil {
+				return []byte(err.Error())
+			}
+			return out
+		}
+
+		p := pipe.Script(
+			pipe.Exec("git", "diff", "--no-ext-diff", "--find-renames", "master"),
+			pipe.Line(
+				pipe.Exec("git", "ls-files", "--others", "--exclude-standard"),
+				pipe.Replace(newFileDiff),
+			),
+		)
+
+		out, err := pipeutil.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
+		if err != nil {
+			return err.Error()
+		}
+		return string(out)
+	default:
+		return ""
+	}
 }
 
 // GoPackageWorkingDiffOriginMaster shows the difference between the working directory and origin/master branch.
 // Precondition is that goPackage.Dir.Repo is not nil, and VcsLocal is updated.
 func GoPackageWorkingDiffOriginMaster(goPackage *gist7480523.GoPackage) string {
-	if goPackage.Dir.Repo.VcsLocal.Status != "" || (goPackage.Dir.Repo.VcsLocal.Remote != "" && goPackage.Dir.Repo.VcsLocal.LocalRev != goPackage.Dir.Repo.VcsLocal.LocalRemoteRev) {
-		switch goPackage.Dir.Repo.Vcs.Type() {
-		case legacyvcs.Git:
-			newFileDiff := func(line []byte) []byte {
-				cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
-				cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
-				out, err := cmd.Output()
-				if len(out) > 0 {
-					// diff exits with a non-zero status when the files don't match.
-					// Ignore that failure as long as we get output.
-					err = nil
-				}
-				if err != nil {
-					return []byte(err.Error())
-				}
-				return out
-			}
-
-			p := pipe.Script(
-				pipe.Exec("git", "diff", "--no-ext-diff", "--find-renames", "origin/master"),
-				pipe.Line(
-					pipe.Exec("git", "ls-files", "--others", "--exclude-standard"),
-					pipe.Replace(newFileDiff),
-				),
-			)
-
-			out, err := pipeutil.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
-			if err != nil {
-				return err.Error()
-			}
-			return string(out)
-		}
+	if goPackage.Dir.Repo.VcsLocal.Status == "" && (goPackage.Dir.Repo.VcsLocal.Remote == "" || goPackage.Dir.Repo.VcsLocal.LocalRev == goPackage.Dir.Repo.VcsLocal.LocalRemoteRev) {
+		return ""
 	}
-	return ""
+
+	switch goPackage.Dir.Repo.Vcs.Type() {
+	case legacyvcs.Git:
+		newFileDiff := func(line []byte) []byte {
+			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
+			cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
+			out, err := cmd.Output()
+			if len(out) > 0 {
+				// diff exits with a non-zero status when the files don't match.
+				// Ignore that failure as long as we get output.
+				err = nil
+			}
+			if err != nil {
+				return []byte(err.Error())
+			}
+			return out
+		}
+
+		p := pipe.Script(
+			pipe.Exec("git", "diff", "--no-ext-diff", "--find-renames", "origin/master"),
+			pipe.Line(
+				pipe.Exec("git", "ls-files", "--others", "--exclude-standard"),
+				pipe.Replace(newFileDiff),
+			),
+		)
+
+		out, err := pipeutil.OutputDir(p, goPackage.Dir.Repo.Vcs.RootPath())
+		if err != nil {
+			return err.Error()
+		}
+		return string(out)
+	default:
+		return ""
+	}
 }
 
 // BranchesOptions are options for Branches.
