@@ -1,6 +1,7 @@
 package legacyvcs
 
 import (
+	"log"
 	"os/exec"
 	"strings"
 
@@ -79,6 +80,11 @@ func (this *hgVcs) GetLocalRev() string {
 	} else {
 		return ""
 	}
+}
+
+func (this *hgVcs) GetLocalRemoteRev() string {
+	log.Println("hgVcs.GetLocalRemoteRev: not implemented")
+	return ""
 }
 
 func (this *hgVcs) GetRemoteRev() string {

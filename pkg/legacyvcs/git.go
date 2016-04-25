@@ -37,7 +37,7 @@ func (this *gitVcs) GetStash() string {
 }
 
 func (this *gitVcs) GetRemote() string {
-	cmd := exec.Command("git", "ls-remote", "--get-url", "origin")
+	cmd := exec.Command("git", "ls-remote", "--get-url")
 	cmd.Dir = this.rootPath
 
 	if out, err := cmd.Output(); err == nil {
@@ -68,6 +68,17 @@ const gitRevisionLength = 40
 
 func (this *gitVcs) GetLocalRev() string {
 	cmd := exec.Command("git", "rev-parse", this.GetDefaultBranch())
+	cmd.Dir = this.rootPath
+
+	if out, err := cmd.Output(); err == nil && len(out) >= gitRevisionLength {
+		return string(out[:gitRevisionLength])
+	} else {
+		return ""
+	}
+}
+
+func (this *gitVcs) GetLocalRemoteRev() string {
+	cmd := exec.Command("git", "rev-parse", "origin/"+this.GetDefaultBranch())
 	cmd.Dir = this.rootPath
 
 	if out, err := cmd.Output(); err == nil && len(out) >= gitRevisionLength {

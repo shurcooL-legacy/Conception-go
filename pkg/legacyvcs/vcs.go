@@ -39,8 +39,9 @@ type Vcs interface {
 	GetDefaultBranch() string // Get default branch name for this vcs.
 	GetLocalBranch() string   // Get currently checked out local branch name.
 
-	GetLocalRev() string  // Get current local revision of default branch.
-	GetRemoteRev() string // Get latest remote revision of default branch.
+	GetLocalRev() string       // Get current local revision of default branch.
+	GetLocalRemoteRev() string // Get current locally-known remote revision of default branch.
+	GetRemoteRev() string      // Get latest remote revision of default branch.
 
 	// Returns true if given commit is contained in the default local branch.
 	IsContained(rev string) bool

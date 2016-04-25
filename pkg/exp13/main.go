@@ -33,11 +33,12 @@ func NewVcsState(vcs legacyvcs.Vcs) *VcsState {
 // ---
 
 type VcsLocal struct {
-	Status      string
-	Stash       string
-	Remote      string
-	LocalBranch string
-	LocalRev    string
+	Status         string
+	Stash          string
+	Remote         string
+	LocalBranch    string
+	LocalRev       string
+	LocalRemoteRev string
 
 	gist7802150.DepNode2
 }
@@ -58,6 +59,7 @@ func (this *VcsLocal) Update() {
 	this.Remote = vcs.GetRemote()
 	this.LocalBranch = vcs.GetLocalBranch()
 	this.LocalRev = vcs.GetLocalRev()
+	this.LocalRemoteRev = vcs.GetLocalRemoteRev()
 }
 
 // ---

@@ -6590,6 +6590,7 @@ func initHttpHandlers() {
 		started := time.Now()
 
 		_, short := req.URL.Query()["short"]
+		_, origin := req.URL.Query()["origin"] // If set, compare against origin/master instead of just working directory.
 
 		// rootPath -> []*GoPackage
 		var goPackagesInRepo = make(map[string][]*GoPackage)
@@ -6649,27 +6650,47 @@ func initHttpHandlers() {
 		for out := range outChan {
 			repo := out.(GoPackageRepo)
 			goPackage := repo.GoPackages()[0]
-			if goPackage.Dir.Repo.VcsLocal.Status != "" {
-				repoImportPathPattern := GetRepoImportPathPattern(repo.RootPath(), goPackage.Bpkg.SrcRoot)
-				fmt.Fprint(buf, "\n"+"## "+repoImportPathPattern+"\n")
-				fmt.Fprint(buf, "\n```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n")
-				if !short {
-					workingDiff := u6.GoPackageWorkingDiff(goPackage)
-					if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiff)); err == nil {
-						for _, fileDiff := range fileDiffs {
-							fmt.Fprint(buf, "\n"+"#### "+fileDiffName(fileDiff)+"\n")
-							fmt.Fprint(buf, "\n```diff\n")
-							if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
-								fmt.Fprint(buf, string(hunks))
-							}
-							fmt.Fprint(buf, "```\n")
-						}
-					} else {
-						fmt.Fprint(buf, "\n```\n"+err.Error()+"\n```\n")
-					}
+			switch origin {
+			case false:
+				if goPackage.Dir.Repo.VcsLocal.Status == "" {
+					continue
 				}
-				clean = false
+			case true:
+				if goPackage.Dir.Repo.VcsLocal.Status == "" && (goPackage.Dir.Repo.VcsLocal.Remote == "" || goPackage.Dir.Repo.VcsLocal.LocalRev == goPackage.Dir.Repo.VcsLocal.LocalRemoteRev) {
+					continue
+				}
 			}
+
+			repoImportPathPattern := GetRepoImportPathPattern(repo.RootPath(), goPackage.Bpkg.SrcRoot)
+			fmt.Fprint(buf, "\n"+"## "+repoImportPathPattern+"\n")
+			if goPackage.Dir.Repo.VcsLocal.Status != "" {
+				fmt.Fprint(buf, "\n```\n"+goPackage.Dir.Repo.VcsLocal.Status+"```\n")
+			}
+			if goPackage.Dir.Repo.VcsLocal.Remote != "" && goPackage.Dir.Repo.VcsLocal.LocalRev != goPackage.Dir.Repo.VcsLocal.LocalRemoteRev {
+				fmt.Fprint(buf, "\n```\n Local: "+goPackage.Dir.Repo.VcsLocal.LocalRev+"\nRemote: "+goPackage.Dir.Repo.VcsLocal.LocalRemoteRev+"\n```\n")
+			}
+			if !short {
+				var workingDiff string
+				switch origin {
+				case false:
+					workingDiff = u6.GoPackageWorkingDiff(goPackage)
+				case true:
+					workingDiff = u6.GoPackageWorkingDiffOriginMaster(goPackage)
+				}
+				if fileDiffs, err := diff.ParseMultiFileDiff([]byte(workingDiff)); err == nil {
+					for _, fileDiff := range fileDiffs {
+						fmt.Fprint(buf, "\n"+"#### "+fileDiffName(fileDiff)+"\n")
+						fmt.Fprint(buf, "\n```diff\n")
+						if hunks, err := diff.PrintHunks(fileDiff.Hunks); err == nil {
+							fmt.Fprint(buf, string(hunks))
+						}
+						fmt.Fprint(buf, "```\n")
+					}
+				} else {
+					fmt.Fprint(buf, "\n```\n"+err.Error()+"\n```\n")
+				}
+			}
+			clean = false
 		}
 		if clean {
 			fmt.Fprint(buf, "_(Working directory clean across all GOPATH workspaces.)_")
