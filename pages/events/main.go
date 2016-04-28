@@ -10,8 +10,8 @@ import (
 	"github.com/shurcooL/Conception-go/events"
 )
 
-var mousePointer = &events.Pointer{VirtualCategory: events.POINTING}
-var keyboardPointer = &events.Pointer{VirtualCategory: events.TYPING}
+var mousePointer = &events.Pointer{VirtualCategory: events.Pointing}
+var keyboardPointer = &events.Pointer{VirtualCategory: events.Typing}
 
 func init() {
 	runtime.LockOSThread()
@@ -60,13 +60,13 @@ func main() {
 	window.SetMouseMovementCallback(func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
 		inputEvent := events.InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: {}},
-			InputId:    0,
+			EventTypes: map[events.EventType]struct{}{events.SliderEvent: {}},
+			InputID:    0,
 			Buttons:    nil,
 			Sliders:    []float64{xdelta, ydelta},
 		}
 		if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
-			inputEvent.EventTypes[events.AXIS_EVENT] = struct{}{}
+			inputEvent.EventTypes[events.AxisEvent] = struct{}{}
 			inputEvent.Axes = []float64{xpos, ypos}
 		}
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
@@ -75,8 +75,8 @@ func main() {
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		inputEvent := events.InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: {}},
-			InputId:    2,
+			EventTypes: map[events.EventType]struct{}{events.SliderEvent: {}},
+			InputID:    2,
 			Buttons:    nil,
 			Sliders:    []float64{yoff, xoff},
 			Axes:       nil,
@@ -87,8 +87,8 @@ func main() {
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 		inputEvent := events.InputEvent{
 			Pointer:     mousePointer,
-			EventTypes:  map[events.EventType]struct{}{events.BUTTON_EVENT: {}},
-			InputId:     uint16(button),
+			EventTypes:  map[events.EventType]struct{}{events.ButtonEvent: {}},
+			InputID:     uint16(button),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
 			Axes:        nil,
@@ -100,8 +100,8 @@ func main() {
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		inputEvent := events.InputEvent{
 			Pointer:     keyboardPointer,
-			EventTypes:  map[events.EventType]struct{}{events.BUTTON_EVENT: {}},
-			InputId:     uint16(key),
+			EventTypes:  map[events.EventType]struct{}{events.ButtonEvent: {}},
+			InputID:     uint16(key),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
 			Axes:        nil,
@@ -123,8 +123,8 @@ func main() {
 	window.SetCharCallback(func(w *glfw.Window, char rune) {
 		inputEvent := events.InputEvent{
 			Pointer:    keyboardPointer,
-			EventTypes: map[events.EventType]struct{}{events.CHARACTER_EVENT: {}},
-			InputId:    uint16(char),
+			EventTypes: map[events.EventType]struct{}{events.CharacterEvent: {}},
+			InputID:    uint16(char),
 			Buttons:    nil,
 			Sliders:    nil,
 			Axes:       nil,

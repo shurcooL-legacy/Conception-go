@@ -11,9 +11,9 @@ import (
 type VirtualCategory uint8
 
 const (
-	TYPING VirtualCategory = iota
-	POINTING
-	WINDOWING
+	Typing VirtualCategory = iota
+	Pointing
+	Windowing
 )
 
 //go:generate stringer -type=VirtualCategory
@@ -95,12 +95,12 @@ func (ps *PointerState) Button(button int) bool {
 type EventType uint8
 
 const (
-	BUTTON_EVENT EventType = iota
-	CHARACTER_EVENT
-	SLIDER_EVENT
-	AXIS_EVENT
-	POINTER_ACTIVATION
-	POINTER_DEACTIVATION
+	ButtonEvent EventType = iota
+	CharacterEvent
+	SliderEvent
+	AxisEvent
+	PointerActivation
+	PointerDeactivation
 )
 
 //go:generate stringer -type=EventType
@@ -115,10 +115,10 @@ func (s eventTypeSet) Has(et EventType) bool {
 type InputEvent struct {
 	Pointer    *Pointer
 	EventTypes eventTypeSet
-	InputId    uint16
+	InputID    uint16
 	// TODO: Add pointers to BeforeState and AfterState?
 
-	Buttons []bool
+	Buttons []bool // First button has id InputID, second has id InputID+1, etc.
 	// TODO: Characters? Split into distinct event types, bundle up in an event frame based on time?
 	Sliders     []float64
 	Axes        []float64
@@ -139,8 +139,8 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent, widget Widgeter) []Inp
 		inputEvent := inputEventQueue[0]
 
 		// TODO: Calculate whether a pointing pointer moved relative to canvas in a better way... what if canvas is moved via keyboard, etc.
-		pointingPointerMovedRelativeToCanvas := inputEvent.Pointer.VirtualCategory == POINTING &&
-			(inputEvent.EventTypes.Has(AXIS_EVENT) && inputEvent.InputId == 0 || inputEvent.EventTypes.Has(SLIDER_EVENT) && inputEvent.InputId == 2)
+		pointingPointerMovedRelativeToCanvas := inputEvent.Pointer.VirtualCategory == Pointing &&
+			(inputEvent.EventTypes.Has(AxisEvent) && inputEvent.InputID == 0 || inputEvent.EventTypes.Has(SliderEvent) && inputEvent.InputID == 2)
 
 		if pointingPointerMovedRelativeToCanvas {
 			LocalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
@@ -160,7 +160,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent, widget Widgeter) []Inp
 
 		// Populate OriginMapping (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below).
 		if pointingPointerMovedRelativeToCanvas &&
-			!inputEvent.EventTypes.Has(POINTER_DEACTIVATION) && !inputEvent.Pointer.State.IsActive() {
+			!inputEvent.EventTypes.Has(PointerDeactivation) && !inputEvent.Pointer.State.IsActive() {
 
 			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 			copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
@@ -171,7 +171,7 @@ func ProcessInputEventQueue(inputEventQueue []InputEvent, widget Widgeter) []Inp
 		}
 
 		// Populate OriginMapping (but only upon pointer deactivation event).
-		if inputEvent.Pointer.VirtualCategory == POINTING && inputEvent.EventTypes.Has(POINTER_DEACTIVATION) {
+		if inputEvent.Pointer.VirtualCategory == Pointing && inputEvent.EventTypes.Has(PointerDeactivation) {
 
 			inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 			copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
@@ -187,24 +187,24 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 	preStateActive := inputEvent.Pointer.State.IsActive()
 
 	{
-		if inputEvent.EventTypes.Has(BUTTON_EVENT) {
+		if inputEvent.EventTypes.Has(ButtonEvent) {
 			// Extend slice if needed.
-			neededSize := int(inputEvent.InputId) + len(inputEvent.Buttons)
+			neededSize := int(inputEvent.InputID) + len(inputEvent.Buttons)
 			if neededSize > len(inputEvent.Pointer.State.Buttons) {
 				inputEvent.Pointer.State.Buttons = append(inputEvent.Pointer.State.Buttons, make([]bool, neededSize-len(inputEvent.Pointer.State.Buttons))...)
 			}
 
-			copy(inputEvent.Pointer.State.Buttons[inputEvent.InputId:], inputEvent.Buttons)
+			copy(inputEvent.Pointer.State.Buttons[inputEvent.InputID:], inputEvent.Buttons)
 		}
 
-		if inputEvent.EventTypes.Has(AXIS_EVENT) {
+		if inputEvent.EventTypes.Has(AxisEvent) {
 			// Extend slice if needed.
-			neededSize := int(inputEvent.InputId) + len(inputEvent.Axes)
+			neededSize := int(inputEvent.InputID) + len(inputEvent.Axes)
 			if neededSize > len(inputEvent.Pointer.State.Axes) {
 				inputEvent.Pointer.State.Axes = append(inputEvent.Pointer.State.Axes, make([]float64, neededSize-len(inputEvent.Pointer.State.Axes))...)
 			}
 
-			copy(inputEvent.Pointer.State.Axes[inputEvent.InputId:], inputEvent.Axes)
+			copy(inputEvent.Pointer.State.Axes[inputEvent.InputID:], inputEvent.Axes)
 		}
 
 		inputEvent.Pointer.State.Time = time.Now()
@@ -214,9 +214,9 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 
 	switch {
 	case !preStateActive && postStateActive:
-		inputEvent.EventTypes[POINTER_ACTIVATION] = struct{}{}
+		inputEvent.EventTypes[PointerActivation] = struct{}{}
 	case preStateActive && !postStateActive:
-		inputEvent.EventTypes[POINTER_DEACTIVATION] = struct{}{}
+		inputEvent.EventTypes[PointerDeactivation] = struct{}{}
 	}
 
 	return append(inputEventQueue, inputEvent)

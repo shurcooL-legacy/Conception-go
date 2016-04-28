@@ -82,9 +82,9 @@ var headlessFlag = flag.Bool("headless", false, "Headless mode.")
 
 var keepRunning = true
 var redraw = true
-var windowPointer = &Pointer{VirtualCategory: events.WINDOWING}
-var mousePointer = &Pointer{VirtualCategory: events.POINTING}
-var keyboardPointer = &Pointer{VirtualCategory: events.TYPING}
+var windowPointer = &Pointer{VirtualCategory: events.Windowing}
+var mousePointer = &Pointer{VirtualCategory: events.Pointing}
+var keyboardPointer = &Pointer{VirtualCategory: events.Typing}
 var websocketPointer *Pointer // TEST
 
 var buildOutput caret.MultilineContentI
@@ -391,7 +391,7 @@ func (w *Test2Widget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 }
 
 func (w *Test2Widget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.Pointer.State.Button(0) && (inputEvent.EventTypes[events.SLIDER_EVENT] && inputEvent.InputId == 0) {
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.Pointer.State.Button(0) && (inputEvent.EventTypes[events.SliderEvent] && inputEvent.InputId == 0) {
 		*w.field += inputEvent.Sliders[0]
 	}
 }
@@ -1250,7 +1250,7 @@ func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 }
 
 func (w *ButtonWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -1393,7 +1393,7 @@ func (w *BoxWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 }
 
 func (w *BoxWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -1492,7 +1492,7 @@ func (w *WindowWidget) ParentToLocal(ParentPosition mgl64.Vec2) (LocalPosition m
 }
 
 func (w *WindowWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.Pointer.State.Button(0) && (inputEvent.EventTypes[events.SLIDER_EVENT] && inputEvent.InputId == 0) {
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.Pointer.State.Button(0) && (inputEvent.EventTypes[events.SliderEvent] && inputEvent.InputId == 0) {
 		w.pos[0] += inputEvent.Sliders[0]
 		w.pos[1] += inputEvent.Sliders[1]
 	}
@@ -1743,7 +1743,7 @@ func (w *KatWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 }
 
 func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -1751,24 +1751,24 @@ func (w *KatWidget) ProcessEvent(inputEvent InputEvent) {
 		keyboardPointer.OriginMapping = []Widgeter{w}
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		w.mode == Shunpo {
 		w.target = WidgeterS{w}.GlobalToParent(mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
 		w.skillActive = true
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.Pointer.State.Button(1) {
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.Pointer.State.Button(1) {
 		pointerPos := WidgeterS{w}.GlobalToParent(mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]})
 		if pointerPos.Sub(w.pos).Len() > w.size[0]*2/3 || w.target.Sub(w.pos).Len() > w.size[0]*2/3 {
 			w.target = pointerPos
 		}
 		w.mode = AutoAttack
 		w.skillActive = false
-	} else if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 'E' && inputEvent.Buttons[0] == true {
+	} else if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 'E' && inputEvent.Buttons[0] == true {
 		w.mode = Shunpo
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && glfw.Key(inputEvent.InputId) == glfw.KeyEscape && inputEvent.Buttons[0] == true {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && glfw.Key(inputEvent.InputId) == glfw.KeyEscape && inputEvent.Buttons[0] == true {
 		if w.mode == Shunpo {
 			// TODO: Make this consume the event, so the window doesn't get closed...
 			w.mode = AutoAttack
@@ -2140,11 +2140,11 @@ func (w *CanvasWidget) Render() {
 }
 
 func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == events.WINDOWING && inputEvent.EventTypes[events.AXIS_EVENT] {
+	if inputEvent.Pointer.VirtualCategory == events.Windowing && inputEvent.EventTypes[events.AxisEvent] {
 		w.Layout()
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -2154,14 +2154,14 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 	}
 
 	if w.options.Scrollable {
-		if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.SLIDER_EVENT] && inputEvent.InputId == 2 {
+		if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.SliderEvent] && inputEvent.InputId == 2 {
 			w.offset[1] += inputEvent.Sliders[0] * 10
 			w.offset[0] += inputEvent.Sliders[1] * 10
 		}
 	}
 
 	// TODO: Make this happen as a PostProcessEvent if it hasn't been processed by an earlier widget, etc.
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		// TEST, DEBUG: Cmd+O shortcut to open a new window, for testing purposes
 		case glfw.KeyO:
@@ -2193,7 +2193,7 @@ func (w *CanvasWidget) ProcessEvent(inputEvent InputEvent) {
 						}
 					},
 					ProcessEventFunc: func(inputEvent InputEvent) {
-						if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+						if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 							switch glfw.Key(inputEvent.InputId) {
 							case glfw.KeyEnter:
 								content := textBox.Content.Content()
@@ -2618,14 +2618,14 @@ func (w *ScrollPaneWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 func (w *ScrollPaneWidget) ProcessEvent(inputEvent InputEvent) {
 	var moved bool
 
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.SLIDER_EVENT] && inputEvent.InputId == 2 {
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.SliderEvent] && inputEvent.InputId == 2 {
 		w.child.Pos()[0] += inputEvent.Sliders[1] * 10
 		w.child.Pos()[1] += inputEvent.Sliders[0] * 10
 		moved = true
 	}
 
 	// TODO: This should move cursor so it's on screen?
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyUp:
 			if inputEvent.ModifierKey == glfw.ModControl|glfw.ModAlt {
@@ -2804,7 +2804,7 @@ func NewFooWidget2(pos mgl64.Vec2) Widgeter {
 	actions := &CustomWidget{
 		Widget: NewWidget(np, np),
 		ProcessEventFunc: func(inputEvent InputEvent) {
-			if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+			if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 				switch glfw.Key(inputEvent.InputId) {
 				case glfw.KeyEnter:
 					type tokenText struct {
@@ -2888,7 +2888,7 @@ func (w *FooWidget) Render() {
 }
 
 func (w *FooWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -2898,7 +2898,7 @@ func (w *FooWidget) ProcessEvent(inputEvent InputEvent) {
 		}
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyBackspace:
 			if len(w.text) > 0 {
@@ -2907,7 +2907,7 @@ func (w *FooWidget) ProcessEvent(inputEvent InputEvent) {
 		}
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.CHARACTER_EVENT] && inputEvent.InputId < 128 {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.CharacterEvent] && inputEvent.InputId < 128 {
 		w.text += string(inputEvent.InputId)
 	}
 }
@@ -3595,7 +3595,7 @@ func (w *SearchableListWidget) ProcessEvent(inputEvent InputEvent) {
 		extension.ProcessEvent(inputEvent)
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && // TODO: GetHoverer() // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { // TODO: GetHoverer() // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -3621,7 +3621,7 @@ func NewSearchableListWidgetAction(pos, size mgl64.Vec2, entries SliceStringer) 
 	actions := &CustomWidget{
 		Widget: NewWidget(np, np),
 		ProcessEventFunc: func(inputEvent InputEvent) {
-			if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+			if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 				switch glfw.Key(inputEvent.InputId) {
 				case glfw.KeyEnter:
 					fmt.Println(w.listWidget.GetSelected())
@@ -3924,7 +3924,7 @@ func (w *FilterableSelecterWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 	}
 }
 func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -3937,7 +3937,7 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer
 	hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
-	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.Pointer.State.Button(0) {
+	if hasTypingFocus && inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.Pointer.State.Button(0) {
 		globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
 		localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 		if w.entries.Len() > 0 {
@@ -3956,7 +3956,7 @@ func (w *FilterableSelecterWidget) ProcessEvent(inputEvent InputEvent) {
 		}
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 		var firstSelected uint64
 		for s := range w.selected {
 			firstSelected = s
@@ -4076,7 +4076,7 @@ func (w *VfsListingWidget) ProcessEvent(inputEvent InputEvent) {
 		extension.ProcessEvent(inputEvent)
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyLeft:
 			c := keyboardPointer.OriginMapping[0] // HACK
@@ -4242,7 +4242,7 @@ func (w *VfsListingPureWidget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
 func (w *VfsListingPureWidget) ProcessEvent(inputEvent InputEvent) {
 	w.FilterableSelecterWidget.ProcessEvent(inputEvent)
 
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -5760,7 +5760,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		extension.ProcessEvent(inputEvent)
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
@@ -5778,8 +5778,8 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 	// HACK: Should iterate over all typing pointers, not just assume keyboard pointer and its first mapping
 	//hasTypingFocus := keyboardPointer != nil && keyboardPointer.OriginMapping.ContainsWidget(w)
 
-	if inputEvent.Pointer.VirtualCategory == events.POINTING {
-		if inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true { // On mouse button 0 down
+	if inputEvent.Pointer.VirtualCategory == events.Pointing {
+		if inputEvent.EventTypes[events.ButtonEvent] && inputEvent.InputId == 0 && inputEvent.Buttons[0] == true { // On mouse button 0 down
 			// Leave selection if shift is held down
 			leaveSelection := inputEvent.ModifierKey&glfw.ModShift != 0
 
@@ -5787,7 +5787,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			localPosition := WidgeterS{w}.GlobalToLocal(globalPosition)
 			logicalPosition := mgl64.Vec2{localPosition[0] / fontWidth, localPosition[1] / fontHeight}
 			w.caretPosition.SetPositionFromLogical(logicalPosition, leaveSelection)
-		} else if inputEvent.EventTypes[events.AXIS_EVENT] && inputEvent.InputId == 0 && inputEvent.Pointer.State.Button(0) { // On mouse move while button 0 down
+		} else if inputEvent.EventTypes[events.AxisEvent] && inputEvent.InputId == 0 && inputEvent.Pointer.State.Button(0) { // On mouse move while button 0 down
 			leaveSelection := true
 
 			globalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
@@ -5797,7 +5797,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		}
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 		switch glfw.Key(inputEvent.InputId) {
 		case glfw.KeyBackspace:
 			w.caretPosition.Backspace()
@@ -5969,7 +5969,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				closeOnEscape := &CustomWidget{
 					Widget: NewWidget(np, np),
 					ProcessEventFunc: func(inputEvent InputEvent) {
-						if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+						if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 							switch glfw.Key(inputEvent.InputId) {
 							case glfw.KeyEnter:
 								// Remove popupTest from w.PopupsTest.
@@ -6021,7 +6021,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 					closeOnEscape := &CustomWidget{
 						Widget: NewWidget(np, np),
 						ProcessEventFunc: func(inputEvent InputEvent) {
-							if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+							if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 								switch glfw.Key(inputEvent.InputId) {
 								case glfw.KeyEnter:
 									// HACK: I should map it so Enter triggers the same action as Cmd+G handler, instead of faking it here...
@@ -6136,7 +6136,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 				closeOnEscape := &CustomWidget{
 					Widget: NewWidget(np, np),
 					ProcessEventFunc: func(inputEvent InputEvent) {
-						if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+						if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 							switch glfw.Key(inputEvent.InputId) {
 							case glfw.KeyEnter:
 								// Remove popupTest from w.PopupsTest.
@@ -6199,7 +6199,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 		}
 	}
 
-	if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.CHARACTER_EVENT] && inputEvent.InputId < 128 {
+	if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.CharacterEvent] && inputEvent.InputId < 128 {
 		w.caretPosition.ReplaceSelectionWith(string(inputEvent.InputId))
 	}
 }
@@ -6256,7 +6256,7 @@ type Pointer struct {
 
 func (this *Pointer) Render() {
 	switch {
-	case this.VirtualCategory == events.POINTING && len(this.State.Axes) >= 2:
+	case this.VirtualCategory == events.Pointing && len(this.State.Axes) >= 2:
 		// Prevent pointer from being drawn when the OS mouse pointer is visible.
 		if this == mousePointer {
 			// HACK
@@ -6318,8 +6318,8 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 
 		if !katOnly {
 			// TODO: Calculate whether a pointing pointer moved relative to canvas in a better way... what if canvas is moved via keyboard, etc.
-			pointingPointerMovedRelativeToCanvas := inputEvent.Pointer.VirtualCategory == events.POINTING &&
-				(inputEvent.EventTypes[events.AXIS_EVENT] && inputEvent.InputId == 0 || inputEvent.EventTypes[events.SLIDER_EVENT] && inputEvent.InputId == 2)
+			pointingPointerMovedRelativeToCanvas := inputEvent.Pointer.VirtualCategory == events.Pointing &&
+				(inputEvent.EventTypes[events.AxisEvent] && inputEvent.InputId == 0 || inputEvent.EventTypes[events.SliderEvent] && inputEvent.InputId == 2)
 
 			if pointingPointerMovedRelativeToCanvas {
 				LocalPosition := mgl64.Vec2{inputEvent.Pointer.State.Axes[0], inputEvent.Pointer.State.Axes[1]}
@@ -6339,7 +6339,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 
 			// Populate OriginMapping (but only when pointer is moved while not active, and this isn't a deactivation since that's handled below)
 			if pointingPointerMovedRelativeToCanvas &&
-				!inputEvent.EventTypes[events.POINTER_DEACTIVATION] && !inputEvent.Pointer.State.IsActive() {
+				!inputEvent.EventTypes[events.PointerDeactivation] && !inputEvent.Pointer.State.IsActive() {
 
 				inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 				copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
@@ -6350,7 +6350,7 @@ func ProcessInputEventQueue(widget Widgeter, inputEventQueue []InputEvent) []Inp
 			}
 
 			// Populate OriginMapping (but only upon pointer deactivation event)
-			if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes[events.POINTER_DEACTIVATION] {
+			if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes[events.PointerDeactivation] {
 
 				inputEvent.Pointer.OriginMapping = make([]Widgeter, len(inputEvent.Pointer.Mapping))
 				copy(inputEvent.Pointer.OriginMapping, inputEvent.Pointer.Mapping)
@@ -6369,7 +6369,7 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 	preStateActive := inputEvent.Pointer.State.IsActive()
 
 	{
-		if inputEvent.EventTypes[events.BUTTON_EVENT] {
+		if inputEvent.EventTypes[events.ButtonEvent] {
 			// Extend slice if needed.
 			neededSize := int(inputEvent.InputId) + len(inputEvent.Buttons)
 			if neededSize > len(inputEvent.Pointer.State.Buttons) {
@@ -6379,7 +6379,7 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 			copy(inputEvent.Pointer.State.Buttons[inputEvent.InputId:], inputEvent.Buttons)
 		}
 
-		if inputEvent.EventTypes[events.AXIS_EVENT] {
+		if inputEvent.EventTypes[events.AxisEvent] {
 			// Extend slice if needed.
 			neededSize := int(inputEvent.InputId) + len(inputEvent.Axes)
 			if neededSize > len(inputEvent.Pointer.State.Axes) {
@@ -6396,9 +6396,9 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 
 	switch {
 	case !preStateActive && postStateActive:
-		inputEvent.EventTypes[events.POINTER_ACTIVATION] = true
+		inputEvent.EventTypes[events.PointerActivation] = true
 	case preStateActive && !postStateActive:
-		inputEvent.EventTypes[events.POINTER_DEACTIVATION] = true
+		inputEvent.EventTypes[events.PointerDeactivation] = true
 	}
 
 	return append(inputEventQueue, inputEvent)
@@ -6853,7 +6853,7 @@ func main() {
 
 			inputEvent := InputEvent{
 				Pointer:    windowPointer,
-				EventTypes: map[events.EventType]bool{events.AXIS_EVENT: true},
+				EventTypes: map[events.EventType]bool{events.AxisEvent: true},
 				InputId:    0,
 				Buttons:    nil,
 				Sliders:    nil,
@@ -6877,7 +6877,7 @@ func main() {
 
 			inputEvent := InputEvent{
 				Pointer:    windowPointer,
-				EventTypes: map[events.EventType]bool{events.BUTTON_EVENT: true},
+				EventTypes: map[events.EventType]bool{events.ButtonEvent: true},
 				InputId:    0,
 				Buttons:    []bool{focused},
 				Sliders:    nil,
@@ -6895,13 +6895,13 @@ func main() {
 
 			inputEvent := InputEvent{
 				Pointer:    mousePointer,
-				EventTypes: map[events.EventType]bool{events.SLIDER_EVENT: true},
+				EventTypes: map[events.EventType]bool{events.SliderEvent: true},
 				InputId:    0,
 				Buttons:    nil,
 				Sliders:    []float64{x - lastMousePos[0], y - lastMousePos[1]}, // TODO: Do this in a pointer general way?
 			}
 			if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
-				inputEvent.EventTypes[events.AXIS_EVENT] = true
+				inputEvent.EventTypes[events.AxisEvent] = true
 				inputEvent.Axes = []float64{x, y}
 			}
 			lastMousePos[0] = x
@@ -6915,7 +6915,7 @@ func main() {
 		window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 			inputEvent := InputEvent{
 				Pointer:    mousePointer,
-				EventTypes: map[events.EventType]bool{events.SLIDER_EVENT: true},
+				EventTypes: map[events.EventType]bool{events.SliderEvent: true},
 				InputId:    2,
 				Buttons:    nil,
 				Sliders:    []float64{yoff, xoff},
@@ -6928,7 +6928,7 @@ func main() {
 		window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 			inputEvent := InputEvent{
 				Pointer:     mousePointer,
-				EventTypes:  map[events.EventType]bool{events.BUTTON_EVENT: true},
+				EventTypes:  map[events.EventType]bool{events.ButtonEvent: true},
 				InputId:     uint16(button),
 				Buttons:     []bool{action != glfw.Release},
 				Sliders:     nil,
@@ -6947,7 +6947,7 @@ func main() {
 
 			inputEvent := InputEvent{
 				Pointer:     keyboardPointer,
-				EventTypes:  map[events.EventType]bool{events.BUTTON_EVENT: true},
+				EventTypes:  map[events.EventType]bool{events.ButtonEvent: true},
 				InputId:     uint16(key),
 				Buttons:     []bool{action != glfw.Release},
 				Sliders:     nil,
@@ -6962,7 +6962,7 @@ func main() {
 		window.SetCharCallback(func(w *glfw.Window, char rune) {
 			inputEvent := InputEvent{
 				Pointer:    keyboardPointer,
-				EventTypes: map[events.EventType]bool{events.CHARACTER_EVENT: true},
+				EventTypes: map[events.EventType]bool{events.CharacterEvent: true},
 				InputId:    uint16(char),
 				Buttons:    nil,
 				Sliders:    nil,
@@ -7370,7 +7370,7 @@ func main() {
 		selectPackageListing := &CustomWidget{
 			Widget: NewWidget(np, np),
 			ProcessEventFunc: func(inputEvent InputEvent) {
-				if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+				if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 					switch glfw.Key(inputEvent.InputId) {
 					case glfw.KeyO:
 						if inputEvent.ModifierKey&glfw.ModSuper != 0 {
@@ -7387,7 +7387,7 @@ func main() {
 		selectFolderListing := &CustomWidget{
 			Widget: NewWidget(np, np),
 			ProcessEventFunc: func(inputEvent InputEvent) {
-				if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+				if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 					switch glfw.Key(inputEvent.InputId) {
 					case glfw.KeyT:
 						if inputEvent.ModifierKey&glfw.ModSuper != 0 {
@@ -7402,7 +7402,7 @@ func main() {
 		focusEditor := &CustomWidget{
 			Widget: NewWidget(np, np),
 			ProcessEventFunc: func(inputEvent InputEvent) {
-				if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+				if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 					switch glfw.Key(inputEvent.InputId) {
 					case glfw.KeyEnter:
 						editor.caretPosition.Move(-3)
@@ -7470,7 +7470,7 @@ func main() {
 			buildAndRun := &CustomWidget{
 				Widget: NewWidget(np, np),
 				ProcessEventFunc: func(inputEvent InputEvent) {
-					if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+					if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 						switch glfw.Key(inputEvent.InputId) {
 						case glfw.KeyB:
 							if inputEvent.ModifierKey == glfw.ModSuper {
@@ -7910,7 +7910,7 @@ func main() {
 				gotoDecl := &CustomWidget{
 					Widget: NewWidget(np, np),
 					ProcessEventFunc: func(inputEvent InputEvent) {
-						if inputEvent.Pointer.VirtualCategory == events.TYPING && inputEvent.EventTypes[events.BUTTON_EVENT] && inputEvent.Buttons[0] == true {
+						if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes[events.ButtonEvent] && inputEvent.Buttons[0] == true {
 							switch glfw.Key(inputEvent.InputId) {
 							case glfw.KeyDown:
 								if inputEvent.ModifierKey == glfw.ModSuper|glfw.ModAlt {
@@ -8370,7 +8370,7 @@ func main() {
 </html>`)
 		})
 		http.Handle("/websocket2.ws", websocket.Handler(func(c *websocket.Conn) {
-			websocketPointer = &Pointer{VirtualCategory: events.POINTING} // TODO: Fix race condition
+			websocketPointer = &Pointer{VirtualCategory: events.Pointing} // TODO: Fix race condition
 
 			br := bufio.NewReader(c)
 			for {
@@ -8390,7 +8390,7 @@ func main() {
 
 					inputEvent := InputEvent{
 						Pointer:    websocketPointer,
-						EventTypes: map[events.EventType]bool{events.AXIS_EVENT: true},
+						EventTypes: map[events.EventType]bool{events.AxisEvent: true},
 						InputId:    0,
 						Buttons:    nil,
 						Sliders:    []float64{x, y},

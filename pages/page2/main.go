@@ -209,18 +209,18 @@ func main() {
 	window.SetFramebufferSizeCallback(framebufferSizeCallback)
 
 	var inputEventQueue []events.InputEvent
-	mousePointer = &events.Pointer{VirtualCategory: events.POINTING}
+	mousePointer = &events.Pointer{VirtualCategory: events.Pointing}
 
 	window.SetMouseMovementCallback(func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
 		inputEvent := events.InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[events.EventType]struct{}{events.SLIDER_EVENT: {}},
-			InputId:    0,
+			EventTypes: map[events.EventType]struct{}{events.SliderEvent: {}},
+			InputID:    0,
 			Buttons:    nil,
 			Sliders:    []float64{xdelta, ydelta},
 		}
 		if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
-			inputEvent.EventTypes[events.AXIS_EVENT] = struct{}{}
+			inputEvent.EventTypes[events.AxisEvent] = struct{}{}
 			inputEvent.Axes = []float64{xpos, ypos}
 		}
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
@@ -229,8 +229,8 @@ func main() {
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 		inputEvent := events.InputEvent{
 			Pointer:     mousePointer,
-			EventTypes:  map[events.EventType]struct{}{events.BUTTON_EVENT: {}},
-			InputId:     uint16(button),
+			EventTypes:  map[events.EventType]struct{}{events.ButtonEvent: {}},
+			InputID:     uint16(button),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
 			Axes:        nil,
@@ -449,7 +449,7 @@ func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []events.Widgeter {
 
 func (w *ButtonWidget) ProcessEvent(inputEvent events.InputEvent) {
 	//if _, buttonEvent := inputEvent.EventTypes[events.BUTTON_EVENT]; inputEvent.Pointer.VirtualCategory == events.POINTING && buttonEvent && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-	if inputEvent.Pointer.VirtualCategory == events.POINTING && inputEvent.EventTypes.Has(events.BUTTON_EVENT) && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes.Has(events.ButtonEvent) && inputEvent.InputID == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 
