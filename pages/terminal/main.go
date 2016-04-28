@@ -2,12 +2,19 @@
 package main
 
 import (
+	"go/build"
 	"log"
+	"os"
 	"runtime"
 
 	"github.com/go-gl/gl/v2.1/gl"
+	"github.com/go-gl/mathgl/mgl64"
 	"github.com/goxjs/glfw"
 	"github.com/shurcooL/Conception-go/events"
+)
+
+const (
+	borderX, borderY = 5, 4
 )
 
 func init() {
@@ -20,10 +27,8 @@ func main() {
 	}
 	defer glfw.Terminate()
 
-	const fontWidth, fontHeight = 6, 13
-
 	glfw.WindowHint(glfw.Resizable, gl.FALSE)
-	window, err := glfw.CreateWindow(86*fontWidth+10, 24*fontHeight+8, "Terminal — 86×24", nil, nil)
+	window, err := glfw.CreateWindow(80*fontWidth+borderX*2, 25*fontHeight+borderY*2, "Terminal — 80×25", nil, nil)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -39,6 +44,9 @@ func main() {
 	window.SwapBuffers()
 
 	glfw.SwapInterval(1) // Vsync.
+
+	InitFont()
+	defer DeinitFont()
 
 	framebufferSizeCallback := func(w *glfw.Window, framebufferSize0, framebufferSize1 int) {
 		gl.Viewport(0, 0, int32(framebufferSize0), int32(framebufferSize1))
@@ -169,6 +177,14 @@ func main() {
 		gl.Vertex2i(0, 1)
 		gl.End()*/
 
+		gl.Color3d(0, 0, 0)
+		NewOpenGlStream(mgl64.Vec2{borderX, borderY}).PrintText(` !"#$%&'()*+,-./
+0123456789:;<=>?
+@ABCDEFGHIJKLMNO
+PQRSTUVWXYZ[\]^_
+` + "`" + `abcdefghijklmno
+pqrstuvwxyz{|}~`)
+
 		mousePointer.Render()
 
 		window.SwapBuffers()
@@ -202,3 +218,26 @@ type nopContextWatcher struct{}
 
 func (nopContextWatcher) OnMakeCurrent(context interface{}) {}
 func (nopContextWatcher) OnDetach()                         {}
+
+// Set the working directory to the root of Conception-go package, so that its assets can be accessed.
+func init() {
+	// importPathToDir resolves the absolute path from importPath.
+	// There doesn't need to be a valid Go package inside that import path,
+	// but the directory must exist.
+	importPathToDir := func(importPath string) (string, error) {
+		p, err := build.Import(importPath, "", build.FindOnly)
+		if err != nil {
+			return "", err
+		}
+		return p.Dir, nil
+	}
+
+	dir, err := importPathToDir("github.com/shurcooL/Conception-go")
+	if err != nil {
+		log.Fatalln("Unable to find github.com/shurcooL/Conception-go package in your GOPATH, it's needed to load assets:", err)
+	}
+	err = os.Chdir(dir)
+	if err != nil {
+		log.Panicln("os.Chdir:", err)
+	}
+}
