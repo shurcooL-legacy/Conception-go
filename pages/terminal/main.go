@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
@@ -20,6 +21,10 @@ const (
 func init() {
 	runtime.LockOSThread()
 }
+
+const prompt = "~ $ "
+
+var text = prompt
 
 func main() {
 	if err := glfw.Init(nopContextWatcher{}); err != nil {
@@ -132,16 +137,6 @@ func main() {
 			ModifierKey: uint8(mods),
 		}
 		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
-
-		// HACK.
-		switch {
-		case key == glfw.Key1 && action == glfw.Press:
-			window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
-		case key == glfw.Key2 && action == glfw.Press:
-			window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
-		case key == glfw.Key3 && action == glfw.Press:
-			window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
-		}
 	})
 
 	window.SetCharCallback(func(w *glfw.Window, char rune) {
@@ -178,12 +173,17 @@ func main() {
 		gl.End()*/
 
 		gl.Color3d(0, 0, 0)
-		NewOpenGlStream(mgl64.Vec2{borderX, borderY}).PrintText(` !"#$%&'()*+,-./
-0123456789:;<=>?
-@ABCDEFGHIJKLMNO
-PQRSTUVWXYZ[\]^_
-` + "`" + `abcdefghijklmno
-pqrstuvwxyz{|}~`)
+		NewOpenGlStream(mgl64.Vec2{borderX, borderY}).PrintText(text)
+
+		// Draw caret.
+		lines := strings.Split(text, "\n")
+		lastLine := lines[len(lines)-1]
+		expandedCaretPosition, caretLine := len(lastLine), len(lines)-1
+		gl.PushMatrix()
+		gl.Translated(borderX, borderY, 0)
+		gl.Color3d(0, 0, 0)
+		gl.Recti(int32(expandedCaretPosition*fontWidth-1), int32(caretLine*fontHeight), int32(expandedCaretPosition*fontWidth+1), int32(caretLine*fontHeight)+fontHeight)
+		gl.PopMatrix()
 
 		mousePointer.Render()
 
@@ -206,6 +206,29 @@ func (a *app) processInputEventQueue(inputEventQueue []events.InputEvent) []even
 
 		if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes.Has(events.ButtonEvent) && glfw.Key(inputEvent.InputID) == glfw.KeyW && inputEvent.Buttons[0] && glfw.ModifierKey(inputEvent.ModifierKey) == glfw.ModSuper {
 			a.window.SetShouldClose(true)
+		}
+
+		if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes.Has(events.ButtonEvent) && inputEvent.Buttons[0] && glfw.ModifierKey(inputEvent.ModifierKey) & ^glfw.ModShift == 0 {
+			switch glfw.Key(inputEvent.InputID) {
+			case glfw.KeyBackspace:
+				if len(text) > 0 {
+					text = text[:len(text)-1]
+				}
+			case glfw.KeyEnter:
+				text += "\n-bash: command not found"
+				text += "\n" + prompt
+			}
+		}
+
+		if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes.Has(events.ButtonEvent) && glfw.Key(inputEvent.InputID) == glfw.KeyL && inputEvent.Buttons[0] && glfw.ModifierKey(inputEvent.ModifierKey) == glfw.ModControl {
+			text = prompt
+		}
+		if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes.Has(events.ButtonEvent) && glfw.Key(inputEvent.InputID) == glfw.KeyC && inputEvent.Buttons[0] && glfw.ModifierKey(inputEvent.ModifierKey) == glfw.ModControl {
+			text += "^C\n" + prompt
+		}
+
+		if inputEvent.Pointer.VirtualCategory == events.Typing && inputEvent.EventTypes.Has(events.CharacterEvent) {
+			text += string(inputEvent.InputID)
 		}
 
 		inputEventQueue = inputEventQueue[1:]
