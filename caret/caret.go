@@ -276,7 +276,7 @@ func (cp *caretPositionInternal) Compare(other *caretPositionInternal) int8 {
 }
 
 // TODO: Change amount to a proper type with 4 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
-// TOOD: Rename to JumpTo or something to indicate it's a method that can never fail.
+// TODO: Rename to JumpTo or something to indicate it's a method that can never fail.
 // Move jumps the caret position to a new position. This operation never fails, but may not have any effect.
 // If amount is ±1, move by 1 character within same line if possible.
 // If amount is ±2, jump to start/end of line.
@@ -488,7 +488,7 @@ func (cp *CaretPosition) TryMoveH(direction direction, leaveSelection, jumpWords
 
 // HACK: leaveSelection is currently an optional bool parameter
 // TODO: Change amount to a proper type with 4 values, etc. to avoid confusion with other funcs where amount can be an arbitrary number.
-// TOOD: Rename to JumpTo or something to indicate it's a method that can never fail.
+// TODO: Rename to JumpTo or something to indicate it's a method that can never fail.
 // Move jumps the caret position to a new position. This operation never fails, but may not have any effect.
 // If amount is ±1, move by 1 character within same line if possible.
 // If amount is ±2, jump to start/end of line.

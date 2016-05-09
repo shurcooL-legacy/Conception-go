@@ -5387,7 +5387,7 @@ func NewTextBoxWidgetExternalContent(pos mgl64.Vec2, mc caret.MultilineContentI,
 	return w
 }
 
-// TOOD: Improve horizontal centering.
+// TODO: Improve horizontal centering.
 func (w *TextBoxWidget) CenterOnCaretPosition() {
 	// HACK: This kinda conflicts/overlaps with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
 	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
@@ -5397,7 +5397,7 @@ func (w *TextBoxWidget) CenterOnCaretPosition() {
 	}
 }
 
-// TOOD: Improve horizontal centering.
+// TODO: Improve horizontal centering.
 func (w *TextBoxWidget) CenterOnCaretPositionIfOffscreen() {
 	// HACK: This kinda conflicts/overlaps with MakeUpdated(&w.scrollToCaret), which also tries to scroll the scroll pane... Find a better way.
 	if scrollPane, ok := w.Parent().(*ScrollPaneWidget); ok && scrollPane.child == w {
