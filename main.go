@@ -6408,21 +6408,16 @@ func EnqueueInputEvent(inputEventQueue []InputEvent, inputEvent InputEvent) []In
 
 // fileDiffName returns the name of a FileDiff as Markdown.
 func fileDiffName(fileDiff *diff.FileDiff) string {
-	var origName, newName string
-	if strings.HasPrefix(fileDiff.OrigName, "a/") {
-		origName = fileDiff.OrigName[2:]
-	}
-	if strings.HasPrefix(fileDiff.NewName, "b/") {
-		newName = fileDiff.NewName[2:]
-	}
+	origName := strings.TrimPrefix(fileDiff.OrigName, "a/")
+	newName := strings.TrimPrefix(fileDiff.NewName, "b/")
 	switch {
-	case origName != "" && newName != "" && origName == newName: // Modified.
+	case origName != "/dev/null" && newName != "/dev/null" && origName == newName: // Modified.
 		return newName
-	case origName != "" && newName != "" && origName != newName: // Renamed.
+	case origName != "/dev/null" && newName != "/dev/null" && origName != newName: // Renamed.
 		return origName + " -> " + newName
-	case origName == "" && newName != "": // Added.
+	case origName == "/dev/null" && newName != "/dev/null": // Added.
 		return newName
-	case origName != "" && newName == "": // Removed.
+	case origName != "/dev/null" && newName == "/dev/null": // Removed.
 		return "~~" + origName + "~~"
 	default:
 		panic("unexpected *diff.FileDiff, no names")
@@ -6431,21 +6426,16 @@ func fileDiffName(fileDiff *diff.FileDiff) string {
 
 // fileDiffNameRaw returns a name of a FileDiff in raw form.
 func fileDiffNameRaw(fileDiff *diff.FileDiff) string {
-	var origName, newName string
-	if strings.HasPrefix(fileDiff.OrigName, "a/") {
-		origName = fileDiff.OrigName[2:]
-	}
-	if strings.HasPrefix(fileDiff.NewName, "b/") {
-		newName = fileDiff.NewName[2:]
-	}
+	origName := strings.TrimPrefix(fileDiff.OrigName, "a/")
+	newName := strings.TrimPrefix(fileDiff.NewName, "b/")
 	switch {
-	case origName != "" && newName != "" && origName == newName: // Modified.
+	case origName != "/dev/null" && newName != "/dev/null" && origName == newName: // Modified.
 		return newName
-	case origName != "" && newName != "" && origName != newName: // Renamed.
+	case origName != "/dev/null" && newName != "/dev/null" && origName != newName: // Renamed.
 		return newName
-	case origName == "" && newName != "": // Added.
+	case origName == "/dev/null" && newName != "/dev/null": // Added.
 		return newName
-	case origName != "" && newName == "": // Removed.
+	case origName != "/dev/null" && newName == "/dev/null": // Removed.
 		return origName
 	default:
 		panic("unexpected *diff.FileDiff, no names")
@@ -7970,7 +7960,7 @@ func main() {
 				var buf bytes.Buffer
 				w := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', 0)
 				for _, i := range importers.Results {
-					fmt.Fprintf(w, "%s\t%s\n", i.Path, i.Synopsis)
+					fmt.Fprintf(w, "%s - %s\n", i.Path, i.Synopsis)
 				}
 				w.Flush()
 				godocOrgImporters.content = buf.String()
