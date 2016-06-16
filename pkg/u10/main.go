@@ -68,7 +68,7 @@ func (f MarkdownOptionsHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.R
 
 // writeGitHubFlavoredMarkdownViaLocalWithToc renders GFM as a full HTML page with table of contents and writes to w.
 func writeGitHubFlavoredMarkdownViaLocalWithToc(w io.Writer, markdown []byte) {
-	io.WriteString(w, `<html><head><meta charset="utf-8"><link href="https://dl.dropboxusercontent.com/u/8554242/temp/github-flavored-markdown.css" media="all" rel="stylesheet" type="text/css" /><link href="//cdnjs.cloudflare.com/ajax/libs/octicons/2.1.2/octicons.css" media="all" rel="stylesheet" type="text/css" /><link href="/table-of-contents.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
+	io.WriteString(w, `<html><head><meta charset="utf-8"><link href="https://dl.dropboxusercontent.com/u/8554242/temp/github-flavored-markdown.css" media="all" rel="stylesheet" type="text/css" /><link href="/assets/octicons/octicons.css" media="all" rel="stylesheet" type="text/css" /><link href="/table-of-contents.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
 	w.Write(github_flavored_markdown.Markdown(markdown))
 	io.WriteString(w, `</article><script type="text/javascript" src="/table-of-contents.go.js"></script></body></html>`)
 }

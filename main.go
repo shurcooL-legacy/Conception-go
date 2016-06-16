@@ -59,6 +59,7 @@ import (
 	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/analysis"
 	"github.com/shurcooL/go/gddo"
+	"github.com/shurcooL/go/gzip_file_server"
 	"github.com/shurcooL/go/httpstoppable"
 	"github.com/shurcooL/go/open"
 	"github.com/shurcooL/go/pipeutil"
@@ -66,7 +67,9 @@ import (
 	"github.com/shurcooL/go/reflectfind"
 	"github.com/shurcooL/go/reflectsource"
 	"github.com/shurcooL/go/trim"
+	"github.com/shurcooL/httpfs/union"
 	"github.com/shurcooL/markdownfmt/markdown"
+	"github.com/shurcooL/octicons"
 	"golang.org/x/net/websocket"
 	"golang.org/x/tools/godoc/vfs"
 	goimports "golang.org/x/tools/imports"
@@ -6443,6 +6446,13 @@ func fileDiffNameRaw(fileDiff *diff.FileDiff) string {
 }
 
 func initHttpHandlers() {
+	{
+		assets := union.New(map[string]http.FileSystem{
+			"/octicons": octicons.Assets,
+		})
+		fileServer := gzip_file_server.New(assets)
+		http.Handle("/assets/", http.StripPrefix("/assets", fileServer))
+	}
 	http.HandleFunc("/close", func(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintln(w, "Closing.")
 		keepRunning = false
