@@ -11,10 +11,10 @@ import (
 	"github.com/shurcooL/go/gfmutil"
 
 	// An experiment in making the frontend resources available.
-	// This tries to ensure "/table-of-contents.go.js" and "/table-of-contents.css" will be available...
+	// This registers on default mux paths "/table-of-contents.js" and "/table-of-contents.css".
 	// TODO: This is not quite done and requires figuring out a good way to solve the challenge...
 	//       Relative paths do not work at all when it's a library rather than package main.
-	// TODO: Perhaps the strings `<script type="text/javascript" src="/table-of-contents.go.js"></script>` and
+	// TODO: Perhaps the strings `<script type="text/javascript" src="/table-of-contents.js"></script>` and
 	//       `<link href="/table-of-contents.css" media="all" rel="stylesheet" type="text/css" />` should be coming
 	//       from the TOC handler package?
 	// TODO: Perhaps I could use "/go/import/path" notation to ensure no path collisions?
@@ -67,8 +67,9 @@ func (f MarkdownOptionsHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.R
 }
 
 // writeGitHubFlavoredMarkdownViaLocalWithToc renders GFM as a full HTML page with table of contents and writes to w.
+// It assumes that GFM CSS is available at /assets/gfm/gfm.css.
 func writeGitHubFlavoredMarkdownViaLocalWithToc(w io.Writer, markdown []byte) {
-	io.WriteString(w, `<html><head><meta charset="utf-8"><link href="https://dl.dropboxusercontent.com/u/8554242/temp/github-flavored-markdown.css" media="all" rel="stylesheet" type="text/css" /><link href="/assets/octicons/octicons.css" media="all" rel="stylesheet" type="text/css" /><link href="/table-of-contents.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
+	io.WriteString(w, `<html><head><meta charset="utf-8"><link href="/assets/gfm/gfm.css" media="all" rel="stylesheet" type="text/css" /><link href="/assets/octicons/octicons.css" media="all" rel="stylesheet" type="text/css" /><link href="/table-of-contents.css" media="all" rel="stylesheet" type="text/css" /></head><body><article class="markdown-body entry-content" style="padding: 30px;">`)
 	w.Write(github_flavored_markdown.Markdown(markdown))
-	io.WriteString(w, `</article><script type="text/javascript" src="/table-of-contents.go.js"></script></body></html>`)
+	io.WriteString(w, `</article><script type="text/javascript" src="/table-of-contents.js"></script></body></html>`)
 }

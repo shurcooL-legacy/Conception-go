@@ -55,6 +55,7 @@ import (
 	"github.com/shurcooL/Conception-go/pkg/markdown_http"
 	"github.com/shurcooL/Conception-go/pkg/u10"
 	"github.com/shurcooL/Conception-go/pkg/u6"
+	"github.com/shurcooL/github_flavored_markdown/gfmstyle"
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go-goon/bypass"
 	"github.com/shurcooL/go/analysis"
@@ -6449,6 +6450,7 @@ func initHttpHandlers() {
 	{
 		assets := union.New(map[string]http.FileSystem{
 			"/octicons": octicons.Assets,
+			"/gfm":      gfmstyle.Assets,
 		})
 		fileServer := httpgzip.FileServer(assets, httpgzip.FileServerOptions{ServeError: httpgzip.Detailed})
 		http.Handle("/assets/", http.StripPrefix("/assets", fileServer))
