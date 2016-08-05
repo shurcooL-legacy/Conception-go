@@ -26,21 +26,21 @@ const prompt = "~ $ "
 
 var text = prompt
 
-func main() {
+func run() error {
 	if err := glfw.Init(nopContextWatcher{}); err != nil {
-		log.Fatalln(err)
+		return err
 	}
 	defer glfw.Terminate()
 
 	glfw.WindowHint(glfw.Resizable, gl.FALSE)
 	window, err := glfw.CreateWindow(80*fontWidth+borderX*2, 25*fontHeight+borderY*2, "Terminal — 80×25", nil, nil)
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 	window.MakeContextCurrent()
 
 	if err := gl.Init(); err != nil {
-		log.Fatalln(err)
+		return err
 	}
 
 	// Clear screen right away.
@@ -173,7 +173,7 @@ func main() {
 		gl.End()*/
 
 		gl.Color3d(0, 0, 0)
-		NewOpenGlStream(mgl64.Vec2{borderX, borderY}).PrintText(text)
+		NewOpenGLStream(mgl64.Vec2{borderX, borderY}).PrintText(text)
 
 		// Draw caret.
 		lines := strings.Split(text, "\n")
@@ -189,6 +189,15 @@ func main() {
 
 		window.SwapBuffers()
 		runtime.Gosched()
+	}
+
+	return nil
+}
+
+func main() {
+	err := run()
+	if err != nil {
+		log.Fatalln(err)
 	}
 }
 

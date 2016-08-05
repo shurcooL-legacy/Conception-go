@@ -17,7 +17,7 @@ import (
 )
 
 var oFontBase, oFontBackground uint32
-var lodBias float64 = -66.67
+var lodBias = -66.67
 
 var selectedTextColor = mgl64.Vec3{195 / 255.0, 212 / 255.0, 242 / 255.0}
 var selectedTextDarkColor = selectedTextColor.Mul(0.75)
@@ -38,7 +38,7 @@ func (fo FontOptions) IsBold() bool { return fo == Bold || fo == BoldItalic }
 // IsItalic returns true if the font has the italic property set.
 func (fo FontOptions) IsItalic() bool { return fo == Italic || fo == BoldItalic }
 
-type OpenGlStream struct {
+type OpenGLStream struct {
 	pos        mgl64.Vec2
 	lineStartX float64
 	advance    uint32
@@ -49,23 +49,23 @@ type OpenGlStream struct {
 	ShowInvisibles  bool
 }
 
-func NewOpenGlStream(pos mgl64.Vec2) *OpenGlStream {
-	return &OpenGlStream{pos: pos, lineStartX: pos[0]}
+func NewOpenGLStream(pos mgl64.Vec2) *OpenGLStream {
+	return &OpenGLStream{pos: pos, lineStartX: pos[0]}
 }
 
-func (o *OpenGlStream) SetPos(pos mgl64.Vec2) {
+func (o *OpenGLStream) SetPos(pos mgl64.Vec2) {
 	o.pos = pos
 	o.lineStartX = pos[0]
 	o.advance = 0
 }
 
-func (o *OpenGlStream) SetPosWithExpandedPosition(pos mgl64.Vec2, x, y uint32) {
+func (o *OpenGLStream) SetPosWithExpandedPosition(pos mgl64.Vec2, x, y uint32) {
 	o.pos = pos.Add(mgl64.Vec2{float64(x) * fontWidth, float64(y) * fontHeight})
 	o.lineStartX = pos[0]
 	o.advance = x
 }
 
-func (o *OpenGlStream) PrintText(s string) {
+func (o *OpenGLStream) PrintText(s string) {
 	for {
 		end := strings.Index(s, "\n")
 
@@ -88,7 +88,7 @@ func (o *OpenGlStream) PrintText(s string) {
 }
 
 // Input shouldn't have newlines
-func (o *OpenGlStream) PrintLine(s string) {
+func (o *OpenGLStream) PrintLine(s string) {
 	if o.BorderColor != nil {
 		gl.PushAttrib(gl.CURRENT_BIT)
 
@@ -121,20 +121,20 @@ func (o *OpenGlStream) PrintLine(s string) {
 	}
 }
 
-func (o *OpenGlStream) advanceBy(amount uint32) {
+func (o *OpenGLStream) advanceBy(amount uint32) {
 	o.advance += amount
 	o.afterAdvance()
 }
-func (o *OpenGlStream) advanceReset() {
+func (o *OpenGLStream) advanceReset() {
 	o.advance = 0
 	o.afterAdvance()
 }
-func (o *OpenGlStream) afterAdvance() {
+func (o *OpenGLStream) afterAdvance() {
 	o.pos[0] = o.lineStartX + fontWidth*float64(o.advance)
 }
 
 // Shouldn't have tabs nor newlines
-func (o *OpenGlStream) PrintSegment(s string) {
+func (o *OpenGLStream) PrintSegment(s string) {
 	if s == "" {
 		return
 	}
@@ -263,8 +263,6 @@ func LoadTexture(path string) {
 	CheckGLError()
 }
 
-// =====
-
 var (
 	nearlyWhiteColor = mgl64.Vec3{0.975, 0.975, 0.975}
 )
@@ -307,8 +305,8 @@ func drawInnerSlicedBox(pos, size mgl64.Vec2, borderColor, backgroundColor mgl64
 }
 
 func CheckGLError() {
-	errorCode := gl.GetError()
-	if errorCode != 0 {
-		log.Panicln("GL Error:", errorCode)
+	err := gl.GetError()
+	if err != 0 {
+		panic(fmt.Errorf("gl error: %v", err))
 	}
 }
