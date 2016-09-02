@@ -6470,7 +6470,7 @@ func initHttpHandlers() {
 
 		// TODO: Try to lookup the GoPackage rather than creating a new one.
 		importPath := req.URL.Path[1:]
-		_, skipGenerated := req.URL.Query()["skip-generated"]
+		skipGenerated, _ := strconv.ParseBool(req.URL.Query().Get("skip-generated"))
 		if goPackage := GoPackageFromImportPath(importPath); goPackage != nil {
 			b += `# import "` + importPath + "\"\n"
 
@@ -6591,8 +6591,8 @@ func initHttpHandlers() {
 	http.Handle("/status", u10.MarkdownOptionsHandlerFunc(func(req *http.Request) ([]byte, *u10.Options, error) {
 		started := time.Now()
 
-		_, short := req.URL.Query()["short"]
-		_, origin := req.URL.Query()["origin"] // If set, compare against origin/master instead of just working directory.
+		short, _ := strconv.ParseBool(req.URL.Query().Get("short"))
+		origin, _ := strconv.ParseBool(req.URL.Query().Get("origin")) // If set, compare against origin/master instead of just working directory.
 
 		// rootPath -> []*GoPackage
 		var goPackagesInRepo = make(map[string][]*GoPackage)
