@@ -7958,7 +7958,6 @@ func main() {
 
 			godocOrgImporters := &DepStringerFunc{}
 			godocOrgImporters.UpdateFunc = func(this DepNode2I) {
-				//fmt.Print("\x07")
 				goPackage := this.GetSources()[0].(GoPackageSelecter).GetSelectedGoPackage()
 				if goPackage == nil {
 					godocOrgImporters.content = ""
@@ -7970,11 +7969,14 @@ func main() {
 					return
 				}
 				var buf bytes.Buffer
-				w := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', 0)
+				w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 				for _, i := range importers.Results {
-					fmt.Fprintf(w, "%s - %s\n", i.Path, i.Synopsis)
+					fmt.Fprintf(w, "%s\t%s\n", i.Path, i.Synopsis)
 				}
 				w.Flush()
+				if len(importers.Results) == 0 {
+					fmt.Fprintln(&buf, "(No importers.)")
+				}
 				godocOrgImporters.content = buf.String()
 			}
 			godocOrgImporters.AddSources(&GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
