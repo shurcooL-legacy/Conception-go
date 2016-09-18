@@ -6569,17 +6569,11 @@ func initHttpHandlers() {
 				}
 
 				// git diff against master.
+				b += "\n" + underline("git diff against master")
 				if workingDiffMaster := u6.GoPackageWorkingDiffMaster(goPackage); workingDiffMaster != "" {
-					b += "\n" + underline("git diff against master")
-
-					// Stats (lines added/removed).
-					cmd := exec.Command("git", "diff", "--stat", "--find-renames", "master")
-					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
-					if stat, err := cmd.CombinedOutput(); err == nil {
-						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
-					}
-
-					b += "\n```diff\n" + workingDiffMaster + "\n```\n"
+					b += "\nView diff [here](/diff/" + importPath + ").\n"
+				} else {
+					b += "\n_(No diff.)_\n"
 				}
 			}
 		} else {
