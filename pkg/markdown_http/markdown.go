@@ -13,9 +13,15 @@ import (
 type MarkdownHandlerFunc func(req *http.Request) (markdown []byte, err error)
 
 func (this MarkdownHandlerFunc) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "GET" {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "method should be GET", http.StatusMethodNotAllowed)
+		return
+	}
+
 	markdown, err := this(req)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
