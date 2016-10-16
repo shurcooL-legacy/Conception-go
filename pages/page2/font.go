@@ -163,7 +163,7 @@ func (o *OpenGlStream) PrintSegment(s string) {
 	gl.CallLists(int32(len(s)), gl.UNSIGNED_BYTE, gl.Ptr(&[]byte(s)[0]))
 	gl.PopMatrix()
 
-	//CheckGLError()
+	//checkGLError()
 }
 
 // ---
@@ -211,7 +211,7 @@ func InitFont() {
 	gl.Translated(fontWidth, 0.0, 0.0)
 	gl.EndList()
 
-	CheckGLError()
+	checkGLError()
 }
 
 func DeinitFont() {
@@ -263,7 +263,7 @@ func LoadTexture(path string) {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 	gl.TexParameterf(gl.TEXTURE_2D, gl.TEXTURE_LOD_BIAS, -0.5)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, int32(format), int32(bounds.Dx()), int32(bounds.Dy()), 0, uint32(format), gl.UNSIGNED_BYTE, gl.Ptr(pixPointer))
-	CheckGLError()
+	checkGLError()
 }
 
 // =====
@@ -273,9 +273,9 @@ func drawBorderlessBox(pos, size mgl64.Vec2, backgroundColor mgl64.Vec3) {
 	gl.Rectd(pos[0], pos[1], pos.Add(size)[0], pos.Add(size)[1])
 }
 
-func CheckGLError() {
-	errorCode := gl.GetError()
-	if errorCode != 0 {
-		log.Panicln("GL Error:", errorCode)
+func checkGLError() {
+	err := gl.GetError()
+	if err != 0 {
+		panic(fmt.Errorf("GL error: %v", err))
 	}
 }

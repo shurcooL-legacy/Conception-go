@@ -157,7 +157,7 @@ func init() {
 	}
 	err = os.Chdir(dir)
 	if err != nil {
-		log.Panicln("os.Chdir:", err)
+		log.Fatalln("os.Chdir:", err)
 	}
 }
 

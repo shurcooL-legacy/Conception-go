@@ -135,13 +135,6 @@ var globalParsedFile *parsedFile
 var globalGoSymbols SliceStringer
 var con2RunBinPath = filepath.Join(os.TempDir(), "Conception-go", "Con2RunBin")
 
-func CheckGLError() {
-	errorCode := gl.GetError()
-	if errorCode != 0 {
-		log.Panicln("GL Error:", errorCode)
-	}
-}
-
 // ---
 
 type ChangeListener interface {
@@ -6773,7 +6766,7 @@ func main() {
 		}
 		err := glfw.Init()
 		if err != nil {
-			log.Panicln("glfw.Init():", err)
+			log.Fatalln("glfw.Init():", err)
 		}
 		fmt.Printf("glfw %s.\n", glfw.GetVersionString())
 		defer glfw.Terminate()
@@ -6786,7 +6779,7 @@ func main() {
 			}
 			err := os.Chdir(conceptionGo.Bpkg.Dir)
 			if err != nil {
-				log.Panicln("os.Chdir:", err)
+				log.Fatalln("os.Chdir:", err)
 			}
 		}
 
