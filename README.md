@@ -40,8 +40,7 @@ $GOPATH/bin/Conception-go
 # Install latest Go (if you don't already have it).
 sudo apt-get install --yes curl
 curl -L https://golang.org/dl/go1.8.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
-export PATH=$PATH:/usr/local/go/bin
-export GOPATH=$HOME/MyGoWorkspace # Set your GOPATH as described at https://golang.org/doc/code.html#GOPATH (if you didn't already).
+export PATH="$PATH:/usr/local/go/bin"
 
 # Install git, OpenGL headers (if you don't already have them).
 sudo apt-get install --yes git
