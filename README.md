@@ -1,4 +1,7 @@
-# Conception-go [![Build Status](https://travis-ci.org/shurcooL/Conception-go.svg?branch=master)](https://travis-ci.org/shurcooL/Conception-go) [![GoDoc](https://godoc.org/github.com/shurcooL/Conception-go?status.svg)](https://godoc.org/github.com/shurcooL/Conception-go)
+Conception-go
+=============
+
+[![Build Status](https://travis-ci.org/shurcooL/Conception-go.svg?branch=master)](https://travis-ci.org/shurcooL/Conception-go) [![GoDoc](https://godoc.org/github.com/shurcooL/Conception-go?status.svg)](https://godoc.org/github.com/shurcooL/Conception-go)
 
 This is a work in progress Go implementation of [Conception](https://github.com/shurcooL/Conception#demonstration).
 
@@ -36,7 +39,7 @@ $GOPATH/bin/Conception-go
 ```bash
 # Install latest Go (if you don't already have it).
 sudo apt-get install --yes curl
-curl -L https://golang.org/dl/go1.7.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
+curl -L https://golang.org/dl/go1.8.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
 export PATH=$PATH:/usr/local/go/bin
 export GOPATH=$HOME/MyGoWorkspace # Set your GOPATH as described at https://golang.org/doc/code.html#GOPATH (if you didn't already).
 
