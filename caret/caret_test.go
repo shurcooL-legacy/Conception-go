@@ -3,8 +3,8 @@ package caret_test
 import (
 	"fmt"
 
-	conception "github.com/shurcooL/Conception-go"
 	"github.com/shurcooL/Conception-go/caret"
+	"github.com/shurcooL/Conception-go/pkg/multilinecontent"
 	"github.com/shurcooL/go-goon"
 )
 
@@ -23,7 +23,7 @@ func main() {
 `
 
 func ExampleCaretPosition() {
-	mc := conception.NewMultilineContentString(sample)
+	mc := multilinecontent.NewString(sample)
 	cp := caret.NewCaretPosition(mc)
 	cp.SetSelection(43, 45)
 

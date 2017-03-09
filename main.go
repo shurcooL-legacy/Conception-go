@@ -54,6 +54,7 @@ import (
 	"github.com/shurcooL/Conception-go/pkg/httpstoppable"
 	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
 	"github.com/shurcooL/Conception-go/pkg/markdown_http"
+	"github.com/shurcooL/Conception-go/pkg/multilinecontent"
 	"github.com/shurcooL/Conception-go/pkg/u10"
 	"github.com/shurcooL/Conception-go/pkg/u6"
 	"github.com/shurcooL/github_flavored_markdown/gfmstyle"
@@ -3763,7 +3764,7 @@ type SelecterWidgetOptions struct {
 
 // NewSelecterWidget creates a simple selecter widget.
 func NewSelecterWidget(pos mgl64.Vec2, entries SliceStringer, options *SelecterWidgetOptions) *FilterableSelecterWidget {
-	return NewFilterableSelecterWidget(pos, entries, NewMultilineContent(), options)
+	return NewFilterableSelecterWidget(pos, entries, multilinecontent.New(), options)
 }
 
 // NewFilterableSelecterWidget creates a selecter widget with a filter.
@@ -4345,7 +4346,7 @@ func (w *GoonWidget) setupInternals() {
 			// TODO: Strings need %#v, numbers need %+v
 			mc = NewMultilineContentFuncInstant(func() string { return fmt.Sprintf("(%s)(%+v)", getTypeString(w.a.Elem()), w.a.Elem().Interface()) })
 		} else {
-			mc = NewMultilineContentString(fmt.Sprintf("%s{...}", getTypeString(w.a.Elem())))
+			mc = multilinecontent.NewString(fmt.Sprintf("%s{...}", getTypeString(w.a.Elem())))
 		}
 		t := NewTextLabelWidgetExternalContent(np, mc)
 		f = NewFlowLayoutWidget(np, []Widgeter{title, t}, nil)
@@ -4464,93 +4465,14 @@ func NewContentReader(c caret.MultilineContentI) io.Reader { return strings.NewR
 
 // ---
 
-type contentLine struct {
-	start  uint32
-	length uint32
-}
-
-func (this contentLine) Start() uint32 {
-	return this.start
-}
-
-func (this contentLine) End() uint32 {
-	return this.start + this.length
-}
-
-func (this contentLine) Length() uint32 {
-	return this.length
-}
-
-type MultilineContent struct {
-	content     string
-	lines       []contentLine // TODO: Can be replaced by line starts only, calculate length in Line()
-	longestLine uint32        // Line length
-
-	ViewGroup
-}
-
-func NewMultilineContent() *MultilineContent {
-	mc := &MultilineContent{}
-	mc.InitViewGroup(mc, "memory://???")
-	mc.updateLines()
-	return mc
-}
-func NewMultilineContentString(content string) *MultilineContent {
-	mc := &MultilineContent{}
-	mc.InitViewGroup(mc, "memory://???")
-	SetViewGroup(mc, content)
-	return mc
-}
-
-func (c *MultilineContent) Content() string     { return c.content }
-func (c *MultilineContent) LongestLine() uint32 { return c.longestLine }
-
-func (c *MultilineContent) LenContent() int { return len(c.content) }
-
-func (c *MultilineContent) Line(lineIndex int) caret.ContentLine {
-	if lineIndex < 0 {
-		return contentLine{0, 0}
-	} else if lineIndex >= len(c.lines) {
-		return contentLine{uint32(len(c.content)), 0}
-	} else {
-		return c.lines[lineIndex]
-	}
-}
-func (c *MultilineContent) LenLines() int {
-	return len(c.lines)
-}
-
-func (mc *MultilineContent) SetSelf(content string) {
-	mc.content = content
-	mc.updateLines()
-}
-
-func (w *MultilineContent) updateLines() {
-	lines := strings.Split(w.content, "\n")
-	w.lines = make([]contentLine, len(lines))
-	w.longestLine = 0
-	for lineIndex, line := range lines {
-		expandedLineLength := caret.ExpandedLength(line, 0)
-		if expandedLineLength > w.longestLine {
-			w.longestLine = expandedLineLength
-		}
-		if lineIndex >= 1 {
-			w.lines[lineIndex].start = w.lines[lineIndex-1].End() + 1
-		}
-		w.lines[lineIndex].length = uint32(len(line))
-	}
-}
-
-// ---
-
 type MultilineContentFile struct {
-	*MultilineContent // TODO: Explore this being a pointer vs value
-	path              string
+	*multilinecontent.MultilineContent // TODO: Explore this being a pointer vs value
+	path                               string
 	ViewGroup
 }
 
 func NewMultilineContentFile(path string) *MultilineContentFile {
-	this := &MultilineContentFile{MultilineContent: NewMultilineContent(), path: path}
+	this := &MultilineContentFile{MultilineContent: multilinecontent.New(), path: path}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		panic(err)
@@ -4639,13 +4561,13 @@ func (this *FileView) NotifyChange() {
 // ---
 
 type MultilineContentPointer struct {
-	*MultilineContent
+	*multilinecontent.MultilineContent
 	p *string
 	ViewGroup
 }
 
 func NewMultilineContentPointer(p *string) *MultilineContentPointer {
-	this := &MultilineContentPointer{MultilineContent: NewMultilineContent(), p: p}
+	this := &MultilineContentPointer{MultilineContent: multilinecontent.New(), p: p}
 	this.InitViewGroup(this, "memory://???")
 	this.AddAndSetViewGroup(this.MultilineContent, *p)
 	UniversalClock.AddChangeListener(this) // TODO: Perhaps switch to a push notifications type setup, instead of constantly polling for change...
@@ -4694,36 +4616,6 @@ func (this *WebSocketView) NotifyChange() {
 		}
 	default:
 	}
-}
-
-// ---
-
-// TEST: An unfinished experiment.
-type ReverseMultilineContent struct {
-	*MultilineContent
-}
-
-func NewReverseMultilineContent() *ReverseMultilineContent {
-	rmc := &ReverseMultilineContent{&MultilineContent{}}
-	rmc.InitViewGroup(rmc, "memory://???(reverse)")
-	rmc.updateLines()
-	return rmc
-}
-
-func (c *ReverseMultilineContent) Content() string { return reverse(c.content) }
-
-/*func (c *ReverseMultilineContent) SetSelf(content string) {
-	c.content = reverse(content)
-	c.updateLines()
-}*/
-
-// reverse returns a reversed s.
-func reverse(s string) string {
-	r := []rune(s)
-	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
-		r[i], r[j] = r[j], r[i]
-	}
-	return string(r)
 }
 
 // ---
@@ -4841,14 +4733,14 @@ func (w *lifeFormWidget) NotifyChange() {
 // ---
 
 type MultilineContentFunc struct {
-	*MultilineContent // TODO: Explore this being a pointer vs value
-	contentFunc       func() string
+	*multilinecontent.MultilineContent // TODO: Explore this being a pointer vs value
+	contentFunc                        func() string
 	ViewGroup
 }
 
 // THINK: Merge the func and dependees into one struct? Maybe can't if funcs can have different signatures...
 func NewMultilineContentFunc(contentFunc func() string, dependees []DepNodeI) *MultilineContentFunc {
-	this := &MultilineContentFunc{MultilineContent: NewMultilineContent(), contentFunc: contentFunc}
+	this := &MultilineContentFunc{MultilineContent: multilinecontent.New(), contentFunc: contentFunc}
 	this.InitViewGroup(this, "func://???")
 	this.AddAndSetViewGroup(this.MultilineContent, contentFunc())
 	for _, dependee := range dependees {
@@ -4929,7 +4821,7 @@ func NewTextLabelWidgetExternalContent(pos mgl64.Vec2, mc caret.MultilineContent
 }
 
 func NewTextLabelWidgetString(pos mgl64.Vec2, s string) *TextLabelWidget {
-	mc := NewMultilineContentString(s)
+	mc := multilinecontent.NewString(s)
 	w := NewTextLabelWidgetExternalContent(pos, mc)
 	return w
 }
@@ -4940,7 +4832,7 @@ func NewTextLabelWidgetGoon(pos mgl64.Vec2, any interface{}) *TextLabelWidget {
 }
 
 func NewTextLabelWidgetStringTooltip(pos mgl64.Vec2, s, tooltip string) *TextLabelWidget {
-	mc := NewMultilineContentString(s)
+	mc := multilinecontent.NewString(s)
 	w := NewTextLabelWidgetExternalContent(pos, mc)
 	w.tooltip = NewTextLabelWidgetString(np, tooltip)
 	return w
@@ -5328,12 +5220,12 @@ type TextBoxWidgetOptions struct {
 }
 
 func NewTextBoxWidget(pos mgl64.Vec2) *TextBoxWidget {
-	mc := NewMultilineContent()
+	mc := multilinecontent.New()
 	return NewTextBoxWidgetExternalContent(pos, mc, nil)
 }
 
 func NewTextBoxWidgetOptions(pos mgl64.Vec2, options TextBoxWidgetOptions) *TextBoxWidget {
-	mc := NewMultilineContent()
+	mc := multilinecontent.New()
 	return NewTextBoxWidgetExternalContent(pos, mc, &options)
 }
 
@@ -7008,8 +6900,8 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	}
 	gl.End()`
 
-			box1 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(c0), nil)
-			box2 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(c1), nil)
+			box1 := NewTextBoxWidgetExternalContent(np, multilinecontent.NewString(c0), nil)
+			box2 := NewTextBoxWidgetExternalContent(np, multilinecontent.NewString(c1), nil)
 
 			windowSize0, windowSize1 := window.GetSize()
 			widgets = append(widgets, NewScrollPaneWidget(mgl64.Vec2{0, fontHeight + 2}, mgl64.Vec2{float64(windowSize0/2 - 2), float64(windowSize1 - fontHeight - 4)}, box1))
@@ -7054,7 +6946,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 			//w := NewTextFileWidget(mgl64.Vec2{200, 200}, "/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/play/31/main.go")
 			//widgets = append(widgets, w)
 
-			editorContent := NewMultilineContent()
+			editorContent := multilinecontent.New()
 			w := NewTextBoxWidgetExternalContent(mgl64.Vec2{200, 200}, editorContent, nil)
 			openedFile := NewFileView("/Users/Dmitri/Dropbox/Work/2013/GoLand/src/github.com/shurcooL/play/31/main.go")
 			openedFile.AddAndSetViewGroup(editorContent, readFileOrEmpty(openedFile.path))
@@ -7175,10 +7067,10 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		widgets = append(widgets, w)
 
 		{
-			mc1 := NewMultilineContent()
+			mc1 := multilinecontent.New()
 			b1 := NewTextBoxWidgetExternalContent(mgl64.Vec2{400, 800}, mc1, nil)
 
-			mc2 := NewReverseMultilineContent()
+			mc2 := multilinecontent.NewReverse()
 			mc2.AddAndSetViewGroup(mc1, "")
 			b2 := NewTextBoxWidgetExternalContent(mgl64.Vec2{800, 800}, mc2, nil)
 
@@ -7273,7 +7165,7 @@ func main() {
 
 	case 3:
 
-		editor := NewTextBoxWidgetExternalContent(mgl64.Vec2{0, 200}, NewMultilineContentString(`package main
+		editor := NewTextBoxWidgetExternalContent(mgl64.Vec2{0, 200}, multilinecontent.NewString(`package main
 
 import (
 	"fmt"
@@ -7341,7 +7233,7 @@ func main() {
 		}
 
 		// Main editor
-		editorContent := NewMultilineContent()
+		editorContent := multilinecontent.New()
 		editorFileOpener := NewFileOpener(editorContent)
 		editorFileOpener.AddSources(folderListing, &GoPackageSelecterAdapter{goPackageListing.OnSelectionChanged()})
 		keepUpdatedTEST = append(keepUpdatedTEST, editorFileOpener)
@@ -7793,7 +7685,7 @@ func main() {
 			// ---
 
 			// Build Output.
-			buildOutput = NewMultilineContent()
+			buildOutput = multilinecontent.New()
 			nextTool9Collapsible := NewCollapsibleWidget(np, NewTextBoxWidgetExternalContent(np, buildOutput, nil), "Build Output")
 
 			// Go Compile Errors hardcoded TEST
@@ -8140,7 +8032,7 @@ func main() {
 
 		//widgets = append(widgets, NewCompositeWidget(mathgl.Vec2d{160, 30}, []Widgeter{NewGoPackageListingPureWidget()}))
 
-		contentWs := NewMultilineContent()
+		contentWs := multilinecontent.New()
 		widgets = append(widgets, NewTextBoxWidgetExternalContent(mgl64.Vec2{800 - 50, 30}, contentWs, nil))
 		http.HandleFunc("/websocket", func(w http.ResponseWriter, req *http.Request) {
 			io.WriteString(w, `<html>
@@ -8631,7 +8523,7 @@ func main() {
 
 		// Diff experiment
 		{
-			box1 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(`const Tau = 2 * math.Pi
+			box1 := NewTextBoxWidgetExternalContent(np, multilinecontent.NewString(`const Tau = 2 * math.Pi
 
 func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	const x = 64
@@ -8643,7 +8535,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 		gl.Vertex2d(gl.Double(pos[0]+math.Sin(Tau*float64(i)/x)*size[0]/2), ...)
 	}
 	gl.End()`), nil)
-			box2 := NewTextBoxWidgetExternalContent(np, NewMultilineContentString(`
+			box2 := NewTextBoxWidgetExternalContent(np, multilinecontent.NewString(`
 func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 	const TwoPi = math.Pi * 2
 
