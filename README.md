@@ -21,7 +21,7 @@ A screenshot showing off a single aspect of the project that was recently added 
 Installation
 ------------
 
-### OS X
+### macOS
 
 ```bash
 # Install latest Go, git (if you don't already have them).
