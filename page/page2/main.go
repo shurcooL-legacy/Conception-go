@@ -13,7 +13,7 @@ import (
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/goxjs/glfw"
-	"github.com/shurcooL/Conception-go/events"
+	"github.com/shurcooL/Conception-go/event"
 	"github.com/shurcooL/go-goon"
 )
 
@@ -208,35 +208,35 @@ func main() {
 	}
 	window.SetFramebufferSizeCallback(framebufferSizeCallback)
 
-	var inputEventQueue []events.InputEvent
-	mousePointer = &events.Pointer{VirtualCategory: events.Pointing}
+	var inputEventQueue []event.InputEvent
+	mousePointer = &event.Pointer{VirtualCategory: event.Pointing}
 
 	window.SetMouseMovementCallback(func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
-		inputEvent := events.InputEvent{
+		inputEvent := event.InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[events.EventType]struct{}{events.SliderEvent: {}},
+			EventTypes: map[event.EventType]struct{}{event.SliderEvent: {}},
 			InputID:    0,
 			Buttons:    nil,
 			Sliders:    []float64{xdelta, ydelta},
 		}
 		if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
-			inputEvent.EventTypes[events.AxisEvent] = struct{}{}
+			inputEvent.EventTypes[event.AxisEvent] = struct{}{}
 			inputEvent.Axes = []float64{xpos, ypos}
 		}
-		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+		inputEventQueue = event.EnqueueInputEvent(inputEventQueue, inputEvent)
 	})
 
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
-		inputEvent := events.InputEvent{
+		inputEvent := event.InputEvent{
 			Pointer:     mousePointer,
-			EventTypes:  map[events.EventType]struct{}{events.ButtonEvent: {}},
+			EventTypes:  map[event.EventType]struct{}{event.ButtonEvent: {}},
 			InputID:     uint16(button),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
 			Axes:        nil,
 			ModifierKey: uint8(mods),
 		}
-		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+		inputEventQueue = event.EnqueueInputEvent(inputEventQueue, inputEvent)
 	})
 
 	// HACK: Play with various offsets for font rendering.
@@ -270,7 +270,7 @@ func main() {
 
 	var spinner int
 
-	var widgets []events.Widgeter
+	var widgets []event.Widgeter
 
 	widgets = append(widgets, NewButtonWidget(mgl64.Vec2{50, 200}, func() { fmt.Println("button triggered") }))
 
@@ -278,7 +278,7 @@ func main() {
 		glfw.WaitEvents()
 
 		// Process Input.
-		inputEventQueue = events.ProcessInputEventQueue(inputEventQueue, widgets[0])
+		inputEventQueue = event.ProcessInputEventQueue(inputEventQueue, widgets[0])
 
 		gl.Clear(gl.COLOR_BUFFER_BIT)
 		gl.LoadIdentity()
@@ -309,21 +309,21 @@ pqrstuvwxyz{|}~`)
 
 // =====
 
-var mousePointer *events.Pointer
+var mousePointer *event.Pointer
 
 // ---
 
 type Widget struct {
 	pos           mgl64.Vec2
 	size          mgl64.Vec2
-	hoverPointers map[*events.Pointer]bool
-	parent        events.Widgeter
+	hoverPointers map[*event.Pointer]bool
+	parent        event.Widgeter
 
 	//DepNode
 }
 
 func NewWidget(pos, size mgl64.Vec2) Widget {
-	return Widget{pos: pos, size: size, hoverPointers: map[*events.Pointer]bool{}}
+	return Widget{pos: pos, size: size, hoverPointers: map[*event.Pointer]bool{}}
 }
 
 func (_ *Widget) PollLogic()   {}
@@ -335,7 +335,7 @@ func (w *Widget) Layout() {
 }
 func (_ *Widget) LayoutNeeded() {}
 func (_ *Widget) Render()       {}
-func (w *Widget) Hit(ParentPosition mgl64.Vec2) []events.Widgeter {
+func (w *Widget) Hit(ParentPosition mgl64.Vec2) []event.Widgeter {
 	LocalPosition := w.ParentToLocal(ParentPosition)
 
 	Hit := (LocalPosition[0] >= 0 &&
@@ -344,31 +344,31 @@ func (w *Widget) Hit(ParentPosition mgl64.Vec2) []events.Widgeter {
 		LocalPosition[1] <= w.size[1])
 
 	if Hit {
-		return []events.Widgeter{w}
+		return []event.Widgeter{w}
 	} else {
 		return nil
 	}
 }
-func (w *Widget) ProcessEvent(inputEvent events.InputEvent) {}
-func (_ *Widget) ContainsWidget(widget, target events.Widgeter) bool {
+func (w *Widget) ProcessEvent(inputEvent event.InputEvent) {}
+func (_ *Widget) ContainsWidget(widget, target event.Widgeter) bool {
 	return widget == target
 }
 
 func (w *Widget) Pos() *mgl64.Vec2  { return &w.pos }
 func (w *Widget) Size() *mgl64.Vec2 { return &w.size }
 
-func (w *Widget) HoverPointers() map[*events.Pointer]bool {
+func (w *Widget) HoverPointers() map[*event.Pointer]bool {
 	return w.hoverPointers
 }
 
-func (w *Widget) Parent() events.Widgeter     { return w.parent }
-func (w *Widget) SetParent(p events.Widgeter) { w.parent = p }
+func (w *Widget) Parent() event.Widgeter     { return w.parent }
+func (w *Widget) SetParent(p event.Widgeter) { w.parent = p }
 
 func (w *Widget) ParentToLocal(ParentPosition mgl64.Vec2) (LocalPosition mgl64.Vec2) {
 	return ParentPosition.Sub(w.pos)
 }
 
-type WidgeterS struct{ events.Widgeter }
+type WidgeterS struct{ event.Widgeter }
 
 func (w WidgeterS) GlobalToParent(GlobalPosition mgl64.Vec2) (ParentPosition mgl64.Vec2) {
 	switch w.Parent() {
@@ -439,17 +439,17 @@ func (w *ButtonWidget) Render() {
 
 	NewOpenGlStream(w.pos.Add(mgl64.Vec2{8, 3}).Add(softwareUpdateTextOffset)).PrintText("Software Update...")
 }
-func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []events.Widgeter {
+func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []event.Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
-		return []events.Widgeter{w}
+		return []event.Widgeter{w}
 	} else {
 		return nil
 	}
 }
 
-func (w *ButtonWidget) ProcessEvent(inputEvent events.InputEvent) {
-	//if _, buttonEvent := inputEvent.EventTypes[events.BUTTON_EVENT]; inputEvent.Pointer.VirtualCategory == events.POINTING && buttonEvent && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
-	if inputEvent.Pointer.VirtualCategory == events.Pointing && inputEvent.EventTypes.Has(events.ButtonEvent) && inputEvent.InputID == 0 && inputEvent.Buttons[0] == false &&
+func (w *ButtonWidget) ProcessEvent(inputEvent event.InputEvent) {
+	//if _, buttonEvent := inputEvent.EventTypes[event.BUTTON_EVENT]; inputEvent.Pointer.VirtualCategory == event.POINTING && buttonEvent && inputEvent.InputId == 0 && inputEvent.Buttons[0] == false &&
+	if inputEvent.Pointer.VirtualCategory == event.Pointing && inputEvent.EventTypes.Has(event.ButtonEvent) && inputEvent.InputID == 0 && inputEvent.Buttons[0] == false &&
 		inputEvent.Pointer.Mapping.ContainsWidget(w) && /* TODO: GetHoverer() */ // IsHit(this button) should be true
 		inputEvent.Pointer.OriginMapping.ContainsWidget(w) { /* TODO: GetHoverer() */ // Make sure we're releasing pointer over same button that it originally went active on, and nothing is in the way (i.e. button is hoverer)
 

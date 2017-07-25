@@ -1,5 +1,5 @@
-// Package events is a WIP package for common event handling. It is not yet used by Conception-go.
-package events
+// Package event is a package for common event handling.
+package event
 
 import (
 	"io"

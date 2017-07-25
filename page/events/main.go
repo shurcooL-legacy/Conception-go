@@ -7,11 +7,11 @@ import (
 
 	"github.com/goxjs/gl"
 	"github.com/goxjs/glfw"
-	"github.com/shurcooL/Conception-go/events"
+	"github.com/shurcooL/Conception-go/event"
 )
 
-var mousePointer = &events.Pointer{VirtualCategory: events.Pointing}
-var keyboardPointer = &events.Pointer{VirtualCategory: events.Typing}
+var mousePointer = &event.Pointer{VirtualCategory: event.Pointing}
+var keyboardPointer = &event.Pointer{VirtualCategory: event.Typing}
 
 func init() {
 	runtime.LockOSThread()
@@ -46,7 +46,7 @@ func main() {
 			Sliders:    nil,
 			Axes:       []float64{float64(windowSize[0]), float64(windowSize[1])},
 		}
-		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)*/
+		inputEventQueue = event.EnqueueInputEvent(inputEventQueue, inputEvent)*/
 	}
 	{
 		var framebufferSize [2]int
@@ -55,59 +55,59 @@ func main() {
 	}
 	window.SetFramebufferSizeCallback(framebufferSizeCallback)
 
-	var inputEventQueue []events.InputEvent
+	var inputEventQueue []event.InputEvent
 
 	window.SetMouseMovementCallback(func(w *glfw.Window, xpos, ypos, xdelta, ydelta float64) {
-		inputEvent := events.InputEvent{
+		inputEvent := event.InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[events.EventType]struct{}{events.SliderEvent: {}},
+			EventTypes: map[event.EventType]struct{}{event.SliderEvent: {}},
 			InputID:    0,
 			Buttons:    nil,
 			Sliders:    []float64{xdelta, ydelta},
 		}
 		if w.GetInputMode(glfw.CursorMode) != glfw.CursorDisabled {
-			inputEvent.EventTypes[events.AxisEvent] = struct{}{}
+			inputEvent.EventTypes[event.AxisEvent] = struct{}{}
 			inputEvent.Axes = []float64{xpos, ypos}
 		}
-		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+		inputEventQueue = event.EnqueueInputEvent(inputEventQueue, inputEvent)
 	})
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
-		inputEvent := events.InputEvent{
+		inputEvent := event.InputEvent{
 			Pointer:    mousePointer,
-			EventTypes: map[events.EventType]struct{}{events.SliderEvent: {}},
+			EventTypes: map[event.EventType]struct{}{event.SliderEvent: {}},
 			InputID:    2,
 			Buttons:    nil,
 			Sliders:    []float64{yoff, xoff},
 			Axes:       nil,
 		}
-		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+		inputEventQueue = event.EnqueueInputEvent(inputEventQueue, inputEvent)
 	})
 
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
-		inputEvent := events.InputEvent{
+		inputEvent := event.InputEvent{
 			Pointer:     mousePointer,
-			EventTypes:  map[events.EventType]struct{}{events.ButtonEvent: {}},
+			EventTypes:  map[event.EventType]struct{}{event.ButtonEvent: {}},
 			InputID:     uint16(button),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
 			Axes:        nil,
 			ModifierKey: uint8(mods),
 		}
-		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+		inputEventQueue = event.EnqueueInputEvent(inputEventQueue, inputEvent)
 	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		inputEvent := events.InputEvent{
+		inputEvent := event.InputEvent{
 			Pointer:     keyboardPointer,
-			EventTypes:  map[events.EventType]struct{}{events.ButtonEvent: {}},
+			EventTypes:  map[event.EventType]struct{}{event.ButtonEvent: {}},
 			InputID:     uint16(key),
 			Buttons:     []bool{action != glfw.Release},
 			Sliders:     nil,
 			Axes:        nil,
 			ModifierKey: uint8(mods),
 		}
-		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+		inputEventQueue = event.EnqueueInputEvent(inputEventQueue, inputEvent)
 
 		// HACK.
 		switch {
@@ -121,15 +121,15 @@ func main() {
 	})
 
 	window.SetCharCallback(func(w *glfw.Window, char rune) {
-		inputEvent := events.InputEvent{
+		inputEvent := event.InputEvent{
 			Pointer:    keyboardPointer,
-			EventTypes: map[events.EventType]struct{}{events.CharacterEvent: {}},
+			EventTypes: map[event.EventType]struct{}{event.CharacterEvent: {}},
 			InputID:    uint16(char),
 			Buttons:    nil,
 			Sliders:    nil,
 			Axes:       nil,
 		}
-		inputEventQueue = events.EnqueueInputEvent(inputEventQueue, inputEvent)
+		inputEventQueue = event.EnqueueInputEvent(inputEventQueue, inputEvent)
 	})
 
 	gl.ClearColor(0.85, 0.85, 0.85, 1)
@@ -149,7 +149,7 @@ func main() {
 	}
 }
 
-func processInputEventQueue(inputEventQueue []events.InputEvent) []events.InputEvent {
+func processInputEventQueue(inputEventQueue []event.InputEvent) []event.InputEvent {
 	for len(inputEventQueue) > 0 {
 		inputEvent := inputEventQueue[0]
 
