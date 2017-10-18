@@ -2,7 +2,6 @@ sudo: false
 addons:
   apt_packages:
     - libgl1-mesa-dev
-    - libgles2-mesa-dev
     - xorg-dev
 language: go
 go:

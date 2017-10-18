@@ -31,7 +31,7 @@ Installation
 go get -u github.com/shurcooL/Conception-go
 
 # Run it.
-$GOPATH/bin/Conception-go
+$(go env GOPATH)/bin/Conception-go
 ```
 
 ### Linux
@@ -39,7 +39,7 @@ $GOPATH/bin/Conception-go
 ```bash
 # Install latest Go (if you don't already have it).
 sudo apt-get install --yes curl
-curl -L https://golang.org/dl/go1.8.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
+curl -L https://golang.org/dl/go1.9.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
 export PATH="$PATH:/usr/local/go/bin"
 
 # Install git, OpenGL headers (if you don't already have them).
@@ -50,7 +50,7 @@ sudo apt-get install --yes libgl1-mesa-dev xorg-dev # OpenGL headers.
 go get -u github.com/shurcooL/Conception-go
 
 # Run it.
-$GOPATH/bin/Conception-go
+$(go env GOPATH)/bin/Conception-go
 ```
 
 License
