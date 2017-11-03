@@ -2,8 +2,8 @@
 package exp13
 
 import (
-	"github.com/shurcooL/Conception-go/pkg/gist7802150"
-	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7802150"
+	"github.com/shurcooL-legacy/Conception-go/pkg/legacyvcs"
 	go_vcs "golang.org/x/tools/go/vcs"
 )
 

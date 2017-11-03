@@ -3,8 +3,8 @@ package multilinecontent
 import (
 	"strings"
 
-	"github.com/shurcooL/Conception-go/caret"
-	"github.com/shurcooL/Conception-go/pkg/gist7802150"
+	"github.com/shurcooL-legacy/Conception-go/caret"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7802150"
 )
 
 // New creates an empty memory-backed MultilineContent.

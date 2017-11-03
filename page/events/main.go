@@ -7,7 +7,7 @@ import (
 
 	"github.com/goxjs/gl"
 	"github.com/goxjs/glfw"
-	"github.com/shurcooL/Conception-go/event"
+	"github.com/shurcooL-legacy/Conception-go/event"
 )
 
 var mousePointer = &event.Pointer{VirtualCategory: event.Pointing}

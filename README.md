@@ -1,7 +1,7 @@
 Conception-go
 =============
 
-[![Build Status](https://travis-ci.org/shurcooL/Conception-go.svg?branch=master)](https://travis-ci.org/shurcooL/Conception-go) [![GoDoc](https://godoc.org/github.com/shurcooL/Conception-go?status.svg)](https://godoc.org/github.com/shurcooL/Conception-go)
+[![Build Status](https://travis-ci.org/shurcooL-legacy/Conception-go.svg?branch=master)](https://travis-ci.org/shurcooL-legacy/Conception-go) [![GoDoc](https://godoc.org/github.com/shurcooL-legacy/Conception-go?status.svg)](https://godoc.org/github.com/shurcooL-legacy/Conception-go)
 
 This is a work in progress Go implementation of [Conception](https://github.com/shurcooL/Conception#demonstration).
 
@@ -28,7 +28,7 @@ Installation
 ...
 
 # Step back and enjoy 1 command that installs Conception-go and all its dependencies.
-go get -u github.com/shurcooL/Conception-go
+go get -u github.com/shurcooL-legacy/Conception-go
 
 # Run it.
 $(go env GOPATH)/bin/Conception-go
@@ -47,7 +47,7 @@ sudo apt-get install --yes git
 sudo apt-get install --yes libgl1-mesa-dev xorg-dev # OpenGL headers.
 
 # Step back and enjoy 1 command that installs Conception-go and all its dependencies.
-go get -u github.com/shurcooL/Conception-go
+go get -u github.com/shurcooL-legacy/Conception-go
 
 # Run it.
 $(go env GOPATH)/bin/Conception-go

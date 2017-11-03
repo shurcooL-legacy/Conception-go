@@ -5,7 +5,7 @@ import (
 	"io"
 	"os/exec"
 
-	"github.com/shurcooL/Conception-go/pkg/gist7802150"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7802150"
 	"gopkg.in/pipe.v2"
 )
 

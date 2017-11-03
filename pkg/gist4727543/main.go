@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shurcooL/Conception-go/pkg/gist5504644"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist5504644"
 )
 
 // tryUnquote returns the unquoted string, or the original string if unquoting fails.

@@ -10,11 +10,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/shurcooL/Conception-go/pkg/exp12"
+	"github.com/shurcooL-legacy/Conception-go/pkg/exp12"
 	"golang.org/x/tools/go/vcs"
 
-	"github.com/shurcooL/Conception-go/pkg/gist5504644"
-	"github.com/shurcooL/Conception-go/pkg/gist7802150"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist5504644"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7802150"
 )
 
 type GoPackageStringer func(*GoPackage) string

@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/shurcooL/Conception-go/pkg/exp13"
-	"github.com/shurcooL/Conception-go/pkg/gist7480523"
-	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
+	"github.com/shurcooL-legacy/Conception-go/pkg/exp13"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7480523"
+	"github.com/shurcooL-legacy/Conception-go/pkg/legacyvcs"
 	"github.com/shurcooL/go/pipeutil"
 	"github.com/shurcooL/go/trim"
 	"gopkg.in/pipe.v2"

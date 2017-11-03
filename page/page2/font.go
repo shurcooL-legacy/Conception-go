@@ -12,7 +12,7 @@ import (
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
 
-	"github.com/shurcooL/Conception-go/caret"
+	"github.com/shurcooL-legacy/Conception-go/caret"
 )
 
 var oFontBase, oFontBackground uint32

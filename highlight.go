@@ -9,11 +9,11 @@ import (
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/mb0/diff"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/shurcooL/Conception-go/pkg/gist7802150"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7802150"
 	"github.com/shurcooL/highlight_go"
 	"github.com/sourcegraph/syntaxhighlight"
 
-	"github.com/shurcooL/Conception-go/caret"
+	"github.com/shurcooL-legacy/Conception-go/caret"
 )
 
 type TextStyle struct {

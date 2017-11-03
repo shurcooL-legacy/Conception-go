@@ -6,10 +6,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/shurcooL/Conception-go/pkg/gist7480523"
-	"github.com/shurcooL/Conception-go/pkg/gist7651991"
-	"github.com/shurcooL/Conception-go/pkg/gist7802150"
-	"github.com/shurcooL/Conception-go/pkg/gist8018045"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7480523"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7651991"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7802150"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist8018045"
 )
 
 type GoPackageList interface {

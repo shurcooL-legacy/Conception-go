@@ -11,7 +11,7 @@ import (
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/goxjs/glfw"
-	"github.com/shurcooL/Conception-go/event"
+	"github.com/shurcooL-legacy/Conception-go/event"
 )
 
 const (
@@ -264,9 +264,9 @@ func init() {
 		return p.Dir, nil
 	}
 
-	dir, err := importPathToDir("github.com/shurcooL/Conception-go")
+	dir, err := importPathToDir("github.com/shurcooL-legacy/Conception-go")
 	if err != nil {
-		log.Fatalln("Unable to find github.com/shurcooL/Conception-go package in your GOPATH, it's needed to load assets:", err)
+		log.Fatalln("Unable to find github.com/shurcooL-legacy/Conception-go package in your GOPATH, it's needed to load assets:", err)
 	}
 	err = os.Chdir(dir)
 	if err != nil {

@@ -4,9 +4,9 @@ package exp12
 import (
 	"sync"
 
-	"github.com/shurcooL/Conception-go/pkg/exp13"
-	"github.com/shurcooL/Conception-go/pkg/gist7802150"
-	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
+	"github.com/shurcooL-legacy/Conception-go/pkg/exp13"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist7802150"
+	"github.com/shurcooL-legacy/Conception-go/pkg/legacyvcs"
 )
 
 // rootPath -> *VcsState

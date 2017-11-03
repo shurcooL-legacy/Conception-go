@@ -3,8 +3,8 @@ package caret_test
 import (
 	"fmt"
 
-	"github.com/shurcooL/Conception-go/caret"
-	"github.com/shurcooL/Conception-go/pkg/multilinecontent"
+	"github.com/shurcooL-legacy/Conception-go/caret"
+	"github.com/shurcooL-legacy/Conception-go/pkg/multilinecontent"
 	"github.com/shurcooL/go-goon"
 )
 

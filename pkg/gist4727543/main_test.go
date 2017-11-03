@@ -3,7 +3,7 @@ package gist4727543_test
 import (
 	"fmt"
 
-	"github.com/shurcooL/Conception-go/pkg/gist4727543"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist4727543"
 )
 
 func Example() {
@@ -12,11 +12,11 @@ func Example() {
 	fmt.Println(gist4727543.GetForcedUseRenamed("io/ioutil", "RenamedPkg"))
 	fmt.Println(gist4727543.GetForcedUseRenamed("io/ioutil", "."))
 	fmt.Println()
-	fmt.Println(gist4727543.GetForcedUseFromImport(`github.com/shurcooL/Conception-go/pkg/gist4727543`))
-	fmt.Println(gist4727543.GetForcedUseFromImport(`"github.com/shurcooL/Conception-go/pkg/gist4727543"`))
-	fmt.Println(gist4727543.GetForcedUseFromImport("`github.com/shurcooL/Conception-go/pkg/gist4727543`"))
-	fmt.Println(gist4727543.GetForcedUseFromImport(`. "github.com/shurcooL/Conception-go/pkg/gist4727543"`))
-	fmt.Println(gist4727543.GetForcedUseFromImport(`renamed "github.com/shurcooL/Conception-go/pkg/gist4727543"`))
+	fmt.Println(gist4727543.GetForcedUseFromImport(`github.com/shurcooL-legacy/Conception-go/pkg/gist4727543`))
+	fmt.Println(gist4727543.GetForcedUseFromImport(`"github.com/shurcooL-legacy/Conception-go/pkg/gist4727543"`))
+	fmt.Println(gist4727543.GetForcedUseFromImport("`github.com/shurcooL-legacy/Conception-go/pkg/gist4727543`"))
+	fmt.Println(gist4727543.GetForcedUseFromImport(`. "github.com/shurcooL-legacy/Conception-go/pkg/gist4727543"`))
+	fmt.Println(gist4727543.GetForcedUseFromImport(`renamed "github.com/shurcooL-legacy/Conception-go/pkg/gist4727543"`))
 	fmt.Println(gist4727543.GetForcedUseFromImport(`bad`))
 	fmt.Println(gist4727543.GetForcedUseFromImport(`bad bad bad`))
 

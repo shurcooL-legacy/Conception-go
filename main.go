@@ -40,23 +40,23 @@ import (
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/mattn/go-runewidth"
 	intmath "github.com/pkg/math"
-	"github.com/shurcooL/Conception-go/pkg/exp11"
-	"github.com/shurcooL/Conception-go/pkg/exp12"
-	"github.com/shurcooL/Conception-go/pkg/exp13"
-	"github.com/shurcooL/Conception-go/pkg/exp14"
-	"github.com/shurcooL/Conception-go/pkg/gist4727543"
-	"github.com/shurcooL/Conception-go/pkg/gist5504644"
-	"github.com/shurcooL/Conception-go/pkg/gist6003701"
-	. "github.com/shurcooL/Conception-go/pkg/gist7480523"
-	. "github.com/shurcooL/Conception-go/pkg/gist7576154"
-	. "github.com/shurcooL/Conception-go/pkg/gist7651991"
-	. "github.com/shurcooL/Conception-go/pkg/gist7802150"
-	"github.com/shurcooL/Conception-go/pkg/httpstoppable"
-	"github.com/shurcooL/Conception-go/pkg/legacyvcs"
-	"github.com/shurcooL/Conception-go/pkg/markdown_http"
-	"github.com/shurcooL/Conception-go/pkg/multilinecontent"
-	"github.com/shurcooL/Conception-go/pkg/u10"
-	"github.com/shurcooL/Conception-go/pkg/u6"
+	"github.com/shurcooL-legacy/Conception-go/pkg/exp11"
+	"github.com/shurcooL-legacy/Conception-go/pkg/exp12"
+	"github.com/shurcooL-legacy/Conception-go/pkg/exp13"
+	"github.com/shurcooL-legacy/Conception-go/pkg/exp14"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist4727543"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist5504644"
+	"github.com/shurcooL-legacy/Conception-go/pkg/gist6003701"
+	. "github.com/shurcooL-legacy/Conception-go/pkg/gist7480523"
+	. "github.com/shurcooL-legacy/Conception-go/pkg/gist7576154"
+	. "github.com/shurcooL-legacy/Conception-go/pkg/gist7651991"
+	. "github.com/shurcooL-legacy/Conception-go/pkg/gist7802150"
+	"github.com/shurcooL-legacy/Conception-go/pkg/httpstoppable"
+	"github.com/shurcooL-legacy/Conception-go/pkg/legacyvcs"
+	"github.com/shurcooL-legacy/Conception-go/pkg/markdown_http"
+	"github.com/shurcooL-legacy/Conception-go/pkg/multilinecontent"
+	"github.com/shurcooL-legacy/Conception-go/pkg/u10"
+	"github.com/shurcooL-legacy/Conception-go/pkg/u6"
 	"github.com/shurcooL/github_flavored_markdown/gfmstyle"
 	"github.com/shurcooL/go-goon"
 	"github.com/shurcooL/go-goon/bypass"
@@ -78,8 +78,8 @@ import (
 	"gopkg.in/pipe.v2"
 	"sourcegraph.com/sourcegraph/go-diff/diff"
 
-	"github.com/shurcooL/Conception-go/caret"
-	"github.com/shurcooL/Conception-go/event"
+	"github.com/shurcooL-legacy/Conception-go/caret"
+	"github.com/shurcooL-legacy/Conception-go/event"
 )
 
 var modeFlag = flag.Int("mode", 1, "Mode.")
@@ -6630,7 +6630,7 @@ func init() {
 }
 
 var gddoClient = gddo.Client{
-	UserAgent: "Conception-go (https://github.com/shurcooL/Conception-go)",
+	UserAgent: "Conception-go (https://github.com/shurcooL-legacy/Conception-go)",
 }
 
 func main() {
@@ -6665,9 +6665,9 @@ func main() {
 
 		// Set the working directory to the root of the package, so that its assets can be accessed.
 		{
-			conceptionGo := GoPackageFromImportPath("github.com/shurcooL/Conception-go")
+			conceptionGo := GoPackageFromImportPath("github.com/shurcooL-legacy/Conception-go")
 			if conceptionGo == nil {
-				log.Fatalln("Unable to find github.com/shurcooL/Conception-go package in your GOPATH, it's needed to load assets.")
+				log.Fatalln("Unable to find github.com/shurcooL-legacy/Conception-go package in your GOPATH, it's needed to load assets.")
 			}
 			err := os.Chdir(conceptionGo.Bpkg.Dir)
 			if err != nil {
