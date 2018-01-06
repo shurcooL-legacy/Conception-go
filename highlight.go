@@ -24,7 +24,7 @@ type TextStyle struct {
 	ShowInvisibles  *bool
 }
 
-func (textStyle *TextStyle) Apply(glt *OpenGlStream) {
+func (textStyle *TextStyle) Apply(glt *OpenGLStream) {
 	if textStyle == nil {
 		return
 	}

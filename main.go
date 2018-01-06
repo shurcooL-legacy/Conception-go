@@ -1181,7 +1181,7 @@ func (w *ButtonLabelWidget) Render() {
 	w.ButtonWidget.Render()
 
 	gl.Color3d(0, 0, 0)
-	NewOpenGlStream(w.Pos().Add(mgl64.Vec2{4, 0})).PrintLine(w.label)
+	NewOpenGLStream(w.Pos().Add(mgl64.Vec2{4, 0})).PrintLine(w.label)
 }
 
 // ---
@@ -1459,7 +1459,7 @@ func (w *WindowWidget) Render() {
 
 	// Title
 	gl.Color3dv(&nearlyBlackColor[0])
-	NewOpenGlStream(w.pos.Add(mgl64.Vec2{60})).PrintLine(w.Name)
+	NewOpenGLStream(w.pos.Add(mgl64.Vec2{60})).PrintLine(w.Name)
 
 	gl.PushMatrix()
 	gl.Translated(w.pos[0], w.pos[1], 0)
@@ -2734,7 +2734,7 @@ func (w *UnderscoreSepToCamelCaseWidget) Render() {
 	gl.Rectd(0, 0, w.size[0], w.size[1])
 
 	gl.Color3d(0, 0, 0)
-	NewOpenGlStream(mgl64.Vec2{0, 0}).PrintText(s)
+	NewOpenGLStream(mgl64.Vec2{0, 0}).PrintText(s)
 }
 
 // ---
@@ -2869,7 +2869,7 @@ func (w *FooWidget) Render() {
 		DrawNBox(w.pos, w.size)
 	}
 
-	glt := NewOpenGlStream(w.pos)
+	glt := NewOpenGLStream(w.pos)
 	gl.Color3d(0, 0, 0)
 	glt.PrintText(w.text)
 
@@ -3701,7 +3701,7 @@ func (this *FilterableSliceStringer) Print(filteredIndex uint64, pos mgl64.Vec2,
 
 	index := strings.Index(strings.ToLower(entry), strings.ToLower(filter.Content()))
 
-	glt := NewOpenGlStream(pos)
+	glt := NewOpenGLStream(pos)
 	if !selected {
 		gl.Color3dv(&veryDarkColor[0])
 		glt.PrintText(entry[:index])
@@ -4864,7 +4864,7 @@ func (w *TextLabelWidget) Render() {
 	//DrawBorderlessBox(w.pos, w.size, lightColor)
 
 	gl.Color3d(0, 0, 0)
-	NewOpenGlStream(w.pos).PrintText(w.Content.Content())
+	NewOpenGLStream(w.pos).PrintText(w.Content.Content())
 
 	isHit := len(w.HoverPointers()) > 0
 	// Tooltip
@@ -4935,7 +4935,7 @@ func (w *StringerWidget) Render() {
 
 	gl.Color3d(0, 0, 0)
 	// TODO: Multiline support?
-	NewOpenGlStream(w.pos).PrintText(w.content.String())
+	NewOpenGLStream(w.pos).PrintText(w.content.String())
 }
 
 // ---
@@ -5545,7 +5545,7 @@ func (w *TextBoxWidget) Render() {
 				hlIters = append(hlIters, NewSelectionHighlighterIterator(w.Content.Line(beginLineIndex).Start(), min, max, hasTypingFocus))
 			}
 
-			glt := NewOpenGlStream(w.pos.Add(mgl64.Vec2{0, float64(fontHeight * beginLineIndex)}))
+			glt := NewOpenGLStream(w.pos.Add(mgl64.Vec2{0, float64(fontHeight * beginLineIndex)}))
 
 			for _, hlIter := range hlIters {
 				textStyle := hlIter.Current()
@@ -5568,7 +5568,7 @@ func (w *TextBoxWidget) Render() {
 		} else {
 			for lineIndex := 0; lineIndex < w.Content.LenLines(); lineIndex++ {
 				contentLine := w.Content.Line(lineIndex)
-				NewOpenGlStream(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}).PrintLine(strings.Repeat("*", int(contentLine.Length())))
+				NewOpenGLStream(mgl64.Vec2{w.pos[0], w.pos[1] + float64(fontHeight*lineIndex)}).PrintLine(strings.Repeat("*", int(contentLine.Length())))
 			}
 		}
 	}
@@ -5576,7 +5576,7 @@ func (w *TextBoxWidget) Render() {
 	// Display Go Errors via line highlighting.
 	for _, uri := range w.Content.GetAllUris() {
 		if _, ok := goCompileErrorsManagerTest.All[uri]; ok {
-			glt := NewOpenGlStream(np)
+			glt := NewOpenGLStream(np)
 			for lineIndex, messages := range goCompileErrorsManagerTest.All[uri] {
 				if lineIndex < beginLineIndex || lineIndex >= endLineIndex {
 					continue // Skip lines that are offscreen.

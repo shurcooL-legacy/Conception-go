@@ -293,7 +293,7 @@ func main() {
 		drawBox()
 
 		gl.Color3d(1, 0, 0)
-		NewOpenGlStream(mgl64.Vec2{50, 300}).PrintText(` !"#$%&'()*+,-./
+		NewOpenGLStream(mgl64.Vec2{50, 300}).PrintText(` !"#$%&'()*+,-./
 0123456789:;<=>?
 @ABCDEFGHIJKLMNO
 PQRSTUVWXYZ[\]^_
@@ -437,7 +437,7 @@ func (w *ButtonWidget) Render() {
 		gl.Color3d(0, 0, 0)
 	}
 
-	NewOpenGlStream(w.pos.Add(mgl64.Vec2{8, 3}).Add(softwareUpdateTextOffset)).PrintText("Software Update...")
+	NewOpenGLStream(w.pos.Add(mgl64.Vec2{8, 3}).Add(softwareUpdateTextOffset)).PrintText("Software Update...")
 }
 func (w *ButtonWidget) Hit(ParentPosition mgl64.Vec2) []event.Widgeter {
 	if len(w.Widget.Hit(ParentPosition)) > 0 {
