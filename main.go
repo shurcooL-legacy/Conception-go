@@ -68,7 +68,6 @@ import (
 	"github.com/shurcooL/go/printerutil"
 	"github.com/shurcooL/go/reflectfind"
 	"github.com/shurcooL/go/reflectsource"
-	"github.com/shurcooL/go/trim"
 	"github.com/shurcooL/httpfs/union"
 	"github.com/shurcooL/httpgzip"
 	"github.com/shurcooL/markdownfmt/markdown"
@@ -377,7 +376,7 @@ type Test2Widget struct {
 }
 
 func NewTest2Widget(pos mgl64.Vec2, field *float64) *Test2Widget {
-	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, NewMultilineContentFuncInstant(func() string { return trim.LastNewline(goon.Sdump(*field)) }), nil), field: field}
+	return &Test2Widget{TextBoxWidget: NewTextBoxWidgetExternalContent(pos, NewMultilineContentFuncInstant(func() string { return strings.TrimSuffix(goon.Sdump(*field), "\n") }), nil), field: field}
 }
 
 func (w *Test2Widget) Hit(ParentPosition mgl64.Vec2) []Widgeter {
@@ -1132,7 +1131,7 @@ func (this *GoCompileErrorsTest) Update() {
 		lineIndex := lineNumber - 1 // Convert line number (e.g. 1) to line index (e.g. 0)
 
 		in = in[x+1:]
-		message := trim.FirstSpace(in)
+		message := strings.TrimPrefix(in, " ")
 
 		return GoCompilerError{FileUri: FileUri("file://" + fileUri), ErrorMessage: GoErrorMessage{LineIndex: lineIndex, Message: message}}
 	}
@@ -4146,8 +4145,8 @@ func newVfsListingPureWidget(vfs vfs.FileSystem, path string) Widgeter {
 
 	w := &VfsListingPureWidget{
 		FilterableSelecterWidget: NewSelecterWidget(np, ss, &SelecterWidgetOptions{SelecterWidgetType: OptionalSelection}),
-		vfs:  vfs,
-		path: path,
+		vfs:                      vfs,
+		path:                     path,
 	}
 	w.FilterableSelecterWidget.SelectionChangedPost = func() { w.selectionChangedTest() }
 
@@ -4171,8 +4170,8 @@ func newVfsListingPureWidgetWithSelection(vfs vfs.FileSystem, path string) Widge
 
 	w := &VfsListingPureWidget{
 		FilterableSelecterWidget: NewSelecterWidget(np, ss, &SelecterWidgetOptions{SelecterWidgetType: SingleSelection}),
-		vfs:  vfs,
-		path: path,
+		vfs:                      vfs,
+		path:                     path,
 	}
 	w.FilterableSelecterWidget.SelectionChangedPost = func() { w.selectionChangedTest() }
 
@@ -4827,7 +4826,7 @@ func NewTextLabelWidgetString(pos mgl64.Vec2, s string) *TextLabelWidget {
 }
 
 func NewTextLabelWidgetGoon(pos mgl64.Vec2, any interface{}) *TextLabelWidget {
-	mc := NewMultilineContentFuncInstant(func() string { return trim.LastNewline(goon.Sdump(any)) })
+	mc := NewMultilineContentFuncInstant(func() string { return strings.TrimSuffix(goon.Sdump(any), "\n") })
 	return NewTextLabelWidgetExternalContent(pos, mc)
 }
 
@@ -6372,7 +6371,7 @@ func initHttpHandlers() {
 						cmd := exec.Command("git", "diff", "--stat", "--find-renames", "master")
 						cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 						if stat, err := cmd.CombinedOutput(); err == nil {
-							b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
+							b += "\n```\n" + strings.TrimSuffix(string(stat), "\n") + "\n```\n"
 						}
 					}
 
@@ -6448,7 +6447,7 @@ func initHttpHandlers() {
 					cmd := exec.Command("git", "diff", "--stat", "--find-renames", "HEAD")
 					cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 					if stat, err := cmd.CombinedOutput(); err == nil {
-						b += "\n```\n" + trim.LastNewline(string(stat)) + "\n```\n"
+						b += "\n```\n" + strings.TrimSuffix(string(stat), "\n") + "\n```\n"
 					}
 					b += "\n```diff\n" + workingDiff + "\n```\n"
 				}
@@ -8602,7 +8601,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				for _, widget := range mousePointer.Mapping {
 					out += fmt.Sprintf("%T\n", widget)
 				}
-				return trim.LastNewline(out)
+				return strings.TrimSuffix(out, "\n")
 			}
 			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Mouse Mapping"))
 		}
@@ -8611,7 +8610,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				for _, widget := range mousePointer.OriginMapping {
 					out += fmt.Sprintf("%T\n", widget)
 				}
-				return trim.LastNewline(out)
+				return strings.TrimSuffix(out, "\n")
 			}
 			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Mouse Origin Mapping"))
 		}
@@ -8620,7 +8619,7 @@ func DrawCircle(pos mathgl.Vec2d, size mathgl.Vec2d) {
 				for _, widget := range keyboardPointer.OriginMapping {
 					out += fmt.Sprintf("%T\n", widget)
 				}
-				return trim.LastNewline(out)
+				return strings.TrimSuffix(out, "\n")
 			}
 			w = append(w, NewCollapsibleWidget(np, NewTextLabelWidgetExternalContent(np, NewMultilineContentFuncInstant(contentFunc)), "Keyboard Origin Mapping"))
 		}

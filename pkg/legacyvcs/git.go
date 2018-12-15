@@ -3,9 +3,9 @@ package legacyvcs
 import (
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/shurcooL/go/osutil"
-	"github.com/shurcooL/go/trim"
 )
 
 type gitVcs struct {
@@ -41,7 +41,7 @@ func (this *gitVcs) GetRemote() string {
 	cmd.Dir = this.rootPath
 
 	if out, err := cmd.Output(); err == nil {
-		return trim.LastNewline(string(out))
+		return strings.TrimSuffix(string(out), "\n")
 	} else {
 		return ""
 	}
@@ -57,7 +57,7 @@ func (this *gitVcs) GetLocalBranch() string {
 
 	if out, err := cmd.Output(); err == nil {
 		// Since rev-parse is considered porcelain and may change, need to error-check its output.
-		return trim.LastNewline(string(out))
+		return strings.TrimSuffix(string(out), "\n")
 	} else {
 		return ""
 	}
@@ -109,7 +109,7 @@ func (this *gitVcs) IsContained(rev string) bool {
 	cmd.Dir = this.rootPath
 
 	if out, err := cmd.Output(); err == nil {
-		if len(out) >= 2 && trim.LastNewline(string(out[2:])) == this.GetDefaultBranch() {
+		if len(out) >= 2 && strings.TrimSuffix(string(out[2:]), "\n") == this.GetDefaultBranch() {
 			return true
 		}
 	}
@@ -125,7 +125,7 @@ func getGitRepoRoot(path string) (isGitRepo bool, rootPath string) {
 
 	if out, err := cmd.Output(); err == nil {
 		// Since rev-parse is considered porcelain and may change, need to error-check its output
-		return true, trim.LastNewline(string(out))
+		return true, strings.TrimSuffix(string(out), "\n")
 	} else {
 		return false, ""
 	}

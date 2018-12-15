@@ -11,7 +11,6 @@ import (
 	"github.com/shurcooL-legacy/Conception-go/pkg/gist7480523"
 	"github.com/shurcooL-legacy/Conception-go/pkg/legacyvcs"
 	"github.com/shurcooL/go/pipeutil"
-	"github.com/shurcooL/go/trim"
 	"gopkg.in/pipe.v2"
 )
 
@@ -25,7 +24,7 @@ func GoPackageWorkingDiff(goPackage *gist7480523.GoPackage) string {
 	switch goPackage.Dir.Repo.Vcs.Type() {
 	case legacyvcs.Git:
 		newFileDiff := func(line []byte) []byte {
-			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
+			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", strings.TrimSuffix(string(line), "\n"))
 			cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 			out, err := cmd.Output()
 			if len(out) > 0 {
@@ -67,7 +66,7 @@ func GoPackageWorkingDiffMaster(goPackage *gist7480523.GoPackage) string {
 	switch goPackage.Dir.Repo.Vcs.Type() {
 	case legacyvcs.Git:
 		newFileDiff := func(line []byte) []byte {
-			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
+			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", strings.TrimSuffix(string(line), "\n"))
 			cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 			out, err := cmd.Output()
 			if len(out) > 0 {
@@ -109,7 +108,7 @@ func GoPackageWorkingDiffOriginMaster(goPackage *gist7480523.GoPackage) string {
 	switch goPackage.Dir.Repo.Vcs.Type() {
 	case legacyvcs.Git:
 		newFileDiff := func(line []byte) []byte {
-			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", trim.LastNewline(string(line)))
+			cmd := exec.Command("git", "diff", "--no-ext-diff", "--", "/dev/null", strings.TrimSuffix(string(line), "\n"))
 			cmd.Dir = goPackage.Dir.Repo.Vcs.RootPath()
 			out, err := cmd.Output()
 			if len(out) > 0 {
@@ -158,7 +157,7 @@ func Branches(repo *exp13.VcsState, opt BranchesOptions) string {
 	switch repo.Vcs.Type() {
 	case legacyvcs.Git:
 		branchInfo := func(line []byte) []byte {
-			branch := trim.LastNewline(string(line))
+			branch := strings.TrimSuffix(string(line), "\n")
 			branchDisplay := branch
 			if branch == repo.VcsLocal.LocalBranch {
 				branchDisplay = "**" + branch + "**"
@@ -172,7 +171,7 @@ func Branches(repo *exp13.VcsState, opt BranchesOptions) string {
 				return []byte(fmt.Sprintf("%s | ? | ?\n", branchDisplay))
 			}
 
-			behindAhead := strings.Split(trim.LastNewline(string(out)), "\t")
+			behindAhead := strings.Split(strings.TrimSuffix(string(out), "\n"), "\t")
 			return []byte(fmt.Sprintf("%s | %s | %s\n", branchDisplay, behindAhead[0], behindAhead[1]))
 		}
 
@@ -199,7 +198,7 @@ func Branches(repo *exp13.VcsState, opt BranchesOptions) string {
 // For example, "master\torigin/master".
 func branchRemoteInfo(repo *exp13.VcsState) func(line []byte) []byte {
 	return func(line []byte) []byte {
-		branchRemote := strings.Split(trim.LastNewline(string(line)), "\t")
+		branchRemote := strings.Split(strings.TrimSuffix(string(line), "\n"), "\t")
 		if len(branchRemote) != 2 {
 			return []byte("error: len(branchRemote) != 2")
 		}
@@ -224,7 +223,7 @@ func branchRemoteInfo(repo *exp13.VcsState) func(line []byte) []byte {
 			return []byte(fmt.Sprintf("%s | %s | | \n", branchDisplay, remoteDisplay))
 		}
 
-		behindAhead := strings.Split(trim.LastNewline(string(out)), "\t")
+		behindAhead := strings.Split(strings.TrimSuffix(string(out), "\n"), "\t")
 		return []byte(fmt.Sprintf("%s | %s | %s | %s\n", branchDisplay, remote, behindAhead[0], behindAhead[1]))
 	}
 }

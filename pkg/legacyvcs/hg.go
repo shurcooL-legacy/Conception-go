@@ -4,8 +4,6 @@ import (
 	"log"
 	"os/exec"
 	"strings"
-
-	trim "github.com/shurcooL/go/trim"
 )
 
 func getHgRepoRoot(path string) (isHgRepo bool, rootPath string) {
@@ -13,7 +11,7 @@ func getHgRepoRoot(path string) (isHgRepo bool, rootPath string) {
 	cmd.Dir = path
 
 	if out, err := cmd.Output(); err == nil {
-		return true, trim.LastNewline(string(out))
+		return true, strings.TrimSuffix(string(out), "\n")
 	} else {
 		return false, ""
 	}
@@ -46,7 +44,7 @@ func (this *hgVcs) GetRemote() string {
 	cmd.Dir = this.rootPath
 
 	if out, err := cmd.Output(); err == nil {
-		return trim.LastNewline(string(out))
+		return strings.TrimSuffix(string(out), "\n")
 	} else {
 		return ""
 	}
@@ -61,7 +59,7 @@ func (this *hgVcs) GetLocalBranch() string {
 	cmd.Dir = this.rootPath
 
 	if out, err := cmd.Output(); err == nil {
-		return trim.LastNewline(string(out))
+		return strings.TrimSuffix(string(out), "\n")
 	} else {
 		return ""
 	}
@@ -94,7 +92,7 @@ func (this *hgVcs) GetRemoteRev() string {
 
 	if out, err := cmd.Output(); err == nil {
 		// Get the last line of output.
-		lines := strings.Split(trim.LastNewline(string(out)), "\n") // Always returns at least 1 element.
+		lines := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") // Always returns at least 1 element.
 		return lines[len(lines)-1]
 	}
 	return ""
