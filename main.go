@@ -71,11 +71,11 @@ import (
 	"github.com/shurcooL/httpfs/union"
 	"github.com/shurcooL/httpgzip"
 	"github.com/shurcooL/markdownfmt/markdown"
+	"github.com/sourcegraph/go-diff/diff"
 	"golang.org/x/net/websocket"
 	"golang.org/x/tools/godoc/vfs"
 	goimports "golang.org/x/tools/imports"
 	"gopkg.in/pipe.v2"
-	"sourcegraph.com/sourcegraph/go-diff/diff"
 
 	"github.com/shurcooL-legacy/Conception-go/caret"
 	"github.com/shurcooL-legacy/Conception-go/event"
