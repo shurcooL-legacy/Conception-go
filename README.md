@@ -28,7 +28,7 @@ Installation
 ...
 
 # Step back and enjoy 1 command that installs Conception-go and all its dependencies.
-go get -u github.com/shurcooL-legacy/Conception-go
+GO111MODULE=on go install github.com/shurcooL-legacy/Conception-go
 
 # Run it.
 $(go env GOPATH)/bin/Conception-go
@@ -47,7 +47,7 @@ sudo apt-get install --yes git
 sudo apt-get install --yes libgl1-mesa-dev xorg-dev # OpenGL headers.
 
 # Step back and enjoy 1 command that installs Conception-go and all its dependencies.
-go get -u github.com/shurcooL-legacy/Conception-go
+GO111MODULE=on go install github.com/shurcooL-legacy/Conception-go
 
 # Run it.
 $(go env GOPATH)/bin/Conception-go
