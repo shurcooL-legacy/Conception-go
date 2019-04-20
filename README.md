@@ -27,8 +27,9 @@ Installation
 # Install latest Go, git (if you don't already have them).
 ...
 
-# Step back and enjoy 1 command that installs Conception-go and all its dependencies.
-GO111MODULE=on go install github.com/shurcooL-legacy/Conception-go
+# Step back and enjoy 2 commands that install Conception-go.
+git clone https://github.com/shurcooL/frontend "$GOPATH/src/github.com/shurcooL/frontend" || (cd "$GOPATH/src/github.com/shurcooL/frontend" && git pull --ff-only)  # TODO: remove after golang.org/issue/31603 is resolved
+(cd; GO111MODULE=on go install github.com/shurcooL-legacy/Conception-go)
 
 # Run it.
 $(go env GOPATH)/bin/Conception-go
@@ -39,15 +40,16 @@ $(go env GOPATH)/bin/Conception-go
 ```bash
 # Install latest Go (if you don't already have it).
 sudo apt-get install --yes curl
-curl -L https://golang.org/dl/go1.9.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
+curl -L https://golang.org/dl/go1.12.4.linux-amd64.tar.gz | sudo tar zx -C /usr/local/
 export PATH="$PATH:/usr/local/go/bin"
 
 # Install git, OpenGL headers (if you don't already have them).
 sudo apt-get install --yes git
 sudo apt-get install --yes libgl1-mesa-dev xorg-dev # OpenGL headers.
 
-# Step back and enjoy 1 command that installs Conception-go and all its dependencies.
-GO111MODULE=on go install github.com/shurcooL-legacy/Conception-go
+# Step back and enjoy 2 commands that install Conception-go.
+git clone https://github.com/shurcooL/frontend "$GOPATH/src/github.com/shurcooL/frontend" || (cd "$GOPATH/src/github.com/shurcooL/frontend" && git pull --ff-only)  # TODO: remove after golang.org/issue/31603 is resolved
+(cd; GO111MODULE=on go install github.com/shurcooL-legacy/Conception-go)
 
 # Run it.
 $(go env GOPATH)/bin/Conception-go

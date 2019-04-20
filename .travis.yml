@@ -13,7 +13,10 @@ matrix:
   allow_failures:
     - go: master
   fast_finish: true
+install:
+  - # Do nothing. This is needed to prevent default install action "go get -t -v ./..." from happening.
 script:
+  - git clone https://github.com/shurcooL/frontend "$GOPATH/src/github.com/shurcooL/frontend" || (cd "$GOPATH/src/github.com/shurcooL/frontend" && git pull --ff-only)  # TODO: remove after golang.org/issue/31603 is resolved
   - diff -u <(echo -n) <(gofmt -d -s .)
   - go vet ./...
   - go test -v -race ./...
