@@ -30,7 +30,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	text_scanner "text/scanner"
+	textscanner "text/scanner"
 	"text/tabwriter"
 	"time"
 
@@ -2809,19 +2809,19 @@ func NewFooWidget2(pos mgl64.Vec2) Widgeter {
 						s string
 					}
 
-					var s text_scanner.Scanner
+					var s textscanner.Scanner
 					s.Init(strings.NewReader(searchField.Content.Content()))
-					s.Mode = text_scanner.ScanIdents | text_scanner.ScanStrings
+					s.Mode = textscanner.ScanIdents | textscanner.ScanStrings
 
 					var tokens []tokenText
-					for tok := s.Scan(); tok != text_scanner.EOF; tok = s.Scan() {
+					for tok := s.Scan(); tok != textscanner.EOF; tok = s.Scan() {
 						tokens = append(tokens, tokenText{t: tok, s: s.TokenText()})
 					}
 
 					var out string
 					var cmd []string
 					for _, tt := range tokens {
-						out += fmt.Sprintf("%v:%v ", text_scanner.TokenString(tt.t), tt.s)
+						out += fmt.Sprintf("%v:%v ", textscanner.TokenString(tt.t), tt.s)
 						cmd = append(cmd, tt.s)
 					}
 
