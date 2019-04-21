@@ -7,6 +7,7 @@ import (
 	"go/doc"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"sync"
 )
@@ -63,7 +64,11 @@ func BuildPackageFromImportPathBuildTags(importPath string, buildTags []string) 
 }
 
 func BuildPackageFromImportPath(importPath string) (bpkg *build.Package, err error) {
-	return build.Import(importPath, "", importMode)
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	return build.Import(importPath, wd, importMode)
 }
 
 func BuildPackageFromSrcDir(srcDir string) (bpkg *build.Package, err error) {
