@@ -66,7 +66,7 @@ func BuildPackageFromImportPathBuildTags(importPath string, buildTags []string) 
 func BuildPackageFromImportPath(importPath string) (bpkg *build.Package, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return build.Import(importPath, wd, importMode)
 }
