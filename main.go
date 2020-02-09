@@ -36,7 +36,7 @@ import (
 
 	"github.com/bradfitz/iter"
 	"github.com/go-gl/gl/v2.1/gl"
-	"github.com/go-gl/glfw/v3.2/glfw"
+	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/mattn/go-runewidth"
 	intmath "github.com/pkg/math"
@@ -5763,7 +5763,7 @@ func (w *TextBoxWidget) ProcessEvent(inputEvent InputEvent) {
 			}
 		case glfw.KeyV:
 			if inputEvent.ModifierKey == glfw.ModSuper {
-				if clipboard, err := globalWindow.GetClipboardString(); err == nil && clipboard != "" { // TODO: Don't use globalWindow
+				if clipboard := globalWindow.GetClipboardString(); clipboard != "" { // TODO: Don't use globalWindow
 					w.caretPosition.ReplaceSelectionWith(clipboard)
 				}
 			}
